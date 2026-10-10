@@ -2,7 +2,7 @@
 
 **Unsupervised image clustering that ignores spurious correlations, by jointly learning a causal representation (Information Bottleneck) and a latent reward (multi-intention Inverse RL).**
 
-> **Status:** research prototype, work in progress. The conceptual framework is stable; the implementation and benchmarks are being built (see [Roadmap](#9-status--roadmap)).
+> **Status:** research prototype, work in progress. The conceptual framework is stable; the implementation and benchmarks are being built (see [Roadmap](#10-status--roadmap)).
 
 ---
 
@@ -12,12 +12,13 @@
 2. [Motivation](#2-motivation)
 3. [Background & Reading List](#3-background--reading-list)
 4. [Method](#4-method)
-5. [Open Design Questions](#5-open-design-questions)
-6. [Evaluation Protocol](#6-evaluation-protocol)
-7. [Ablations](#7-ablations)
-8. [Repository Structure](#8-repository-structure-planned)
-9. [Status & Roadmap](#9-status--roadmap)
-10. [Citation & License](#10-citation--license)
+5. [Components & Training](#5-components--training)
+6. [Open Design Questions](#6-open-design-questions)
+7. [Evaluation Protocol](#7-evaluation-protocol)
+8. [Ablations](#8-ablations)
+9. [Repository Structure](#9-repository-structure-planned)
+10. [Status & Roadmap](#10-status--roadmap)
+11. [Citation & License](#11-citation--license)
 
 ---
 
@@ -140,11 +141,128 @@ $$
 \mathcal{L}_{\text{inv}} \;=\; \mathbb{E}_{x,\,t\sim\mathcal{T}}\,\Big\| R_\theta\big(f_\phi(x),\cdot,m\big) - R_\theta\big(f_\phi(t(x)),\cdot,m\big)\Big\|^2
 $$
 
-This is the bridge to IRM (invariance across environments) and IIC (agreement across views). Its exact form is an open design choice and is covered by the ablations in [Section 7](#7-ablations).
+This is the bridge to IRM (invariance across environments) and IIC (agreement across views). Its exact form is an open design choice and is covered by the ablations in [Section 8](#8-ablations).
 
 ---
 
-## 5. Open Design Questions
+## 5. Components & Training
+
+The architecture has four trainable components: the **encoder**, the **intent predictor**, the **reward model** and the **policy**. This section fixes the training signal, then gives for each component its role, its loss, and the intuition behind each term of that loss. It closes with what joint and sequential training would mean in practice.
+
+### 5.0 Notation and training signal
+
+- **Nuisance perturbations.** Let `𝒯` be a set of perturbations that change the style of an image but not its semantic content (background swap, color jitter, style transfer). For an image `x` and `t ~ 𝒯`, write `z = f_φ(x)` and `z_t = f_φ(t(x))`.
+- **Two policies.** `π_θ(a | z, m) = softmax_a R_θ(z, a, m)` is the policy *induced by the reward* (Section 4.2). `π_ω(a | z, m)` is the *learned* policy network of Section 5.4.
+- **Pseudo-demonstrations.** Classical IRL needs expert demonstrations; we have none. Our working hypothesis (see Open Design Question 1) is that the "expert" is the labeling that stays stable under nuisance perturbations. Targets are computed on the perturbed view and frozen (`sg[·]` = stop-gradient):
+
+$$
+m^\* = \mathrm{sg}\big[\mu_\psi(z_t)\big], \qquad a^\* \sim \mathrm{sg}\big[\pi_\theta(\cdot \mid z_t, m^\*)\big]
+$$
+
+This specifies the expectation left implicit in Section 4.4: the losses `L_ψ` and `L_θ` below are exactly its utility term.
+
+### 5.1 Encoder `f_φ`
+
+**Role.** The only component that sees pixels. It maps an image to a stochastic code `z = μ_φ(x) + σ_φ(x) ⊙ ε`, `ε ~ 𝒩(0, I)`, and everything downstream sees only `z`. Its job is a trade-off: keep what the intent and the reward need, discard everything else, in particular backgrounds and styles.
+
+**Loss.**
+
+$$
+\mathcal{L}_{\text{enc}}(\phi) \;=\; \underbrace{\mathcal{L}_\psi + \mathcal{L}_\theta}_{\text{utility, through } z} \;+\; \beta\,\underbrace{\mathbb{E}_x\,\mathrm{KL}\big(p_\phi(z\mid x)\,\|\,\mathcal{N}(0,I)\big)}_{\text{compression}} \;+\; \lambda\,\underbrace{\mathbb{E}_{x,\,t}\Big\|R_\theta(z,\cdot,m)-R_\theta(z_t,\cdot,m)\Big\|^2}_{\mathcal{L}_{\text{inv}}\;(\theta\text{ frozen})}
+$$
+
+For a diagonal Gaussian the KL has a closed form: `½ Σ_j (μ_j² + σ_j² − 1 − log σ_j²)`.
+
+**Reading the terms.**
+- **Utility `L_ψ + L_θ`.** The gradients of the intent and reward losses flow back into `z`. This is the "retain as much information as possible" pressure: anything needed to predict the concept and the assignment must survive.
+- **Compression `β·KL`.** Pulls every code toward the prior, i.e. makes `z` carry as few bits about `x` as possible. `β` sets how hard it pushes.
+- **Invariance `λ·L_inv`.** The check on the encoder: if the useless features were really removed, the reward vector over all clusters must not move when the image is perturbed. `θ` is frozen in this term; otherwise the trivial solution `R_θ ≡ const` would satisfy it for free.
+
+### 5.2 Intent predictor `q_ψ`
+
+**Role.** Infers from `z` a continuous latent concept `m` (what the image is "about", e.g. species morphology) that conditions the reward. As the context variable of Meta-IRL, it lets one global reward express different notions of similarity.
+
+**Loss.**
+
+$$
+\mathcal{L}_\psi \;=\; -\,\mathbb{E}_{x,\,t}\big[\log q_\psi(m^\* \mid z)\big]
+$$
+
+**Reading the terms.**
+- **Log-likelihood of the target `m*`.** The concept predicted from the original image must match the concept predicted from the perturbed one. A concept that changes when only the background changes is penalized, so `m` is pushed toward content.
+- **Gaussian case.** With `q_ψ(m | z) = 𝒩(μ_ψ(z), σ_ψ²(z))`, this is a squared error weighted by the predicted precision, plus `log σ_ψ`: the model can express uncertainty but pays for it.
+- **Caveat.** Nothing forces `m` to be used; a constant `m` reduces the model to single-intention IRL. The "without `m`" ablation measures this.
+
+### 5.3 Reward model `R_θ`
+
+**Role.** Scores every triple `(z, a, m)`: how well cluster `a` explains the image coded by `z` under concept `m`. It is the object that IRL recovers, a single global reward shared by the whole dataset, and the policy is derived from it.
+
+**Loss.** Maximum-entropy IRL likelihood of the pseudo-demonstrations, plus an anti-collapse bonus:
+
+$$
+\mathcal{L}_\theta \;=\; -\,\mathbb{E}\Big[R_\theta(z,a^\*,m)\;-\;\log\sum_{a'}\exp R_\theta(z,a',m)\Big] \;-\; \rho\,\mathcal{H}\Big(\mathbb{E}_x\,\pi_\theta(\cdot\mid z,m)\Big)
+$$
+
+**Reading the terms.**
+- **`R_θ(z, a*, m)`.** Raises the reward of the demonstrated pair.
+- **`log Σ exp R_θ`.** The log-partition term. It lowers the reward of all other clusters, so the reward is *relative*: it cannot be inflated everywhere at once. The first bracket is exactly `−log π_θ(a* | z, m)`.
+- **`ρ·H(marginal)`.** Entropy of the average assignment distribution over the batch. It rewards using all `K` clusters and guards against the degenerate "everything in one cluster" solution (Open Design Question 2). It is a safeguard, and `ρ = 0` recovers the pure IRL likelihood.
+
+### 5.4 Policy `π_ω`
+
+**Role.** The agent that picks the cluster. At inference, the assignment is `a = argmax_a π_ω(a | z, m)`. It is trained to act soft-optimally with respect to the current reward. In a single-step MDP the soft-optimal policy has a closed form (`π_θ ∝ exp R_θ`), so `π_ω` is redundant at the optimum. We keep it as a separate network to preserve the standard IRL split between reward and policy, to allow alternating updates, and to leave room for multi-step or large action spaces.
+
+**Loss.**
+
+$$
+\mathcal{L}_\omega \;=\; -\,\mathbb{E}\Big[\sum_a \pi_\omega(a\mid z,m)\,R_\theta(z,a,m)\Big] \;-\; \alpha\,\mathbb{E}\Big[\mathcal{H}\big(\pi_\omega(\cdot\mid z,m)\big)\Big] \;=\; \alpha\,\mathbb{E}\,\mathrm{KL}\big(\pi_\omega\,\|\,\mathrm{softmax}(R_\theta/\alpha)\big) + \text{const}
+$$
+
+**Reading the terms.**
+- **Expected reward.** Choose the clusters the reward scores highly.
+- **Entropy bonus `α·H`.** Stay stochastic instead of committing early to one cluster; `α` is a temperature (`α = 1` recovers `π_θ` of Section 4.2, `α < 1` sharpens).
+- **KL form.** The same loss says "distill the reward-induced softmax into the network". The loss only updates `ω`; `R_θ`, `z` and `m` are detached.
+
+### 5.5 Joint training
+
+All components are updated at every step, on the same minibatch, from one total loss:
+
+$$
+\mathcal{L} \;=\; \mathcal{L}_\psi + \mathcal{L}_\theta + \beta\,\mathrm{KL} + \lambda\,\mathcal{L}_{\text{inv}} + \mathcal{L}_\omega
+$$
+
+The first four terms are the objective of Section 4.4; `L_ω` is the RL part. Gradient routing:
+
+| Term | Updates |
+|---|---|
+| `L_ψ` (intent) | `ψ`, and `φ` through `z` |
+| `L_θ` (reward) | `θ`, and `φ` through `z` |
+| KL (compression) | `φ` |
+| `L_inv` (invariance) | `φ` only (`θ` frozen) |
+| `L_ω` (policy) | `ω` only |
+
+**What it means.** "Useless" is defined *relative to the reward currently being learned*: the encoder compresses what the reward and intent do not use, while the reward and intent adapt to whatever the encoder keeps. This co-adaptation is the point of the method, and also its main risk: targets are produced by the model itself, so early training is unstable and a random reward can push the bottleneck to discard useful bits. The practical mitigations are a warm-up of `β` from 0 and, if needed, a slowly-moving (EMA) copy of the model to compute `m*` and `a*`.
+
+### 5.6 Sequential training
+
+Two stages, nothing flowing back from the second to the first.
+
+1. **Encoder alone.** No reward exists yet, so the reward-based utility is replaced by a task-agnostic proxy (a cross-view mutual-information objective such as IIC, or a pretrained SSL encoder), together with `β·KL` and an invariance penalty on the code itself, `‖z − z_t‖²`.
+2. **IRL modules on frozen codes.** `φ` is frozen and `L_ψ + L_θ + L_ω` are minimized on `z`. There is no KL, no `L_inv`, and no gradient into the encoder.
+
+| | Joint | Sequential |
+|---|---|---|
+| Optimization | One stage, all parameters | Encoder first, then intent / reward / policy |
+| Does the encoder see the reward? | Yes (through `L_ψ`, `L_θ`, `L_inv`) | No, only a proxy |
+| Meaning of "useless" | Irrelevant to the current reward | Irrelevant to the proxy objective |
+| Strengths | Matches the definition of the method; the encoder is shaped by what clustering needs | Simple, stable, modular; the IRL stage can be re-run without retraining the encoder |
+| Risks | Moving targets, instability, need for warm-up | Frozen stage-1 errors; the proxy may drop cluster-relevant bits or keep spurious ones |
+
+Sequential training is the natural control for the claim that *joint* optimization matters (see [Ablations](#8-ablations)); with `β = 0` it reduces to the "standard multi-intention IRL" baseline.
+
+---
+
+## 6. Open Design Questions
 
 These are the points the implementation must settle, and the ones a reviewer is most likely to ask about:
 
@@ -155,22 +273,22 @@ These are the points the implementation must settle, and the ones a reviewer is 
 
 ---
 
-## 6. Evaluation Protocol
+## 7. Evaluation Protocol
 
-### 6.1 Datasets (engineered spurious correlations)
+### 7.1 Datasets (engineered spurious correlations)
 
 | Dataset | Setup | What it tests |
 |---|---|---|
 | **Colored MNIST** | Digits are strongly correlated with background/foreground color at training time; correlation is randomized or inverted at test time. 10-class variant for clustering; the binary IRM variant as a sanity check. | Whether the model clusters by digit identity instead of color |
 | **Waterbirds** | Landbirds on land and waterbirds on water (strong train-time correlation); minority groups (landbird on water, waterbird on land) at test time. | Whether the model clusters by bird category instead of land/water background |
 
-### 6.2 Baselines
+### 7.2 Baselines
 
 1. **Geometric / statistical clustering:** K-Means and GMM on standard ResNet / ViT embeddings.
 2. **Pure contrastive learning:** SimCLR, MoCo v3 (and IIC) followed by clustering, to see whether contrastive augmentations alone discard backgrounds.
 3. **Standard multi-intention IRL:** a temporal IRL model adapted to single-step images **without** the causal Information Bottleneck encoder.
 
-### 6.3 Metrics
+### 7.3 Metrics
 
 - **Clustering Accuracy (ACC)** with optimal (Hungarian) cluster-to-label matching, and **Normalized Mutual Information (NMI)**, both measured strictly against the true semantic labels (bird species, digit ID), ignoring background.
 - **Out-of-distribution (OOD) robustness:** drop in performance (`ΔACC`) between the correlated test set and the test set where the background correlation is inverted.
@@ -181,7 +299,7 @@ Reporting: mean ± std over several seeds, with fixed `K` equal to the number of
 
 ---
 
-## 7. Ablations
+## 8. Ablations
 
 | Ablation | Question answered |
 |---|---|
@@ -194,7 +312,7 @@ Reporting: mean ± std over several seeds, with fixed `K` equal to the number of
 
 ---
 
-## 8. Repository Structure (planned)
+## 9. Repository Structure (planned)
 
 ```
 cib-irl/
@@ -214,7 +332,7 @@ cib-irl/
 
 ---
 
-## 9. Status & Roadmap
+## 10. Status & Roadmap
 
 - [x] Problem statement and literature review
 - [x] Architecture and joint objective
@@ -226,7 +344,7 @@ cib-irl/
 
 ---
 
-## 10. Citation & License
+## 11. Citation & License
 
 ```bibtex
 @misc{cibirl,
