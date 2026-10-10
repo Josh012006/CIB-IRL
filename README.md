@@ -38,6 +38,7 @@ We turn clustering into a sequential decision problem:
 - **The policy** is the act of clustering. Images arrive one after the other; for each, the policy decides which group it goes into: one of the clusters **built so far**, or a fresh one. Its decision is conditioned on what already exists, as in any unsupervised method that builds its groups along the way. It is a policy in the RL sense, a separate network trained to maximize a return, **not** a softmax of the reward.
 - **The reward** is the intention behind the decision, the *intention of distinction*. It scores a placement by how well the image fits the group it joins **and** how well it is told apart from the other groups. As in any RL problem, the reward says what is worth doing and the policy learns how to do it over a whole sequence of decisions.
 - **The expert.** We can see the creator of the data (the world that produced the cats and the dogs) as an expert who, in building these images, optimized some reward. Multi-intention IRL methods such as PEMIRL recover from expert behavior the reward attached to each category.
+- **The intent.** As in Meta-IRL, a group of images has an *intent*: what its members have in common (the context variable `m`). The memory of the groups built so far is made of these intents, so the reward and the policy compare the intent of the arriving image with the intent of each existing group.
 - **Our step beyond.** Besides the reward that makes each category what it is, there also exists a reward that **distinguishes categories from one another**, the reason we do not confuse them. Finding it *is* learning to distinguish. Optimizing it by RL, over decisions that depend on the clusters already formed, is clustering.
 
 ### 1.3 The obstacle, and our answer
@@ -61,10 +62,10 @@ Image datasets are full of spurious cues (background, texture, style) that are e
 | Human intuition | In CIB-IRL |
 |---|---|
 | The few features that make a cat a cat | Causal latent `z` (encoder + Information Bottleneck) |
-| "This looks like a cat-type thing" | Latent context `m` (intent predictor), optional, see [7.2](#72-still-open) |
-| The groups I have formed so far | Cluster memory `C` (summary of each cluster, empty slots included) |
-| Why this image belongs here and not there | Reward `R_θ(z, C, a)` |
-| Putting it in a group (or starting a new one) | Policy `π_ω(a \| z, C)`, `a ∈ {1..K}`, trained by RL |
+| "This looks like a cat-type thing" | Latent intent `m` (intent predictor `q_ψ`: one per orbit during training, one per image at test time) |
+| The groups I have formed so far | Cluster memory `C`: for each cluster, the average intent of its members (empty slots included) |
+| Why this image belongs here and not there | Reward `R_θ(z, m, C, a)` |
+| Putting it in a group (or starting a new one) | Policy `π_ω(a \| z, m, C)`, `a ∈ {1..K}`, trained by RL |
 | Someone who already knows what goes together | Expert built from transformations ([Section 5](#5-where-do-the-experts-come-from)) |
 | Not being fooled by the background | Compression + invariance of the decision |
 
@@ -91,16 +92,40 @@ Image datasets are full of spurious cues (background, texture, style) that are e
 
 Five papers cover the theoretical foundations of the framework:
 
-1. **Meta-Inverse Reinforcement Learning with Probabilistic Context Variables**, Yu, Yu, Finn, Ermon (NeurIPS 2019).
-   *Why:* learns rewards from unlabeled multi-task demonstrations through a latent context variable `m`, and infers the reward of a new task from a single demonstration.
-2. **Deep Variational Information Bottleneck**, Alemi, Fischer, Dillon, Murphy (ICLR 2017).
-   *Why:* compress the input while retaining task-relevant information, via variational bounds on mutual information.
-3. **Invariant Risk Minimization**, Arjovsky, Bottou, Gulrajani, Lopez-Paz (2019).
-   *Why:* foundational theory of causal invariance across environments (here: styles/backgrounds).
-4. **Invariant Information Clustering for Unsupervised Image Classification and Segmentation**, Ji, Henriques, Vedaldi (ICCV 2019).
-   *Why:* maximizing mutual information between assignments of augmented views to drive unsupervised clustering.
-5. **Apprenticeship Learning About Multiple Intentions**, Babeş-Vroman, Marivate, Subramanian, Littman (ICML 2011).
-   *Why:* clusters unlabeled trajectories by inferring one objective per cluster (EM over IRL), the early version of "clustering and IRL together".
+- [ ] Yu, L., Yu, T., Finn, C., & Ermon, S. (2019).
+  *Meta-Inverse Reinforcement Learning with Probabilistic Context Variables*. NeurIPS 2019.
+  [PDF](https://arxiv.org/pdf/1909.09314.pdf)
+  Core multi-intention IRL method — learns rewards from unlabeled multi-task demonstrations
+  through a latent context variable `m` inferred from the demonstrations, and infers the reward
+  of a new task from a single demonstration. Source of our intent `m` (Section 4.2).
+
+- [ ] Alemi, A. A., Fischer, I., Dillon, J. V., & Murphy, K. (2017).
+  *Deep Variational Information Bottleneck*. ICLR 2017.
+  [PDF](https://arxiv.org/pdf/1612.00410.pdf)
+  Core compression method — turns the Information Bottleneck into a trainable objective with
+  a variational bound on `I(z; x)` (a KL to a prior) and a bound on relevance. Gives the
+  `β·KL` term of our encoder (Section 4.4).
+
+- [ ] Arjovsky, M., Bottou, L., Gulrajani, I., & Lopez-Paz, D. (2019).
+  *Invariant Risk Minimization*. arXiv.
+  [PDF](https://arxiv.org/pdf/1907.02893.pdf)
+  Foundational theory of causal invariance — features whose predictive relation is stable across
+  environments are the causal ones. Frames our nuisance family `𝒯` as "environments", and
+  introduces Colored MNIST.
+
+- [ ] Ji, X., Henriques, J. F., & Vedaldi, A. (2019).
+  *Invariant Information Clustering for Unsupervised Image Classification and Segmentation*. ICCV 2019.
+  [PDF](https://arxiv.org/pdf/1807.06653.pdf)
+  Closest image-clustering approach in spirit — maximizes the mutual information between the
+  cluster assignments of two augmented views of the same image. Our forced moves and
+  invariance term play a similar role in a different formalism.
+
+- [ ] Babeş-Vroman, M., Marivate, V., Subramanian, K., & Littman, M. (2011).
+  *Apprenticeship Learning About Multiple Intentions*. ICML 2011.
+  [Paper page](https://mlanthology.org/icml/2011/babes2011icml-apprenticeship)
+  Early "clustering and IRL together" — clusters unlabeled trajectories by inferring one
+  objective per cluster with an EM procedure over IRL. Closest ancestor of the idea that a
+  cluster is defined by its reward.
 
 Additional references used by the expert design ([Section 5](#5-where-do-the-experts-come-from)): **Debiased Contrastive Learning** (Chuang et al., NeurIPS 2020), **SCAN: Learning to Classify Images without Labels** (Van Gansbeke et al., ECCV 2020), **SimCLR** (Chen et al., 2020), **MoCo v3** (Chen, Xie, He, 2021), and **Waterbirds / Group DRO** (Sagawa et al., 2020).
 
@@ -114,15 +139,17 @@ Additional references used by the expert design ([Section 5](#5-where-do-the-exp
 flowchart TD
     x["Input image x<br/>(content + spurious factors)"] --> enc["Causal encoder f_φ<br/>stochastic, IB-regularized"]
     enc --> z["Causal latent z"]
-    z --> qpsi["Intent predictor q_ψ(m | z)<br/>(optional, see 7.2)"]
+    z --> qpsi["Intent predictor q_ψ(m | z)"]
     qpsi --> m["Latent context m"]
-    z --> pol["Policy π_ω(a | z, C)<br/>trained by RL"]
-    C["Cluster memory C<br/>(summary of each cluster built so far,<br/>empty slots included)"] --> pol
-    m -.-> pol
+    z --> pol["Policy π_ω(a | z, m, C)<br/>trained by RL"]
+    C["Cluster memory C<br/>(average intent of the members of each cluster<br/>built so far, empty slots included)"] --> pol
+    m --> pol
     pol --> a["Assignment a ∈ {1..K}<br/>existing cluster, or empty slot = new cluster"]
     a -- "transition: update the summary of cluster a" --> C
-    z --> rew["Reward R_θ(z, C, a)<br/>fit to the experts (IRL)"]
+    z --> rew["Reward R_θ(z, m, C, a)<br/>fit to the experts (IRL)"]
     C --> rew
+    m --> rew
+    m -- "averaged into the summary of the chosen cluster" --> C
     exp["Experts<br/>(orbits, random pairs)"] -. "IRL: fit the reward" .-> rew
     rew -. "RL: maximize cumulative return" .-> pol
     enc -. "compression: I(z; x)" .-> ib["Information Bottleneck"]
@@ -135,12 +162,19 @@ An *episode* is one sweep over a minibatch of views, presented one after the oth
 
 | Component | Definition |
 |---|---|
-| State `s_t` | `(z_t, C_t)`, plus the optional context `m_t`. `z_t = f_φ(x_t)` is the code of the image arriving at step `t`. `C_t = {(n_k, c_k)}_{k=1..K}` is the **cluster memory**: for each slot `k`, the number of members `n_k` and a summary `c_k` (running mean of their codes). An empty slot (`n_k = 0`) carries a learned "empty" embedding. `C` is a memory, not a differentiable function: it is updated by the transition and is stop-gradient everywhere |
+| State `s_t` | `(z_t, m_t, C_t)`. `z_t = f_φ(x_t)` is the code of the image arriving at step `t` and `m_t = μ_ψ(z_t)` is its inferred intent. `C_t = {(n_k, c_k)}_{k=1..K}` is the **cluster memory**: for each slot `k`, the number of members `n_k` and the **average intent** `c_k` of its members. An empty slot (`n_k = 0`) carries a learned "empty" embedding. `C` is a memory, not a differentiable function: it is updated by the transition and is stop-gradient everywhere |
 | Action `a_t` | A slot `a ∈ {1, …, K}`. Choosing a non-empty slot means *joining* that cluster. Choosing an empty slot means *opening a new cluster*. `K` is an **upper bound**; the number of clusters actually constructed starts at 0 and grows during training |
-| Transition | The chosen slot is updated: `n_a ← n_a + 1`, `c_a ← (1−η_a)·c_a + η_a·z_t` (running mean, or slow EMA once a slot is mature). The next image then sees a different state |
+| Transition | The chosen slot is updated: `n_a ← n_a + 1`, `c_a ← c_a + (m_t − c_a)/n_a` (running mean of the member intents, or a slow EMA once a slot is mature). The next image then sees a different state |
 | Reward | `R_θ(s_t, a_t)`: compatibility of `z_t` with the chosen group **and** distinctness from the other groups. One network, permutation-equivariant over slots. Learned by IRL from the experts ([Section 5](#5-where-do-the-experts-come-from)) |
 | Policy | `π_ω(a \| s_t)`, a **separate network** trained by RL to maximize the entropy-regularized cumulative return `E[Σ_t γ^t R_θ(s_t, a_t)] + α·H(π_ω)`. It is *not* `softmax(R_θ)` |
 | Expert | Not observed: built from image transformations ([Section 5](#5-where-do-the-experts-come-from)) |
+
+**What `m` is, and why the cluster memory is made of intents.** In Meta-IRL (PEMIRL), the context `m` is inferred from a *set* of demonstrations that share a task, and it indexes the reward of that task. Our counterpart of a set of demonstrations is a **group of images**: an orbit at first, then a cluster that gathers orbits. The `m` of a group is its **intent**, what its members have in common. This gives two levels:
+
+- **Per image, `m_u = μ_ψ(z_u)`.** The intent that a single image expresses. During training `q_ψ` is pushed to give the same intent to all views of an orbit (Section 6.2), so `m` is the orbit-consistent, nuisance-free part of the code. At test time it is computed from one image, as PEMIRL infers the context of a new task from a single demonstration.
+- **Per cluster, `c_k`.** The average of the intents of its members. The intent of a cluster *is* the summary stored in the memory.
+
+The reward and the policy therefore receive no extra label: they compare the intent of the arriving image with the intents of the existing clusters. We do not take `m` to be the cluster index (a distribution over slots), because that would duplicate the output of the policy. One honest remark: `m` is a function of `z`, so it adds no information. What it adds is an extra invariance signal (orbit consistency, `L_ψ`) and a space in which clusters are compared. The ablations "without `m`" and "summaries in `z`-space" measure it ([Section 9](#9-ablations)).
 
 **What RL brings that a classifier does not.** The reward is a *one-step* score: it says whether placing this image here is good *given the clusters as they currently are*. A placement also changes the cluster summary, hence the rewards of all later images. The policy optimizes this whole chain: it can leave an uncertain image in a fresh slot instead of polluting an existing summary, or open a cluster early because several later images will need it. If `γ = 0` the return is the immediate reward and the policy is essentially greedy on `R_θ`; the ablation `γ = 0` / `softmax(R_θ)` ([Section 9](#9-ablations)) measures what the sequential structure really adds.
 
@@ -187,7 +221,7 @@ $$
 \mathcal{L}_{\text{inv}}(\phi) \;=\; \mathbb{E}_{x,\,t\sim\mathcal{T}}\;\mathrm{KL}\Big(\pi_{\bar\omega}(\cdot\mid z,\bar C,\bar m)\;\Big\|\;\pi_{\bar\omega}(\cdot\mid z_t,\bar C,\bar m)\Big)
 $$
 
-A bar means **stop-gradient**: the value is used but not updated by this term. The policy `ω`, the intent `ψ` (hence `m`) and the cluster memory `C` are *frozen* here, while the encoder `φ` is updated through both views. Section 6.5 explains why. This is the bridge to IRM (invariance across environments) and IIC (agreement across views). It acts as a *check* on the encoder: if the useless features were really compressed away, the distribution over clusters must not move. Alternatives (the reward-induced choice model `q_θ̄` instead of `π_ω̄`, raw reward differences, `ω` unfrozen) are covered by the ablations in [Section 9](#9-ablations).
+A bar means **stop-gradient**: the value is used but not updated by this term. The policy `ω`, the intent `ψ` (hence `m̄`, the intent of the clean view, given to both views) and the cluster memory `C` are *frozen* here, while the encoder `φ` is updated through both views. The term therefore tests the dependence of the decision on `z`; the invariance of `m` itself is enforced by `L_ψ`. Section 6.5 explains why. This is the bridge to IRM (invariance across environments) and IIC (agreement across views). It acts as a *check* on the encoder: if the useless features were really compressed away, the distribution over clusters must not move. Alternatives (the reward-induced choice model `q_θ̄` instead of `π_ω̄`, raw reward differences, `ω` unfrozen) are covered by the ablations in [Section 9](#9-ablations).
 
 ---
 
@@ -318,7 +352,7 @@ The architecture has four trained components: the **encoder**, the **intent pred
 ### 6.0 Notation
 
 - For a view `u`: `z_u = f_φ(u)` and `m_u = μ_ψ(z_u)` (mean of the inferred intent).
-- `C` is the cluster memory (Section 4.2). `s_u = (z_u, C, m_u)` is the state in which `u` arrives. `C` is always treated as a constant.
+- `C = {(n_k, c_k)}` is the cluster memory (Section 4.2): `c_k` is the average of the intents `m_v` of the members of cluster `k`. `s_u = (z_u, m_u, C)` is the state in which `u` arrives. `C` is always treated as a constant. States and summaries always use the **single-view** intent `m_u`, as at test time; the orbit mean `m*` below is only a training target for `q_ψ`.
 - `R_θ(s, a)` is the reward of placing the arriving image in slot `a`. `q_θ(a | s) = softmax_a R_θ(s, a)` is the choice model it induces, used to score the experts (Section 5.2).
 - `π_ω(a | s)` is the **policy**, a network of its own, trained by RL against `R_θ`. It is not `q_θ`.
 - A bar (`θ̄`, `ω̄`, `m̄`, `C̄`) means **stop-gradient**: the value is used in the computation but not updated by that loss.
@@ -344,7 +378,7 @@ For a diagonal Gaussian the KL has a closed form: `½ Σ_j (μ_j² + σ_j² − 
 
 ### 6.2 Intent predictor `q_ψ`
 
-**Role.** Infers from `z` a continuous latent concept `m` (what the image is "about", e.g. species morphology) that conditions the reward and the policy. As the context variable of Meta-IRL, it lets one global reward express different notions of similarity. Its exact role, now that the cluster memory `C` also carries information about the groups, is the open question of [Section 7.2](#72-still-open).
+**Role.** Infers from `z` a continuous intent `m` (what the image is "about", e.g. species morphology), the counterpart of the context variable of Meta-IRL. It plays two roles. For an image, it is the nuisance-free summary of what the image expresses. For a cluster, the average of the intents of its members is the cluster's summary in the memory `C`, so the intent of a cluster is built from the intents of its images, as PEMIRL infers the context of a task from its demonstrations. The reward and the policy receive `m` and compare it with the intents of the existing clusters.
 
 **Loss.**
 
@@ -355,11 +389,11 @@ $$
 **Reading the terms.**
 - **Log-likelihood of the orbit's intent `m*`.** Every view of an image must give the same concept. A concept that changes when only the background changes is penalized, so `m` is pushed toward content.
 - **Gaussian case.** With `q_ψ(m | z) = 𝒩(μ_ψ(z), σ_ψ²(z))`, this is a squared error weighted by the predicted precision, plus `log σ_ψ`: the model can express uncertainty but pays for it.
-- **Caveat.** Nothing forces `m` to be used; a constant `m` reduces the model to single-intention IRL. The "without `m`" ablation measures this.
+- **Caveat.** `m` is a function of `z`: it adds an invariance signal, not information. A constant `m` would leave the memory with only counts and reduce the model to single-intention IRL. The "without `m`" ablation measures what `m` really contributes.
 
 ### 6.3 Reward model `R_θ`
 
-**Role.** Scores every placement `(s, a)`: how well the arriving image, coded by `z`, fits the group in slot `a` **and** how well it is told apart from the other groups in the memory `C`. It is the object that IRL recovers, the *intention of distinction*, shared by the whole dataset. It is a permutation-equivariant network over the slots (it reads the summary of the chosen slot together with a pooled view of the others), so the identity of a slot never matters, only its content. It is trained by IRL on the experts; it is **not** the policy.
+**Role.** Scores every placement `(s, a)`: how well the arriving image, coded by `z`, fits the group in slot `a` **and** how well it is told apart from the other groups in the memory `C`. It is the object that IRL recovers, the *intention of distinction*, shared by the whole dataset. It is a permutation-equivariant network over the slots, `R_θ(z, m, C, a) = g_θ(z, m, c_a, n_a, pool_{k≠a}(c_k, n_k))`: it reads the chosen slot together with a pooled view of the others, so the identity of a slot never matters, only its content (the first part measures compatibility, the second distinctness). It is trained by IRL on the experts; it is **not** the policy.
 
 **Loss.** Maximum-likelihood IRL of the expert's decisions (Section 5), under the choice model `q_θ`:
 
@@ -374,7 +408,7 @@ $$
 
 ### 6.4 Policy `π_ω` (separate network, trained by RL)
 
-**Role.** The agent that builds the clustering. At each step it sees the arriving code and the clusters built so far, and picks a slot: join a group, or open a new one. It is a separate network `π_ω(a | z, C [, m])` (set-conditioned over the slots, like the reward), with a critic `V_ξ(s)` for the return estimates. At inference the assignment is `a = argmax_a π_ω(a | s)` with the memory `C` frozen at the end of training.
+**Role.** The agent that builds the clustering. At each step it sees the arriving code and the clusters built so far, and picks a slot: join a group, or open a new one. It is a separate network `π_ω(a | z, m, C)` (set-conditioned over the slots, like the reward), with a critic `V_ξ(s)` for the return estimates. At inference the assignment is `a = argmax_a π_ω(a | s)` with the memory `C` frozen at the end of training.
 
 **Loss.** Entropy-regularized RL against the *frozen* reward (actor-critic, e.g. PPO with advantages from `V_ξ`):
 
@@ -406,7 +440,7 @@ This is the objective of Section 4.4, plus the RL loss of Section 6.4, which is 
 | Term | Updates | Frozen (stop-gradient) |
 |---|---|---|
 | `L_ψ` (intent) | `ψ`, and `φ` through `z` | The orbit target `m*` |
-| `L_θ` (expert likelihood) | `θ`, and `φ` through `z` | The memory `C`; `m` is detached for now (`ψ` gets no gradient from `L_θ`); revisited with Q2 |
+| `L_θ` (expert likelihood) | `θ`, and `φ` through `z` | The memory `C` and the intent `m`: `ψ` gets no gradient from `L_θ`. The intent is trained only by `L_ψ`, so the reward cannot bend it to make its own job easier, and the cluster summaries stay stable |
 | KL (compression) | `φ` | None |
 | `L_inv` (invariance) | `φ` only, through both `z` and `z_t` | `ω`, `ψ` (hence `m`) and `C` |
 | `L_ω` (RL return + entropy) | `ω` (and the critic `ξ`) | `φ`, `ψ`, `θ`, `C`: the policy step treats the encoder and the reward as given |
@@ -438,25 +472,93 @@ Two stages, nothing flowing back from the second to the first.
 
 Sequential training is the natural control for the claim that *joint* optimization matters (see [Ablations](#9-ablations)); with `β = 0` it reduces to the "standard multi-intention IRL" baseline.
 
+### 6.7 All the objectives in one place
+
+**Representation and state.** For an arriving view `u`:
+
+$$
+z_u = \mu_\phi(u)+\sigma_\phi(u)\odot\varepsilon,\qquad m_u = \mu_\psi(z_u),\qquad s_u=(z_u,\,m_u,\,C),\qquad C=\{(n_k,c_k)\}_{k=1}^{K}
+$$
+
+**Transition (cluster memory).** After the assignment `a`, the chosen slot absorbs the intent of the view (an empty slot, `n_a = 0`, thereby becomes a new cluster):
+
+$$
+n_a \leftarrow n_a+1,\qquad c_a \leftarrow c_a+\frac{m_u-c_a}{n_a}
+$$
+
+**Intent (Section 6.2).** Every view of an orbit must give the intent of the orbit:
+
+$$
+\mathcal{L}_\psi=-\,\mathbb{E}_{i,\,u\in\text{orbit}_i}\big[\log q_\psi(m^*_i\mid z_u)\big],\qquad m^*_i=\mathrm{sg}\Big[\tfrac{1}{|\text{orbit}_i|}\textstyle\sum_{v\in\text{orbit}_i}\mu_\psi(z_v)\Big]
+$$
+
+**Reward (IRL on the experts, Sections 5.2, 5.3 and 6.3).** The choice model induced by the reward and the expert loss:
+
+$$
+q_\theta(a\mid s)=\frac{\exp R_\theta(s,a)}{\sum_{a'}\exp R_\theta(s,a')},\qquad
+\mathcal{L}_{\text{pos}}=-\,\mathbb{E}\big[\log q_\theta(k^+(u)\mid s_u)\big]
+$$
+
+$$
+\mathcal{L}_{\text{neg}}=\mathbb{E}_{u}\max\Big\{\tfrac{1}{1-\tau^+}\Big(\mathbb{E}_{v}\,\ell(u,v)-\tau^+\,\mathbb{E}_{v^+}\,\ell(u,v^+)\Big),\,0\Big\},\quad \ell(u,v)=-\log\big(1-q_\theta(k(v)\mid s_u)\big)
+$$
+
+$$
+\mathcal{L}_\theta=\mathcal{L}_{\text{pos}}+\mathcal{L}_{\text{neg}}-\rho\,\mathcal{H}\big(\mathbb{E}_s\,q_\theta(\cdot\mid s)\big),\qquad \rho=0\text{ by default}
+$$
+
+**Invariance (Section 4.5).** The policy is the fixed ruler; only the encoder is updated:
+
+$$
+\mathcal{L}_{\text{inv}}=\mathbb{E}_{x,\,t\sim\mathcal{T}}\,\mathrm{KL}\Big(\pi_{\bar\omega}(\cdot\mid z,\bar m,\bar C)\,\Big\|\,\pi_{\bar\omega}(\cdot\mid z_t,\bar m,\bar C)\Big)
+$$
+
+**Reward step** (updates `φ, ψ, θ`):
+
+$$
+\mathcal{L}=\mathcal{L}_\psi+\mathcal{L}_\theta+\beta\,\mathbb{E}_x\mathrm{KL}\big(p_\phi(z\mid x)\,\|\,\mathcal{N}(0,I)\big)+\lambda\,\mathcal{L}_{\text{inv}}
+$$
+
+**Policy step** (updates `ω` and the critic `ξ`; `φ, ψ, θ, C` frozen). The policy maximizes the return of the learned reward, and the critic regresses it:
+
+$$
+\mathcal{L}_\omega=-\,\mathbb{E}_{\pi_\omega}\Big[\sum_t\gamma^t R_{\bar\theta}(s_t,a_t)\Big]-\alpha\,\mathbb{E}\big[\mathcal{H}(\pi_\omega(\cdot\mid s_t))\big],\qquad
+\mathcal{L}_\xi=\mathbb{E}\big[(V_\xi(s_t)-\hat G_t)^2\big]
+$$
+
+with `Ĝ_t = Σ_{j≥0} γ^j R_θ̄(s_{t+j}, a_{t+j})`.
+
+**Inference.** `C` is frozen at the end of training and each image is assigned by `a = argmax_a π_ω(a | z, m, C)` with `m = μ_ψ(z)`.
+
 ---
 
 ## 7. Decisions & Open Questions
 
 ### 7.1 Decisions taken
 
-1. **Expert = transformations.** Orbits of transformed images give "join your twin" decisions (forced moves); random pairs give "do not put together" decisions (repulsion). The expert is relational (no cluster is ever named in absolute terms).
-2. **Random negatives are accepted** as non-intervention, with a known false-negative rate `τ⁺`, corrected by debiasing. Negatives chosen from concepts known to be different are rejected.
-3. **`𝒯` is prior knowledge about nuisances**, declared as such (assumption A1).
-4. **A separate policy `π_ω`, trained by RL.** The policy is conditioned on the clusters built so far (the cluster memory `C`); its actions are the existing clusters or an empty slot; each placement updates `C`. It is trained on the cumulative return of the learned reward and is **not** the softmax of the reward. The reward encodes the intention of distinction and is learned by IRL on the relational experts.
-5. **`K` is an upper bound.** Slots start empty; choosing an empty slot opens a new cluster; the number of constructed clusters grows during training and is monitored.
-6. **Alternating training.** A reward step (IRL, with the encoder, intent and KL) then a policy step (RL, with the others frozen). The risks (RL instability, order dependence, cold start, non-stationarity) are monitored (Section 5.7).
-7. **Invariance compares policies, with `ω`, `ψ` and `C` frozen.** `L_inv` is a KL between the policies on the clean and perturbed views, in the same cluster state; it updates the encoder only (Section 6.5). Ablations: `q_θ̄` instead of `π_ω̄`, raw reward differences, and `ω` unfrozen.
-8. **No collapse safeguard by default.** `ρ = 0`; it is switched on only if `K_eff < 0.7·K` early in training (Section 6.3).
-9. **`τ⁺` and `K`.** `τ⁺ = 1/K` on Colored MNIST; `τ⁺` swept on Waterbirds. `K` is set to the true number of classes in the main results, with sensitivity (larger `K`) in the ablations.
+Each decision is given with its reason and with what we rejected.
+
+| # | Decision | Why | Rejected alternative |
+|---|---|---|---|
+| 1 | **Expert = transformations.** The views of an orbit show the same thing, so they give certain "join your twin" decisions (forced moves). | IRL needs demonstrations and an unsupervised problem has none; the images themselves can provide the "same" signal for free. | Experts built from labels (not unsupervised). |
+| 2 | **Relational expert.** The expert never names a cluster in absolute terms: forced moves (attraction), free moves (first view of an orbit), repulsion between random views. | Must-link / cannot-link constraints are enough to identify the reward up to a relabeling of clusters, which is all clustering needs. | Absolute cluster labels as expert actions. |
+| 3 | **Random negatives with a known false-negative rate `τ⁺`, debiased.** | Random pairs are rarely the same concept; the error rate is known and corrected (Chuang et al. 2020). It is not an intervention. | Negatives chosen from concepts known to be different: they inject labels at the start and bias the unsupervised goal. |
+| 4 | **`𝒯` is prior knowledge about nuisances** (assumption A1). | It encodes what should *not* matter, not what the classes are, like the environments of IRM. | Pretending the method needs no prior at all. |
+| 5 | **A separate policy `π_ω`, trained by RL, conditioned on the clusters built so far.** Actions are the existing clusters or an empty slot; each placement updates the memory `C`. | IRL must bring something new. The reward is the *intention of distinction* (learned from the experts) and the policy optimizes the *return* over a sequence of placements that change the state. A closed-form `softmax(R)` would only be a per-image classifier. | The policy as the softmax of the reward (kept as a control, `γ = 0`); no cluster memory (kept as an ablation). |
+| 6 | **`K` is an upper bound; clusters are opened progressively.** Slots start empty, choosing an empty slot opens a cluster, and the number of constructed clusters grows during training. | Consistent with the cluster memory (a cluster exists once it has members) and with the "unsupervised, built along the way" intuition. `K` known as an upper bound is a weaker assumption than `K` exact. | A fixed `K` all active from step 0. |
+| 7 | **Alternating training.** Reward step (IRL: encoder, intent, reward) then policy step (RL, with the others frozen). | The policy is optimized against a reward, so the reward must be a ruler that does not move during the policy step; both co-adapt across iterations. | A single end-to-end loss through the RL return. |
+| 8 | **`m` is the intent, and the cluster memory is made of intents.** `m` is inferred per image by `q_ψ` (made consistent over an orbit by `L_ψ`); the summary of a cluster is the average intent of its members; the reward and the policy receive `z`, `m` and `C`. `ψ` is trained only by `L_ψ`. | It is the direct counterpart of Meta-IRL: the context of a task is inferred from the set of its demonstrations. It avoids a redundant per-image latent next to the memory. | `m` as the cluster index (duplicates the policy output); `m` absent (kept as an ablation); `ψ` trained by `L_θ` (the reward could distort the intent). |
+| 9 | **Invariance compares policies, with `ω`, `ψ` and `C` frozen.** `L_inv` is a KL between the policies on the clean and perturbed views, in the same cluster state. | A reward is defined only up to a per-image constant under a softmax, so policies are the comparable objects. A free policy could ignore the image and give `L_inv = 0` for free. | Raw reward differences; `ω` unfrozen (kept as ablations). |
+| 10 | **No collapse safeguard by default.** `ρ = 0`; switched on only if `K_eff < 0.7·K` early in training. | Repulsion and the finite number of slots already prevent collapse; a uniform-usage bias is wrong for imbalanced classes. | A large `ρ` from the start. |
+| 11 | **`τ⁺` and `K`.** `τ⁺ = 1/K` on Colored MNIST, swept on Waterbirds; `K` equals the true number of classes in the main results, with sensitivity in the ablations. | `1/K` is exact for balanced classes; Waterbirds is imbalanced (`τ⁺ = Σ_c p_c²`). | A single universal `τ⁺`. |
 
 ### 7.2 Still open
 
-1. **What is `m`?** `m` comes from Meta-IRL, where it indexes the task (the reward) behind a demonstration. In our setting the cluster memory `C` now carries part of that role (it summarizes each group), so `m` may be redundant or may become the cluster/intent itself. Options: a soft concept code from `q_ψ` (current), the cluster identity or summary (the intent *is* the cluster, leaning of the current discussion), or absent in the first version. Until decided, `m` is kept as an optional input, `L_θ` does not update `ψ`, and the "without `m`" ablation is the control.
+No design question is open at this stage. Points to settle by experiment:
+
+1. Whether the reward and the policy should see `z` and `m`, or only `m` (ablation, [Section 9](#9-ablations)).
+2. The update rate of the memory (running mean vs. slow EMA) and the RL hyperparameters (`γ`, `α`, ratio between reward and policy steps).
+3. Whether the reward needs a warm-up on forced moves before the policy acts alone (cold start).
 
 ### 7.3 Deferred
 
@@ -512,6 +614,7 @@ Reporting: mean ± std over several seeds, with `K` (upper bound) set to the num
 | `β` sweep | Where is the compression / utility trade-off, and is there a sweet spot? |
 | `K` larger than the true number, smaller than the true number, imbalanced classes, and `τ⁺` sweep | How sensitive is the method to the upper bound `K` and to the value of `τ⁺`, and does it open the right number of clusters? |
 | Without latent context `m` | What does the intent variable contribute? |
+| Cluster summaries in `z`-space instead of `m`-space; reward and policy see only `m` (no `z`) | Where should clusters be compared, and does `z` bring more than `m` to the decisions? |
 
 ---
 
@@ -525,8 +628,8 @@ cib-irl/
 │   ├── encoder.py    # causal encoder f_φ (stochastic, VIB head)
 │   ├── intent.py     # intent predictor q_ψ(m | z)
 │   ├── memory.py     # cluster memory C: slot summaries, empty slots, transitions
-│   ├── reward.py     # reward R_θ(z, C, a) and induced choice model q_θ
-│   ├── policy.py     # RL policy π_ω(a | z, C) and critic V_ξ
+│   ├── reward.py     # reward R_θ(z, m, C, a) and induced choice model q_θ
+│   ├── policy.py     # RL policy π_ω(a | z, m, C) and critic V_ξ
 │   ├── experts.py    # orbits, forced moves, random pairs, debiasing (Phase 2 mining later)
 │   ├── losses.py     # variational IB bound, expert likelihood, RL loss, consistency term
 │   └── train.py      # rollouts, alternating reward / policy loop, Phase 1 / Phase 2 schedule
@@ -544,7 +647,7 @@ cib-irl/
 - [x] Architecture and joint objective
 - [x] Expert design (orbits, relational decisions, forced moves, debiased negatives, Phase 2)
 - [x] Policy design: separate RL policy conditioned on the clusters built so far, `K` as an upper bound, alternating training
-- [ ] Remaining open questions settled ([Section 7.2](#72-still-open))
+- [x] Design questions settled: experts, policy, `m` ([Section 7.1](#71-decisions-taken))
 - [ ] Variational formulation validated (Section 4.4) and consistency term fixed (Section 4.5)
 - [ ] Expert module, cluster memory and monitoring (leakage, churn, non-empty slots, cluster-size entropy)
 - [ ] Stable reward / policy alternation on Colored MNIST (RL stability, order dependence)
