@@ -19,7 +19,7 @@
 9. [Ablations](#9-ablations)
 10. [Repository Structure](#10-repository-structure-planned)
 11. [Status & Roadmap](#11-status--roadmap)
-12. [Citation & License](#12-citation--license)
+12. [License](#12-license)
 
 ---
 
@@ -90,7 +90,7 @@ Image datasets are full of spurious cues (background, texture, style) that are e
 
 ## 3. Background & Reading List
 
-Five papers cover the theoretical foundations of the framework:
+Six papers cover the theoretical foundations of the framework:
 
 - [ ] Yu, L., Yu, T., Finn, C., & Ermon, S. (2019).
   *Meta-Inverse Reinforcement Learning with Probabilistic Context Variables*. NeurIPS 2019.
@@ -126,6 +126,14 @@ Five papers cover the theoretical foundations of the framework:
   Early "clustering and IRL together" — clusters unlabeled trajectories by inferring one
   objective per cluster with an EM procedure over IRL. Closest ancestor of the idea that a
   cluster is defined by its reward.
+
+- [ ] Le-Khac, P. H., Healy, G., & Smeaton, A. F. (2020).
+  *Contrastive Representation Learning: A Framework and Review*. IEEE Access, 8.
+  [PDF](https://arxiv.org/pdf/2010.05113.pdf)
+  Core contrastive-learning overview — a review that unifies the methods (positive and negative
+  pairs, loss functions, families of methods) and gives the vocabulary used by the other
+  papers. Enough to understand what our `L_pos` and `L_neg` borrow from contrastive learning
+  (Section 5.3).
 
 Additional references used by the expert design ([Section 5](#5-where-do-the-experts-come-from)): **Debiased Contrastive Learning** (Chuang et al., NeurIPS 2020), **SCAN: Learning to Classify Images without Labels** (Van Gansbeke et al., ECCV 2020), **SimCLR** (Chen et al., 2020), **MoCo v3** (Chen, Xie, He, 2021), and **Waterbirds / Group DRO** (Sagawa et al., 2020).
 
@@ -658,15 +666,9 @@ cib-irl/
 
 ---
 
-## 12. Citation & License
+## 12. License
 
-```bibtex
-@misc{cibirl,
-  title  = {CIB-IRL: Causal Information Bottleneck Inverse Reinforcement Learning},
-  author = {TODO},
-  year   = {2026},
-  note   = {Work in progress}
-}
+MIT License
 ```
 
 License: *TODO*.
