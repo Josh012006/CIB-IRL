@@ -243,12 +243,12 @@ and the policy is trained separately, with its own RL loss `L_ω` (Section 6.4),
 
 ### 4.5 Decision-consistency (invariance) term
 
-A feature is spurious if removing it leaves the decision unchanged. We operationalize this with a consistency penalty under nuisance perturbations `t ~ 𝒯` (background swaps, color jitter, style transfer). Because a softmax policy is only defined up to an additive constant per image in the reward, and because the policy is what actually decides, we compare the **policies** on the clean and the perturbed view, in the same (learner's) cluster state. With `z = f_φ(x)` and `z_t = f_φ(t(x))`:
+A feature is spurious if removing it leaves the decision unchanged. We operationalize this with a consistency penalty under nuisance perturbations `g ~ 𝒯` (background swaps, color jitter, style transfer). Because a softmax policy is only defined up to an additive constant per image in the reward, and because the policy is what actually decides, we compare the **policies** on the clean and the perturbed view, in the same (learner's) cluster state. With `z = f_φ(x)` and `z̃ = f_φ(g(x))`:
 
 <br>
 
 ```math
-\mathcal{L}_{\text{inv}}(\phi) = 𝔼_{x,t\sim\mathcal{T}}\,\mathrm{KL}\Big(\pi_{\bar\omega}(\cdot\mid z,\bar C,\bar m)\Big\|\pi_{\bar\omega}(\cdot\mid z_t,\bar C,\bar m)\Big)
+\mathcal{L}_{\text{inv}}(\phi) = 𝔼_{x,g\sim\mathcal{T}}\,\mathrm{KL}\Big(\pi_{\bar\omega}(\cdot\mid z,\bar C,\bar m)\Big\|\pi_{\bar\omega}(\cdot\mid \tilde z,\bar C,\bar m)\Big)
 ```
 
 <br>
@@ -270,7 +270,7 @@ Take one image and transform it: crop it, change its colors, replace its backgro
 **Definitions.**
 
 - **Nuisance family `𝒯`.** Transformations that change appearance (crop, color, blur, background, style) but are meant to preserve the object.
-- **Orbit of an image `x_i`.** `𝒪_i = { t_D ∘ … ∘ t_1 (x_i) : t_k ∈ 𝒯, D ≤ D_max }`: everything reachable by chaining at most `D_max` transformations, with bounded cumulative strength (long chains drift away from the object).
+- **Orbit of an image `x_i`.** `𝒪_i = { g_D ∘ … ∘ g_1 (x_i) : g_k ∈ 𝒯, D ≤ D_max }`: everything reachable by chaining at most `D_max` transformations, with bounded cumulative strength (long chains drift away from the object).
 - **Expert portion `𝒟_E`.** The portion of the training images dedicated to building the expert demonstrations; its size is a hyperparameter. The learner's environment is the whole training set.
 - **Demonstration (episode).** An episode presents views drawn from several orbits, one after the other, in random order. It plays the role of the trajectory in PEMIRL. The state of each decision is `(z_t, m_t, C^E_t)`, where `C^E_t` is the **expert's own memory**: the groups the expert has formed so far in this episode, built by the same transition as the learner's memory ([Section 4.2](#42-episodic-mdp-over-a-growing-set-of-clusters)). It starts empty and is discarded at the end of the episode.
 
@@ -418,7 +418,7 @@ We prefer to state what the expert silently relies on:
 | Non-stationary state and reward | The policy chases a reward and a memory that both move | Alternating updates with a slow reward relative to the policy; frozen reward during the policy step (Section 6.5) |
 | RL instability | Return oscillates, policy entropy collapses | Entropy bonus `α`, small policy learning rate, critic target network, comparison with the closed-form `softmax(R_θ)` control |
 | Semantic drift along chains | Views in an orbit no longer show the same object | Bound `D_max` and cumulative strength |
-| Over-strong transformations | Crops that remove the object, noisy "twin" decisions | Bound the strength of each `t ∈ 𝒯` |
+| Over-strong transformations | Crops that remove the object, noisy "twin" decisions | Bound the strength of each `g ∈ 𝒯` |
 | Confirmation bias and chain drift (Phase 2) | Churn does not decrease, errors reinforced, distinct classes merged through a chain of links | EMA copy, mutual neighbors, confidence `γ_c`, rate cap `M`, persistence over several epochs, no automatic transitive closure |
 | Moving expert (Phase 2) | Reward loss oscillates | Change the expert slowly relative to reward learning (cap and ramp-up) |
 | False negatives | About `1/K` of random pairs are the same concept | Debiasing; check for class imbalance |
@@ -452,7 +452,7 @@ The architecture has four trained components: the **encoder**, the **intent pred
 <br>
 
 ```math
-\mathcal{L}_{\text{enc}}(\phi) = \underbrace{\mathcal{L}_\psi + \mathcal{L}_\theta}_{\text{utility, through } z} + \beta\,\underbrace{𝔼_x\,\mathrm{KL}\big(p_\phi(z\mid x)\|\mathcal{N}(0,I)\big)}_{\text{compression}} + \lambda\,\underbrace{𝔼_{x,t}\,\mathrm{KL}\big(\pi_{\bar\omega}(\cdot\mid z,\bar C,\bar m)\|\pi_{\bar\omega}(\cdot\mid z_t,\bar C,\bar m)\big)}_{\mathcal{L}_{\text{inv}}(\omega,\psi,C\text{ frozen})}
+\mathcal{L}_{\text{enc}}(\phi) = \underbrace{\mathcal{L}_\psi + \mathcal{L}_\theta}_{\text{utility, through } z} + \beta\,\underbrace{𝔼_x\,\mathrm{KL}\big(p_\phi(z\mid x)\|\mathcal{N}(0,I)\big)}_{\text{compression}} + \lambda\,\underbrace{𝔼_{x,g}\,\mathrm{KL}\big(\pi_{\bar\omega}(\cdot\mid z,\bar C,\bar m)\|\pi_{\bar\omega}(\cdot\mid \tilde z,\bar C,\bar m)\big)}_{\mathcal{L}_{\text{inv}}(\omega,\psi,C\text{ frozen})}
 ```
 
 <br>
@@ -549,7 +549,7 @@ This is the objective of Section 4.4, plus the RL loss of Section 6.4, which is 
 | `L_ψ` (intent) | `ψ`, and `φ` through `z` | The orbit target `m*` |
 | `L_θ` (expert likelihood) | `θ`, and `φ` through `z` | The memory `C^E` and the intent `m`: `ψ` gets no gradient from `L_θ`. The intent is trained only by `L_ψ`, so the reward cannot bend it to make its own job easier, and the cluster summaries stay stable |
 | KL (compression) | `φ` | None |
-| `L_inv` (invariance) | `φ` only, through both `z` and `z_t` | `ω`, `ψ` (hence `m`) and `C` |
+| `L_inv` (invariance) | `φ` only, through both `z` and `z̃` | `ω`, `ψ` (hence `m`) and `C` |
 | `L_ω` (RL return + entropy) | `ω` (and the critic `ξ`) | `φ`, `ψ`, `θ`, `C`: the policy step treats the encoder and the reward as given |
 
 **What is frozen in `L_inv`, and why.** With `ω̄`, `m̄`, `C̄` frozen, the invariance term has gradient `∇_ω L_inv = 0` and `∇_ψ L_inv = 0`, while `∇_φ L_inv ≠ 0`. This means the policy is used as a *fixed measuring stick*: if the decision it takes changes under a perturbation, the *encoder* is what gets corrected. If `ω` were free, the term would have a trivial minimizer: any policy that does not depend on the image,
@@ -557,7 +557,7 @@ This is the objective of Section 4.4, plus the RL loss of Section 6.4, which is 
 <br>
 
 ```math
-\pi_\omega(\cdot\mid z,C,m) = \pi_\omega(\cdot\mid C,m) \Longrightarrow \pi_\omega(\cdot\mid z,C,m)=\pi_\omega(\cdot\mid z_t,C,m) \Longrightarrow \mathcal{L}_{\text{inv}} = 0 ,
+\pi_\omega(\cdot\mid z,C,m) = \pi_\omega(\cdot\mid C,m) \Longrightarrow \pi_\omega(\cdot\mid z,C,m)=\pi_\omega(\cdot\mid \tilde z,C,m) \Longrightarrow \mathcal{L}_{\text{inv}} = 0 ,
 ```
 
 <br>
@@ -570,7 +570,7 @@ so the check would push the policy toward ignoring the image instead of pushing 
 
 Two stages, nothing flowing back from the second to the first.
 
-1. **Encoder alone.** No reward exists yet. The encoder is trained on the *same expert signals* (Section 5) but with a reward-free similarity head (e.g. a cosine / contrastive head on `z`), together with `β·KL` and an invariance penalty on the code itself, `‖z − z_t‖²`.
+1. **Encoder alone.** No reward exists yet. The encoder is trained on the *same expert signals* (Section 5) but with a reward-free similarity head (e.g. a cosine / contrastive head on `z`), together with `β·KL` and an invariance penalty on the code itself, `‖z − z̃‖²`.
 2. **IRL and RL modules on frozen codes.** `φ` is frozen. `L_ψ + L_θ` are minimized on `z` and `L_ω` trains the policy, still in alternation (reward step, then policy step). There is no KL, no `L_inv`, and no gradient into the encoder.
 
 | | Joint | Sequential |
@@ -657,7 +657,7 @@ with `k⁺(u)` and `k(v)` slots of the expert's memory `C^E`, and `ℓ(u, v⁺)`
 <br>
 
 ```math
-\mathcal{L}_{\text{inv}}=𝔼_{x,t\sim\mathcal{T}}\,\mathrm{KL}\Big(\pi_{\bar\omega}(\cdot\mid z,\bar m,\bar C)\Big\|\pi_{\bar\omega}(\cdot\mid z_t,\bar m,\bar C)\Big)
+\mathcal{L}_{\text{inv}}=𝔼_{x,g\sim\mathcal{T}}\,\mathrm{KL}\Big(\pi_{\bar\omega}(\cdot\mid z,\bar m,\bar C)\Big\|\pi_{\bar\omega}(\cdot\mid \tilde z,\bar m,\bar C)\Big)
 ```
 
 <br>
