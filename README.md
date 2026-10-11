@@ -211,9 +211,9 @@ Encoder `f_φ`, intent predictor `q_ψ` and reward `R_θ` are optimized together
 As in the Deep VIB, both terms are replaced by variational bounds. With a stochastic encoder `p_φ(z|x)` and a fixed prior `r(z)`:
 
 ```math
-I(z;x) \le \mathbb{E}_{x}\mathrm{KL}\big(p_\phi(z\mid x)\|r(z)\big),
+I(z;x) \le 𝔼_{x}\mathrm{KL}\big(p_\phi(z\mid x)\|r(z)\big),
 \qquad
-I(z;a,m) \ge H(a,m) + \mathbb{E}\big[\log q_\psi(m\mid z) + \log q_\theta(a\mid z,C,m)\big]
+I(z;a,m) \ge H(a,m) + 𝔼\big[\log q_\psi(m\mid z) + \log q_\theta(a\mid z,C,m)\big]
 ```
 
 where `q_θ(a | s) = softmax_a R_θ(s, a)` is the **choice model induced by the reward** (Section 5.2). It is used to score the experts' decisions; it is not the policy that acts. Two remarks on the second bound:
@@ -224,7 +224,7 @@ where `q_θ(a | s) = softmax_a R_θ(s, a)` is the **choice model induced by the 
 The loss minimized on the encoder, intent predictor and reward is
 
 ```math
-\mathcal{L} = \mathcal{L}_\psi + \mathcal{L}_\theta + \beta\mathbb{E}_x\mathrm{KL}\big(p_\phi(z\mid x)\|r(z)\big) + \lambda\mathcal{L}_{\text{inv}}
+\mathcal{L} = \mathcal{L}_\psi + \mathcal{L}_\theta + \beta𝔼_x\mathrm{KL}\big(p_\phi(z\mid x)\|r(z)\big) + \lambda\mathcal{L}_{\text{inv}}
 ```
 
 and the policy is trained separately, with its own RL loss `L_ω` (Section 6.4), in alternation with it (Section 6.5).
@@ -234,7 +234,7 @@ and the policy is trained separately, with its own RL loss `L_ω` (Section 6.4),
 A feature is spurious if removing it leaves the decision unchanged. We operationalize this with a consistency penalty under nuisance perturbations `t ~ 𝒯` (background swaps, color jitter, style transfer). Because a softmax policy is only defined up to an additive constant per image in the reward, and because the policy is what actually decides, we compare the **policies** on the clean and the perturbed view, in the same (learner's) cluster state. With `z = f_φ(x)` and `z_t = f_φ(t(x))`:
 
 ```math
-\mathcal{L}_{\text{inv}}(\phi) = \mathbb{E}_{x,t\sim\mathcal{T}}\mathrm{KL}\Big(\pi_{\bar\omega}(\cdot\mid z,\bar C,\bar m)\Big\|\pi_{\bar\omega}(\cdot\mid z_t,\bar C,\bar m)\Big)
+\mathcal{L}_{\text{inv}}(\phi) = 𝔼_{x,t\sim\mathcal{T}}\mathrm{KL}\Big(\pi_{\bar\omega}(\cdot\mid z,\bar C,\bar m)\Big\|\pi_{\bar\omega}(\cdot\mid z_t,\bar C,\bar m)\Big)
 ```
 
 A bar means **stop-gradient**: the value is used but not updated by this term. The policy `ω`, the intent `ψ` (hence `m̄`, the intent of the clean view, given to both views) and the cluster memory `C` are *frozen* here, while the encoder `φ` is updated through both views. The term therefore tests the dependence of the decision on `z`; the invariance of `m` itself is enforced by `L_ψ`. Section 6.5 explains why. This is the bridge to IRM (invariance across environments) and IIC (agreement across views). It acts as a *check* on the encoder: if the useless features were really compressed away, the distribution over clusters must not move. Alternatives (the reward-induced choice model `q_θ̄` instead of `π_ω̄`, raw reward differences, `ω` unfrozen) are covered by the ablations in [Section 9](#9-ablations).
@@ -317,13 +317,13 @@ Positives alone are not enough: putting everything in one cluster satisfies "an 
 - **Attraction (forced moves).** When view `u` arrives and a twin is already in slot `k⁺(u)` of the expert's memory (the slot opened by the first view of its orbit), the reward must make joining that slot likely (here and below `s_u` is the expert's state):
 
 ```math
-\mathcal{L}_{\text{pos}} = -\mathbb{E}_{u:\text{twin placed}}\big[\log q_\theta\big(k^+(u)\mid s_u\big)\big]
+\mathcal{L}_{\text{pos}} = -𝔼_{u:\text{twin placed}}\big[\log q_\theta\big(k^+(u)\mid s_u\big)\big]
 ```
 
 - **Repulsion (random negatives).** For a view `u` and a random previously placed view `v` of another orbit, sitting in the expert's slot `k(v)`, the reward must make joining `k(v)` unlikely. With `ℓ(u,v) = −log(1 − q_θ(k(v) | s_u))`, the naive negative term is `E_v ℓ(u,v)`. A fraction `τ⁺` of random `v` are actually of the same concept, so we subtract their share, approximated by a positive pair (the standard debiasing of Chuang et al. 2020): the anchor's own twin `v⁺` when one is already placed, and the batch average over the forced moves otherwise. We use `τ⁺ = 1/K` on Colored MNIST; on Waterbirds, where classes are imbalanced, `τ⁺` is swept as a hyperparameter (see assumption A2):
 
 ```math
-\mathcal{L}_{\text{neg}} = \mathbb{E}_{u} \max\Big\{\tfrac{1}{1-\tau^+}\Big(\mathbb{E}_{v\sim\text{placed}} \ell(u,v) - \tau^+ \bar\ell^{+}(u) \Big), 0 \Big\}
+\mathcal{L}_{\text{neg}} = 𝔼_{u} \max\Big\{\tfrac{1}{1-\tau^+}\Big(𝔼_{v\sim\text{placed}} \ell(u,v) - \tau^+ \bar\ell^{+}(u) \Big), 0 \Big\}
 ```
 
 with `ℓ̄⁺(u) = −log(1 − q_θ(k⁺(u) | s_u))` if a twin of `u` is placed, and the average of this quantity over the forced moves of the batch otherwise (so that the correction is defined for first views too).
@@ -422,7 +422,7 @@ The architecture has four trained components: the **encoder**, the **intent pred
 **Loss.**
 
 ```math
-\mathcal{L}_{\text{enc}}(\phi) = \underbrace{\mathcal{L}_\psi + \mathcal{L}_\theta}_{\text{utility, through } z} + \beta\underbrace{\mathbb{E}_x\mathrm{KL}\big(p_\phi(z\mid x)\|\mathcal{N}(0,I)\big)}_{\text{compression}} + \lambda\underbrace{\mathbb{E}_{x,t}\mathrm{KL}\big(\pi_{\bar\omega}(\cdot\mid z,\bar C,\bar m)\|\pi_{\bar\omega}(\cdot\mid z_t,\bar C,\bar m)\big)}_{\mathcal{L}_{\text{inv}}(\omega,\psi,C\text{ frozen})}
+\mathcal{L}_{\text{enc}}(\phi) = \underbrace{\mathcal{L}_\psi + \mathcal{L}_\theta}_{\text{utility, through } z} + \beta\underbrace{𝔼_x\mathrm{KL}\big(p_\phi(z\mid x)\|\mathcal{N}(0,I)\big)}_{\text{compression}} + \lambda\underbrace{𝔼_{x,t}\mathrm{KL}\big(\pi_{\bar\omega}(\cdot\mid z,\bar C,\bar m)\|\pi_{\bar\omega}(\cdot\mid z_t,\bar C,\bar m)\big)}_{\mathcal{L}_{\text{inv}}(\omega,\psi,C\text{ frozen})}
 ```
 
 For a diagonal Gaussian the KL has a closed form: `½ Σ_j (μ_j² + σ_j² − 1 − log σ_j²)`.
@@ -439,7 +439,7 @@ For a diagonal Gaussian the KL has a closed form: `½ Σ_j (μ_j² + σ_j² − 
 **Loss.**
 
 ```math
-\mathcal{L}_\psi = -\mathbb{E}_{i,u\in\text{orbit}_i}\big[\log q_\psi(m^\*_i \mid z_u)\big]
+\mathcal{L}_\psi = -𝔼_{i,u\in\text{orbit}_i}\big[\log q_\psi(m^\*_i \mid z_u)\big]
 ```
 
 **Reading the terms.**
@@ -454,7 +454,7 @@ For a diagonal Gaussian the KL has a closed form: `½ Σ_j (μ_j² + σ_j² − 
 **Loss.** Maximum-likelihood IRL of the expert's decisions (Section 5), under the choice model `q_θ`:
 
 ```math
-\mathcal{L}_\theta = \mathcal{L}_{\text{pos}} + \mathcal{L}_{\text{neg}} - \rho\mathcal{H}\big(\mathbb{E}_sq_\theta(\cdot\mid s)\big), \qquad \rho = 0 \text{ by default}
+\mathcal{L}_\theta = \mathcal{L}_{\text{pos}} + \mathcal{L}_{\text{neg}} - \rho\mathcal{H}\big(𝔼_sq_\theta(\cdot\mid s)\big), \qquad \rho = 0 \text{ by default}
 ```
 
 **Reading the terms.**
@@ -469,7 +469,7 @@ For a diagonal Gaussian the KL has a closed form: `½ Σ_j (μ_j² + σ_j² − 
 **Loss.** Entropy-regularized RL against the *frozen* reward (actor-critic, e.g. PPO with advantages from `V_ξ`):
 
 ```math
-\mathcal{L}_\omega = -\mathbb{E}_{\pi_\omega}\Big[\sum_{t}\gamma^{t}R_{\bar\theta}(s_t,a_t)\Big] - \alpha\mathbb{E}\big[\mathcal{H}\big(\pi_\omega(\cdot\mid s_t)\big)\big]
+\mathcal{L}_\omega = -𝔼_{\pi_\omega}\Big[\sum_{t}\gamma^{t}R_{\bar\theta}(s_t,a_t)\Big] - \alpha𝔼\big[\mathcal{H}\big(\pi_\omega(\cdot\mid s_t)\big)\big]
 ```
 
 **Reading the terms.**
@@ -554,43 +554,43 @@ c_k \leftarrow \frac{1}{|M_k|}\sum_{u\in M_k}\mu_\psi\big(\mu_\phi(u)\big)
 **Intent (Section 6.2).** Every view of an orbit must give the intent of the orbit:
 
 ```math
-\mathcal{L}_\psi=-\mathbb{E}_{i,u\in\text{orbit}_i}\big[\log q_\psi(m^*_i\mid z_u)\big],\qquad m^*_i=\mathrm{sg}\Big[\tfrac{1}{|\text{orbit}_i|}\textstyle\sum_{v\in\text{orbit}_i}\mu_\psi(z_v)\Big]
+\mathcal{L}_\psi=-𝔼_{i,u\in\text{orbit}_i}\big[\log q_\psi(m^*_i\mid z_u)\big],\qquad m^*_i=\mathrm{sg}\Big[\tfrac{1}{|\text{orbit}_i|}\textstyle\sum_{v\in\text{orbit}_i}\mu_\psi(z_v)\Big]
 ```
 
 **Reward (IRL on the experts, Sections 5.2, 5.3 and 6.3).** The choice model induced by the reward and the expert loss, evaluated in the expert's states:
 
 ```math
 q_\theta(a\mid s)=\frac{\exp R_\theta(s,a)}{\sum_{a'}\exp R_\theta(s,a')},\qquad
-\mathcal{L}_{\text{pos}}=-\mathbb{E}\big[\log q_\theta(k^+(u)\mid s^E_u)\big]
+\mathcal{L}_{\text{pos}}=-𝔼\big[\log q_\theta(k^+(u)\mid s^E_u)\big]
 ```
 
 ```math
-\mathcal{L}_{\text{neg}}=\mathbb{E}_{u}\max\Big\{\tfrac{1}{1-\tau^+}\Big(\mathbb{E}_{v}\ell(u,v)-\tau^+\mathbb{E}_{v^+}\ell(u,v^+)\Big),0\Big\},\quad \ell(u,v)=-\log\big(1-q_\theta(k(v)\mid s^E_u)\big)
+\mathcal{L}_{\text{neg}}=𝔼_{u}\max\Big\{\tfrac{1}{1-\tau^+}\Big(𝔼_{v}\ell(u,v)-\tau^+𝔼_{v^+}\ell(u,v^+)\Big),0\Big\},\quad \ell(u,v)=-\log\big(1-q_\theta(k(v)\mid s^E_u)\big)
 ```
 
 with `k⁺(u)` and `k(v)` slots of the expert's memory `C^E`, and `ℓ(u, v⁺)` replaced by the batch average over the forced moves when `u` has no placed twin.
 
 ```math
-\mathcal{L}_\theta=\mathcal{L}_{\text{pos}}+\mathcal{L}_{\text{neg}}-\rho\mathcal{H}\big(\mathbb{E}_sq_\theta(\cdot\mid s)\big),\qquad \rho=0\text{ by default}
+\mathcal{L}_\theta=\mathcal{L}_{\text{pos}}+\mathcal{L}_{\text{neg}}-\rho\mathcal{H}\big(𝔼_sq_\theta(\cdot\mid s)\big),\qquad \rho=0\text{ by default}
 ```
 
 **Invariance (Section 4.5).** The policy is the fixed ruler; only the encoder is updated:
 
 ```math
-\mathcal{L}_{\text{inv}}=\mathbb{E}_{x,t\sim\mathcal{T}}\mathrm{KL}\Big(\pi_{\bar\omega}(\cdot\mid z,\bar m,\bar C)\Big\|\pi_{\bar\omega}(\cdot\mid z_t,\bar m,\bar C)\Big)
+\mathcal{L}_{\text{inv}}=𝔼_{x,t\sim\mathcal{T}}\mathrm{KL}\Big(\pi_{\bar\omega}(\cdot\mid z,\bar m,\bar C)\Big\|\pi_{\bar\omega}(\cdot\mid z_t,\bar m,\bar C)\Big)
 ```
 
 **Reward step** (updates `φ, ψ, θ`):
 
 ```math
-\mathcal{L}=\mathcal{L}_\psi+\mathcal{L}_\theta+\beta\mathbb{E}_x\mathrm{KL}\big(p_\phi(z\mid x)\|\mathcal{N}(0,I)\big)+\lambda\mathcal{L}_{\text{inv}}
+\mathcal{L}=\mathcal{L}_\psi+\mathcal{L}_\theta+\beta𝔼_x\mathrm{KL}\big(p_\phi(z\mid x)\|\mathcal{N}(0,I)\big)+\lambda\mathcal{L}_{\text{inv}}
 ```
 
 **Policy step** (updates `ω` and the critic `ξ`; `φ, ψ, θ, C` frozen). The policy maximizes the return of the learned reward, and the critic regresses it:
 
 ```math
-\mathcal{L}_\omega=-\mathbb{E}_{\pi_\omega}\Big[\sum_t\gamma^t R_{\bar\theta}(s_t,a_t)\Big]-\alpha\mathbb{E}\big[\mathcal{H}(\pi_\omega(\cdot\mid s_t))\big],\qquad
-\mathcal{L}_\xi=\mathbb{E}\big[(V_\xi(s_t)-\hat G_t)^2\big]
+\mathcal{L}_\omega=-𝔼_{\pi_\omega}\Big[\sum_t\gamma^t R_{\bar\theta}(s_t,a_t)\Big]-\alpha𝔼\big[\mathcal{H}(\pi_\omega(\cdot\mid s_t))\big],\qquad
+\mathcal{L}_\xi=𝔼\big[(V_\xi(s_t)-\hat G_t)^2\big]
 ```
 
 with `Ĝ_t = Σ_{j≥0} γ^j R_θ̄(s_{t+j}, a_{t+j})`.
