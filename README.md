@@ -443,7 +443,7 @@ The architecture has four trained components: the **encoder**, the **intent pred
 - Expert signals (Section 5), always in the expert's states `s^E`: forced moves (twin already placed in the expert's memory), random previously placed views (repulsion), with `τ⁺ = 1/K`. The expert never acts on the learner: only `L_θ` reads them.
 - Intent target of an image `i`: `m*_i = sg[ mean over the orbit views of μ_ψ(z_v) ]`, where `sg[·]` is stop-gradient. The intent is a property of the orbit, not of a single view.
 
-### 6.1 Encoder `f_φ`
+### 6.1 Encoder $f_φ$
 
 **Role.** The only component that sees pixels. It maps an image to a stochastic code `z = μ_φ(x) + σ_φ(x) ⊙ ε`, `ε ~ 𝒩(0, I)`, and everything downstream sees only `z`. Its job is a trade-off: keep what the intent and the reward need, discard everything else, in particular backgrounds and styles.
 
@@ -464,7 +464,7 @@ For a diagonal Gaussian the KL has a closed form: `½ Σ_j (μ_j² + σ_j² − 
 - **Compression `β·KL`.** Pulls every code toward the prior, i.e. makes `z` carry as few bits about `x` as possible. `β` sets how hard it pushes.
 - **Invariance `λ·L_inv`.** The check on the encoder. `L_pos` already asks that the views of an image join the same cluster; `L_inv` asks that the whole distribution over clusters chosen by the policy stay the same under perturbation. `ω`, `ψ` and `C` are frozen in this term (see Section 6.5); otherwise the policy could simply learn to ignore the image and satisfy it for free.
 
-### 6.2 Intent predictor `q_ψ`
+### 6.2 Intent predictor $q_ψ$
 
 **Role.** Infers from `z` a continuous intent `m` (what the image is "about", e.g. species morphology), the counterpart of the context variable of Meta-IRL. It plays two roles. For an image, it is the nuisance-free summary of what the image expresses. For a cluster, the average of the intents of its members is the cluster's summary in the memory `C`, so the intent of a cluster is built from the intents of its images, as PEMIRL infers the context of a task from its demonstrations. The reward and the policy receive `m` and compare it with the intents of the existing clusters.
 
@@ -483,7 +483,7 @@ For a diagonal Gaussian the KL has a closed form: `½ Σ_j (μ_j² + σ_j² − 
 - **Gaussian case.** With `q_ψ(m | z) = 𝒩(μ_ψ(z), σ_ψ²(z))`, this is a squared error weighted by the predicted precision, plus `log σ_ψ`: the model can express uncertainty but pays for it.
 - **Caveat.** `m` is a function of `z`: it adds an invariance signal, not information. A constant `m` would leave the memory with only counts and reduce the model to single-intention IRL. The "without `m`" ablation measures what `m` really contributes.
 
-### 6.3 Reward model `R_θ`
+### 6.3 Reward model $R_θ$
 
 **Role.** Scores every placement `(s, a)`: how well the arriving image, coded by `z`, fits the group in slot `a` **and** how well it is told apart from the other groups in the memory `C`. It is the object that IRL recovers, the *intention of distinction*, shared by the whole dataset. It is a permutation-equivariant network over the slots, `R_θ(z, m, C, a) = g_θ(z, m, c_a, pool_{k≠a} c_k)`: it reads the chosen slot together with a pooled view of the others, so the identity of a slot never matters, only its content (the first part measures compatibility, the second distinctness). It does **not** read the counts `n_k`, which would differ between the expert's small groups and the learner's large ones. It is trained by IRL on the expert's states `s^E` and applied to the learner's states `s`, which is a known distribution shift ([Section 5.7](#57-failure-modes-and-what-we-monitor)); it is **not** the policy.
 
@@ -502,7 +502,7 @@ For a diagonal Gaussian the KL has a closed form: `½ Σ_j (μ_j² + σ_j² − 
 - **`L_neg` (repulsion).** Lowers the reward of joining a slot that holds a different orbit in the expert's memory, with the false-negative correction `τ⁺`. This is the "reward that distinguishes": it exists because the softmax inside `q_θ` is *relative*, so lowering a cluster's reward for one image raises the others, empty slots included.
 - **`ρ·H(marginal)` (off by default, `ρ = 0`).** Entropy of the average choice distribution over the batch, a safeguard against collapse. With repulsion in place it should be unnecessary. The activation rule is fixed in advance: we monitor the effective number of clusters `K_eff = exp(H(p̄))`, where `p̄` is the average assignment distribution; if `K_eff` falls below `0.7·K` (initial value, to be validated) during the first epochs, a small `ρ` is switched on. We avoid a large `ρ` by default because uniform cluster usage is wrong for imbalanced classes (e.g. Waterbirds), and because `K` is only an upper bound.
 
-### 6.4 Policy `π_ω` (separate network, trained by RL)
+### 6.4 Policy $π_ω$ (separate network, trained by RL)
 
 **Role.** The agent that builds the clustering. At each step it sees the arriving code and the clusters built so far, and picks a slot: join a group, or open a new one. It is a separate network `π_ω(a | z, m, C)` (set-conditioned over the slots, like the reward), with a critic `V_ξ(s)` for the return estimates. It acts on the learner's states only and never sees the expert, the orbits or the expert's actions. At inference the assignment is `a = argmax_a π_ω(a | s)` with the memory `C` frozen at the end of training.
 
