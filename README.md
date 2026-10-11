@@ -85,7 +85,7 @@ Image datasets are full of spurious cues (background, texture, style) that are e
 
 1. **Modality mismatch.** Multi-intention IRL methods operate on sequences of states and actions produced by experts. A static image has no trajectory and nobody demonstrates the choice. We create the sequence ourselves: the *clustering process* is the trajectory (images are assigned one after the other, and each assignment changes the state), and the expert demonstrations are fabricated from transformations.
 2. **Spurious correlations.** Applied to images, such methods inherit the shortcut-learning behavior of unsupervised learners. An agent grouping animal images will often cluster by background (ducks and boats together because both contain water) instead of by the causal features of the object.
-3. **A single reward.** Most of the IRL based methods don't actually use the IRL itself for the unsupervised clustering part. But rather they end up with a bunch of rewards, each representing a different cluster's features. Our approach tries to encode the concept of distinguishing in a signle the reward.
+3. **A single reward.** Most of the IRL based methods don't actually use the IRL itself for the unsupervised clustering part. But rather they end up with a bunch of rewards, each representing a different cluster's features. Our approach tries to encode the concept of distinguishing in a single the reward.
 
 ---
 
