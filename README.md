@@ -323,7 +323,7 @@ $$
 - **Repulsion (random negatives).** For a view `u` and a random previously placed view `v` of another orbit, sitting in the expert's slot `k(v)`, the reward must make joining `k(v)` unlikely. With `ℓ(u,v) = −log(1 − q_θ(k(v) | s_u))`, the naive negative term is `E_v ℓ(u,v)`. A fraction `τ⁺` of random `v` are actually of the same concept, so we subtract their share, approximated by a positive pair (the standard debiasing of Chuang et al. 2020): the anchor's own twin `v⁺` when one is already placed, and the batch average over the forced moves otherwise. We use `τ⁺ = 1/K` on Colored MNIST; on Waterbirds, where classes are imbalanced, `τ⁺` is swept as a hyperparameter (see assumption A2):
 
 $$
-\mathcal{L}_{\text{neg}} = \mathbb{E}_{u} \max\Big \{\tfrac{1}{1-\tau^+}\Big(\mathbb{E}_{v\sim\text{placed}} \ell(u,v) - \tau^+ \bar\ell^{+}(u) \Big), 0 \Big \}
+\mathcal{L}_{\text{neg}} = \mathbb{E}_{u} \max\Big\\{\tfrac{1}{1-\tau^+}\Big(\mathbb{E}_{v\sim\text{placed}} \ell(u,v) - \tau^+ \bar\ell^{+}(u) \Big), 0 \Big\\}
 $$
 
 with `ℓ̄⁺(u) = −log(1 − q_θ(k⁺(u) | s_u))` if a twin of `u` is placed, and the average of this quantity over the forced moves of the batch otherwise (so that the correction is defined for first views too).
