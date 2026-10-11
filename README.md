@@ -431,7 +431,7 @@ Taken separately, the pieces are known: orbit positives and random negatives are
 
 ## 6. Components & Training
 
-The architecture has four trained components: the **encoder**, the **intent predictor**, the **reward model** and the **policy** (a separate network with its critic, trained by RL), plus the learner's non-differentiable **cluster memory** that the policy writes to (the expert has a memory of its own, per episode). This section fixes the notation, then gives for each component its role, its loss, and the intuition behind each term. It closes with what joint and sequential training mean in practice, and exactly what is frozen where.
+The architecture has four trained components: the **encoder**, the **intent predictor**, the **reward model** and the **policy** (a separate network with its critic, trained by RL), plus the learner's non-differentiable **cluster memory** that the policy writes to (the expert has a memory of its own, per episode). This section fixes the notation, then gives for each component its role, its loss, and the intuition behind each term. It closes with the two ways of training the encoder (joint, [6.5](#65-joint-training-the-encoder-is-trained-with-the-rest-alternating-reward-and-policy-steps), and sequential, [6.6](#66-sequential-training-the-encoder-is-trained-first-then-frozen)) and exactly what is frozen where.
 
 ### 6.0 Notation
 
@@ -522,9 +522,14 @@ For a diagonal Gaussian the KL has a closed form: `½ Σ_j (μ_j² + σ_j² − 
 - **`θ̄` frozen.** During the policy step the reward does not move; it is the ruler the policy is optimized against. The encoder is frozen too: `z` and `C` are given, so RL never reaches the pixels.
 - **`γ`.** `γ = 0` makes the policy essentially greedy on `R_θ`; the control in Section 9 compares it with `γ > 0`.
 
-### 6.5 Joint training (alternating reward and policy steps)
+### 6.5 Joint training: the encoder is trained with the rest (alternating reward and policy steps)
 
-The encoder, the intent predictor and the reward are trained jointly, in alternation with the policy. One iteration:
+> **What "joint" and "sequential" mean.** Sections 6.5 and 6.6 describe two ways of training the **same architecture with the same losses**. The only thing that differs is **how the encoder `f_φ` is trained**. The intent predictor `ψ`, the reward `θ` and the policy `ω` keep the same losses and the same stop-gradients in both modes (gradient routing table below); what changes for them is only whether the codes `z` they receive are still moving.
+>
+> - **Joint (this section).** The encoder is trained *at the same time* as `ψ` and `θ`, and receives the gradient of all the reward-side losses: `L_ψ`, `L_θ`, `β·KL` and `L_inv`. It never receives the gradient of the RL loss `L_ω` (the policy step freezes it).
+> - **Sequential ([6.6](#66-sequential-training-the-encoder-is-trained-first-then-frozen)).** The encoder is trained *first and alone*, with a reward-free objective, and is then frozen; `ψ`, `θ` and `ω` are trained on its fixed codes.
+
+In the joint mode, the encoder, the intent predictor and the reward are trained together in the reward step, in alternation with the policy step. One iteration:
 
 1. **Two batches.**
    - *Expert batch.* A minibatch of expert episodes ([Section 5.2](#52-the-key-idea-an-images-transformations-are-an-expert-demonstration)), fixed in structure: `B` images, `n` views each, shuffled, placed by the expert in its own memory `C^E`. The codes `z_t`, intents `m_t` and the memory summaries are recomputed with the current encoder. The pipeline labels the steps (forced moves, repulsion pairs). The learner's policy plays no role in this batch.
@@ -566,7 +571,9 @@ so the check would push the policy toward ignoring the image instead of pushing 
 
 **What it means.** "Useless" is defined *relative to the reward and policy currently being learned*: the encoder compresses what they do not use, while they adapt to whatever the encoder keeps. This co-adaptation is the point of the method, and also its main risk: the early reward is random, so it can push the bottleneck to discard useful bits, and the early policy is random, so the memory `C` is noisy. Mitigations: a warm-up of `β` from 0, a reward warm-up on forced moves before the policy acts alone, and a reward updated more slowly than the policy. Since the expert's trajectories are fixed, the reward does not chase the policy's own memory; the only moving parts it sees are the encoder and, in Phase 2, the expert's links.
 
-### 6.6 Sequential training
+### 6.6 Sequential training: the encoder is trained first, then frozen
+
+> **Only the encoder's training changes with respect to [6.5](#65-joint-training-the-encoder-is-trained-with-the-rest-alternating-reward-and-policy-steps).** The architecture and the losses `L_ψ`, `L_θ`, `L_ω` are the same, and `ψ`, `θ`, `ω` keep the same stop-gradients. What changes is that the encoder `f_φ` is trained **before** them, **alone**, with a reward-free objective, and is then **frozen**: it never sees the reward, the policy or `L_inv`.
 
 Two stages, nothing flowing back from the second to the first.
 
@@ -576,6 +583,8 @@ Two stages, nothing flowing back from the second to the first.
 | | Joint | Sequential |
 |---|---|---|
 | Optimization | One loop, all networks, alternating reward / policy steps | Encoder first, then intent / reward / policy |
+| What the encoder is trained on | `L_ψ + L_θ + β·KL + λ·L_inv`, at the same time as `ψ` and `θ` (never `L_ω`) | A reward-free similarity head + `β·KL` + `‖z − z̃‖²`, alone, then frozen |
+| What `ψ`, `θ`, `ω` are trained on | The same losses and stop-gradients, on codes `z` that are still moving | The same losses and stop-gradients, on fixed codes `z` |
 | Does the encoder see the reward? | Yes (through `L_ψ`, `L_θ`, `L_inv`) | No, only a similarity head |
 | Meaning of "useless" | Irrelevant to the current reward and policy | Irrelevant to the similarity objective |
 | Strengths | Matches the definition of the method; the encoder is shaped by what clustering needs | Simple, stable, modular; the IRL / RL stage can be re-run without retraining the encoder |
