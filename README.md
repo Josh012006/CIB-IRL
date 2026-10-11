@@ -93,7 +93,7 @@ Image datasets are full of spurious cues (background, texture, style) that are e
 
 Six papers cover the theoretical foundations of the framework:
 
-- [ ] Yu, L., Yu, T., Finn, C., & Ermon, S. (2019).
+- [x] Yu, L., Yu, T., Finn, C., & Ermon, S. (2019).
   *Meta-Inverse Reinforcement Learning with Probabilistic Context Variables*. NeurIPS 2019.
   [PDF](https://arxiv.org/pdf/1909.09314.pdf)
   Core multi-intention IRL method — learns rewards from unlabeled multi-task demonstrations
