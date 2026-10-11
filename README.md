@@ -311,7 +311,7 @@ $$
 - **Repulsion (random negatives).** For a view `u` and a random previously placed view `v` of another orbit, sitting in cluster `k(v)`, the reward must make joining `k(v)` unlikely. With `ℓ(u,v) = −log(1 − q_θ(k(v) | s_u))`, the naive negative term is `E_v ℓ(u,v)`. A fraction `τ⁺` of random `v` are actually of the same concept, so we subtract their share, approximated by the anchor's own twins (the standard debiasing of Chuang et al. 2020). We use `τ⁺ = 1/K` on Colored MNIST; on Waterbirds, where classes are imbalanced, `τ⁺` is swept as a hyperparameter (see assumption A2):
 
 $$
-\mathcal{L}_{\text{neg}} = \mathbb{E}_{u} \max\Big\{\tfrac{1}{1-\tau^+}\Big(\mathbb{E}_{v\sim\text{placed}} \ell(u,v) - \tau^+ \mathbb{E}_{v^+\in\text{twins}(u)} \ell(u,v^+) \Big), 0 \Big\}
+\mathcal{L}_{\text{neg}} = \mathbb{E}_{u} \max\big\{\tfrac{1}{1-\tau^+}\big(\mathbb{E}_{v\sim\text{placed}} \ell(u,v) - \tau^+ \mathbb{E}_{v^+\in\text{twins}(u)} \ell(u,v^+) \big), 0 \big\}
 $$
 
 The expert loss is `L_expert = L_pos + L_neg`, and it is what trains the reward (Section 6.3). The same repulsion is what makes an **empty slot attractive**: when an image fits no existing group, the mass leaves the occupied slots and goes to an empty one, i.e. the reward values *opening a new cluster*.
