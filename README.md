@@ -473,7 +473,7 @@ For a diagonal Gaussian the KL has a closed form: `½ Σ_j (μ_j² + σ_j² − 
 <br>
 
 ```math
-\mathcal{L}_\psi = -𝔼_{i,u\in\text{orbit}_i}\,\big[\log q_\psi(m^\*_i \mid z_u)\big]
+\mathcal{L}_\psi = -𝔼_{i,u\in\text{orbit}_i}\,\big[\log q_\psi(m^*_i \mid z_u)\big]
 ```
 
 <br>
