@@ -258,7 +258,7 @@ Take one image and transform it: crop it, change its colors, replace its backgro
 
 This is exactly the structure of *must-link / cannot-link* constraints in constrained clustering, generated automatically. The reward is therefore identified up to a relabeling of the clusters, which is all clustering needs.
 
-**How an episode becomes expert data, step by step.** No expert trajectory is stored. In every episode:
+**How an episode becomes expert data, step by step.** In every episode:
 
 1. Draw `B` images from the images dedicated to building the experts, and `n` views of each with `𝒯` (so `B·n` views, `n` views per orbit).
 2. Shuffle the `B·n` views into one sequence. The episode is this sequence: the views arrive one at a time, and each placement updates the memory `C` (the transition).
@@ -311,7 +311,7 @@ $$
 - **Repulsion (random negatives).** For a view `u` and a random previously placed view `v` of another orbit, sitting in cluster `k(v)`, the reward must make joining `k(v)` unlikely. With `ℓ(u,v) = −log(1 − q_θ(k(v) | s_u))`, the naive negative term is `E_v ℓ(u,v)`. A fraction `τ⁺` of random `v` are actually of the same concept, so we subtract their share, approximated by the anchor's own twins (the standard debiasing of Chuang et al. 2020). We use `τ⁺ = 1/K` on Colored MNIST; on Waterbirds, where classes are imbalanced, `τ⁺` is swept as a hyperparameter (see assumption A2):
 
 $$
-\mathcal{L}_{\text{neg}} = \mathbb{E}_{u}\max\Big\{\tfrac{1}{1-\tau^+}\Big(\mathbb{E}_{v\sim\text{placed}}\ell(u,v)-\tau^+\mathbb{E}_{v^+\in\text{twins}(u)}\ell(u,v^+)\Big),0\Big\}
+\mathcal{L}_{\text{neg}} = \mathbb{E}_{u}\max\Big\{\tfrac{1}{1-\tau^+}\Big\}(\mathbb{E}_{v\sim\text{placed}}\ell(u,v)-\tau^+\mathbb{E}_{v^+\in\text{twins}(u)}\ell(u,v^+)\Big),0\Big\}
 $$
 
 The expert loss is `L_expert = L_pos + L_neg`, and it is what trains the reward (Section 6.3). The same repulsion is what makes an **empty slot attractive**: when an image fits no existing group, the mass leaves the occupied slots and goes to an empty one, i.e. the reward values *opening a new cluster*.
