@@ -48,7 +48,7 @@ IRL needs expert demonstrations, but an unsupervised problem has none (a supervi
 - all the transformed versions of an image (crops, color changes, new backgrounds, transformations of transformations) obviously show the same thing: when one of them arrives and another is already in a group, the expert demonstrates "join that group";
 - two random images usually show different things: the expert demonstrates "do not put these together".
 
-The expert never says *which* cluster in absolute terms; it only answers "same group or not?". That is enough to learn a reward that tells clusters apart. Details in [Section 5](#5-where-do-the-experts-come-from).
+The expert never says *which* cluster in absolute terms; it only answers "same group or not?". That is enough to learn a reward that tells clusters apart. These decisions are produced on the fly, while the policy builds an episode one image at a time: the data pipeline generated the views, so it knows which ones share an orbit and can label every placement the policy makes. Details in [Section 5](#5-where-do-the-experts-come-from).
 
 ### 1.4 Two safeguards against shortcuts
 
@@ -85,7 +85,7 @@ Image datasets are full of spurious cues (background, texture, style) that are e
 
 1. **Modality mismatch.** Multi-intention IRL methods operate on sequences of states and actions produced by experts. A static image has no trajectory and nobody demonstrates the choice. We create the sequence ourselves: the *clustering process* is the trajectory (images are assigned one after the other, and each assignment changes the state), and the expert demonstrations are fabricated from transformations.
 2. **Spurious correlations.** Applied to images, such methods inherit the shortcut-learning behavior of unsupervised learners. An agent grouping animal images will often cluster by background (ducks and boats together because both contain water) instead of by the causal features of the object.
-3. **A single reward.** Most of the IRL based methods don't actually use the IRL itself for the unsupervised clustering part. But rather they end up with a bunch of rewards, each representing a different cluster's features. Our approach tries to encode the concept of distinguishing in a single the reward.
+3. **A single reward.** Most of the IRL based methods don't actually use the IRL itself for the unsupervised clustering part. But rather they end up with a bunch of rewards, each representing a different cluster's features. Our approach tries to encode the concept of distinguishing in a single reward.
 
 ---
 
@@ -248,9 +248,9 @@ Take one image and transform it: crop it, change its colors, replace its backgro
 
 - **Nuisance family `𝒯`.** Transformations that change appearance (crop, color, blur, background, style) but are meant to preserve the object.
 - **Orbit of an image `x_i`.** `𝒪_i = { t_D ∘ … ∘ t_1 (x_i) : t_k ∈ 𝒯, D ≤ D_max }`: everything reachable by chaining at most `D_max` transformations, with bounded cumulative strength (long chains drift away from the object).
-- **Demonstration (episode).** An episode presents views drawn from several orbits, one after the other, in random order. It plays the role of the trajectory in PEMIRL; the state of each decision is the cluster memory `C_t` as the process built it.
+- **Demonstration (episode).** An episode presents views drawn from several orbits, one after the other, in random order. It plays the role of the trajectory in PEMIRL; the state of each decision is `(z_t, m_t, C_t)`, with the cluster memory `C_t` as the process built it. The clusters the expert refers to are the ones in `C_t`: the expert needs no memory of its own.
 
-**The expert's decisions.** The expert is *relational*: it never names a cluster in absolute terms. In the state `s_t = (z_t, C_t)` where view `u` arrives:
+**The expert's decisions.** The expert is *relational*: it never names a cluster in absolute terms. In the state `s_t = (z_t, m_t, C_t)` where view `u` arrives:
 
 - **Forced move** (certain, by construction). If another view of the same orbit has already been placed, in cluster `k`, the expert action is `a = k`: *join the group of your twin*.
 - **Free move.** If `u` is the first view of its orbit, nothing is demonstrated about *where* it goes. It is not supervised by attraction; it is only constrained by repulsion (below), and the policy chooses.
@@ -258,13 +258,35 @@ Take one image and transform it: crop it, change its colors, replace its backgro
 
 This is exactly the structure of *must-link / cannot-link* constraints in constrained clustering, generated automatically. The reward is therefore identified up to a relabeling of the clusters, which is all clustering needs.
 
+**How an episode becomes expert data, step by step.** No expert trajectory is stored. In every episode:
+
+1. Draw `B` images from the images dedicated to building the experts, and `n` views of each with `𝒯` (so `B·n` views, `n` views per orbit).
+2. Shuffle the `B·n` views into one sequence. The episode is this sequence: the views arrive one at a time, and each placement updates the memory `C` (the transition).
+3. At each step the policy places the arriving view, seeing only `(z_t, m_t, C_t)`: it has no access to orbit identity.
+4. In parallel, the data pipeline, which generated the views and therefore knows which ones share an orbit, labels the step: forced move, free move, or repulsion pairs (previous list). These labels feed only the reward loss `L_θ`.
+
+A small example with `K` slots and six views, in this order: `A1, B1, A2, C1, B2, C2` (`A`, `B`, `C` are three images, each with two views; `A` and `C` are two different cats, `B` is a dog):
+
+| Step | Arriving view | Case | What the expert says |
+|---|---|---|---|
+| 1 | `A1` | Free move | Nothing yet to repel |
+| 2 | `B1` | Free move | Repulsion: do not join the cluster of `A1` |
+| 3 | `A2` | Forced move | Join the cluster where the policy put `A1` |
+| 4 | `C1` | Free move | Repulsion against the clusters of `A1`, `B1`, `A2`. The repulsion from `A` is a false negative (two cats), absorbed by `τ⁺` |
+| 5 | `B2` | Forced move | Join the cluster of `B1` |
+| 6 | `C2` | Forced move | Join the cluster of `C1` |
+
+Nothing in these signals says that `A` and `C` go together: that merge comes from the limited slots and from the similarity of the codes ([Section 5.4](#54-why-two-different-cat-photos-end-up-together)).
+
+**Difference with classical IRL.** In classical IRL the demonstrations are fixed data `(s, a)`, produced by the expert in its own states, and the learner's policy rolls out in the environment on its own states without ever reading the expert's actions: only the reward (or the discriminator) compares the two. We keep the second half: the policy never sees orbit identity nor the labels, and only the reward loss uses them. We differ in the first half: the expert is an oracle and not a stored dataset. Since we generated the views, we know for any state the policy reaches what the expert would do (a forced move) or refuse (a repulsion). The demonstrations are therefore labeled on the states the policy visits, as in DAgger, and they depend on its placements: the twin's cluster is wherever the policy put it. The signal is "be consistent with your own placements of the same orbit, and tell different images apart", which is weaker than copying an external expert but needs no labeled cluster at all.
+
 **The reward-induced choice model.** To score the expert's decisions we model the expert as choosing slot `a` with probability proportional to `exp R_θ(s, a)`:
 
 $$
 q_\theta(a\mid s) \;=\; \frac{\exp R_\theta(s,a)}{\sum_{a'=1}^{K}\exp R_\theta(s,a')}
 $$
 
-Learning the reward that makes the expert's decisions likely under `q_θ` is maximum-likelihood IRL with relational demonstrations. Two approximations are explicit: the expert is modelled as Boltzmann-rational on the *immediate* reward (no soft value iteration through the transitions), and states come from the **current policy** while the actions at forced moves come from the **expert** (the policy visits, the expert corrects, in the spirit of DAgger). Acting is left to the separate policy `π_ω` (Section 6.4).
+Learning the reward that makes the expert's decisions likely under `q_θ` is maximum-likelihood IRL with relational demonstrations. Two approximations are explicit: the expert is modelled as Boltzmann-rational on the *immediate* reward (no soft value iteration through the transitions), and the demonstrations are labeled on the policy's own states (previous paragraphs). Acting is left to the separate policy `π_ω` (Section 6.4).
 
 ```mermaid
 flowchart LR
@@ -310,7 +332,7 @@ So the encoder is not a side detail: it determines *along which axis* the expert
 
 > **Deferred.** Phase 2 is set aside for now: the first experiments use Phase 1 only (orbits + random negatives). The design below is provisional and will be revisited.
 
-Phase 1 (orbits + random negatives) is the foundation. Phase 2 speeds up merging of the same concept across different orbits by adding **extra positives** during training: pairs of views from *different* orbits that the model itself considers the same thing.
+Phase 1 (orbits + random negatives) is the foundation. Phase 2 speeds up merging of the same concept across different orbits by adding **extra positives** during training: pairs of views from *different* orbits that the model itself considers the same thing. Concretely, a linked pair of orbits `(i, j)` acts as one orbit in later episodes: a view of `j` arriving after a view of `i` is a forced move toward the cluster of `i`, and the pair is removed from the repulsion. The expert therefore moves, slowly and under the brakes below, and two cat orbits end up grouped explicitly instead of only through the limited slots ([Section 5.4](#54-why-two-different-cat-photos-end-up-together)).
 
 Candidate pairs `(u, v)` are accepted if all of these hold:
 
@@ -435,7 +457,7 @@ $$
 
 The encoder, the intent predictor and the reward are trained jointly, in alternation with the policy. One iteration:
 
-1. **Rollout.** Draw an episode (views of several orbits in random order). The current policy `π_ω` places the views one by one; the memory `C` is updated by each transition. This gives the states `s_t` and the placed views (for forced moves and repulsion).
+1. **Rollout.** Draw an episode: `B` images, `n` views each via `𝒯`, shuffled into one sequence ([Section 5.2](#52-the-key-idea-an-images-transformations-are-an-expert-demonstration)). The current policy `π_ω` places the views one by one, seeing only `(z_t, m_t, C_t)`; the memory `C` is updated by each transition. In parallel, the pipeline labels the steps from orbit membership (forced moves, repulsion pairs). These labels are used only in the reward step.
 2. **Reward step (IRL).** Minimize the total loss on `φ, ψ, θ`:
 
 $$
@@ -568,6 +590,7 @@ No design question is open at this stage. Points to settle by experiment:
 1. Whether the reward and the policy should see `z` and `m`, or only `m` (ablation, [Section 9](#9-ablations)).
 2. The update rate of the memory (running mean vs. slow EMA) and the RL hyperparameters (`γ`, `α`, ratio between reward and policy steps).
 3. Whether the reward needs a warm-up on forced moves before the policy acts alone (cold start).
+4. Whether episodes are drawn from the whole training set or from a dedicated portion of it, and the number of orbits `B` and views `n` per episode.
 
 ### 7.3 Deferred
 
@@ -670,6 +693,3 @@ cib-irl/
 ## 12. License
 
 MIT License
-```
-
-License: *TODO*.
