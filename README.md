@@ -763,6 +763,11 @@ No design question is open at this stage. Points to settle by experiment:
 
 Training-time diagnostics (Section 5.7): leakage from step 0, number of non-empty slots, cluster-size entropy, churn between epochs, return and policy entropy, sensitivity to the order of images, `NMI(m, background)`, and the **same-class rate among the nearest neighbors in `m`-space** (Phase 1: does the learner group different images of one concept although the expert does not?). Phase 1 and Phase 2 are always reported side by side ([Section 5.5](#55-phase-1-and-phase-2-tolerating-then-correcting-the-expert)).
 
+Two further diagnostics check whether the reward, trained on the expert's states, holds on the learner's states (the distribution shift of [Section 5.7](#57-failure-modes-and-what-we-monitor)):
+
+- **Twin agreement under `𝒯`.** On images with two views, with `π_ω` and the memory frozen, the fraction of pairs that receive the same `argmax π_ω`. Close to 100% means that few twin errors remain to be corrected on the learner's side.
+- **Reward margins.** The reward of the twin's slot minus the best other slot, compared between the expert's states and the learner's states. Similar distributions mean that the reward generalizes from `C^E` to `C`.
+
 Reporting: mean ± std over several seeds, with `K` (upper bound) set to the number of true classes and the number of constructed clusters reported alongside.
 
 ---
@@ -777,6 +782,7 @@ Reporting: mean ± std over several seeds, with `K` (upper bound) set to the num
 | Persistent memory vs memory reset every episode; random vs fixed image order | How much does the result depend on the way the clusters are built along the sequence? |
 | Summaries recomputed each epoch vs slow EMA only | Do stale summaries matter? |
 | Expert labels on the learner's own rollouts (DAgger-like) instead of fixed expert trajectories | Does labelling the learner's states help the reward, or does it make the signal circular? |
+| *Conditional.* Attraction-only labels on the learner's rollouts (twin views must share a slot), in addition to the fixed expert episodes; repulsion stays on the expert's states | Does it correct the distribution shift? Run only if the two diagnostics of [Section 8.3](#83-metrics) (twin agreement, reward margins) show a gap. It needs several views per image in the learner's episodes, and a memory that tells views of one image apart |
 | Reward reading the counts `n_k` | Does the count create a shift between expert and learner states? |
 | `β = 0` (no Information Bottleneck) | Does compression alone remove the spurious features? |
 | `λ = 0` (no decision-consistency term) | Is the invariance term necessary, or is the IB sufficient? |
