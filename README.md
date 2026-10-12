@@ -114,7 +114,7 @@ Six papers cover the theoretical foundations of the framework:
   environments are the causal ones. Frames our nuisance family `𝒯` as "environments", and
   introduces Colored MNIST.
 
-- [ ] Ji, X., Henriques, J. F., & Vedaldi, A. (2019).
+- [x] Ji, X., Henriques, J. F., & Vedaldi, A. (2019).
   *Invariant Information Clustering for Unsupervised Image Classification and Segmentation*. ICCV 2019.
   [PDF](https://arxiv.org/pdf/1807.06653.pdf)
   Closest image-clustering approach in spirit — maximizes the mutual information between the
