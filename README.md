@@ -100,7 +100,7 @@ Six papers cover the theoretical foundations of the framework:
   through a latent context variable `m` inferred from the demonstrations, and infers the reward
   of a new task from a single demonstration. Source of our intent `m` (Section 4.2).
 
-- [ ] Alemi, A. A., Fischer, I., Dillon, J. V., & Murphy, K. (2017).
+- [x] Alemi, A. A., Fischer, I., Dillon, J. V., & Murphy, K. (2017).
   *Deep Variational Information Bottleneck*. ICLR 2017.
   [PDF](https://arxiv.org/pdf/1612.00410.pdf)
   Core compression method — turns the Information Bottleneck into a trainable objective with
