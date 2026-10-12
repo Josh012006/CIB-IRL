@@ -107,7 +107,7 @@ Six papers cover the theoretical foundations of the framework:
   a variational bound on `I(z; x)` (a KL to a prior) and a bound on relevance. Gives the
   `β·KL` term of our encoder (Section 4.4).
 
-- [ ] Arjovsky, M., Bottou, L., Gulrajani, I., & Lopez-Paz, D. (2019).
+- [x] Arjovsky, M., Bottou, L., Gulrajani, I., & Lopez-Paz, D. (2019).
   *Invariant Risk Minimization*. arXiv.
   [PDF](https://arxiv.org/pdf/1907.02893.pdf)
   Foundational theory of causal invariance — features whose predictive relation is stable across
