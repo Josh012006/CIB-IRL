@@ -1,0 +1,11 @@
+{
+  "name": "toy_seed4",
+  "seed": 4,
+  "epochs": 100,
+  "spurious": 0.0,
+  "acc": 0.6,
+  "nmi_class": 0.8096040720878851,
+  "nmi_background": 0.0030177609236066282,
+  "nmi_class_background_in_data": 0.003671651458013352,
+  "clusters_used": 3
+}

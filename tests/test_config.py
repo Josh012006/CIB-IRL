@@ -17,7 +17,8 @@ def write(tmp_path, name, text):
 
 
 def test_every_committed_config_loads():
-    files = sorted((ROOT / "configs").rglob("*.yml"))
+    # TrainConfig files only: transform banks and suites have their own schema (tests/test_transforms.py, test_suite.py)
+    files = sorted((ROOT / "configs").glob("*.yml")) + sorted((ROOT / "configs" / "ablations").glob("*.yml"))
     assert files, "no config found"
     for f in files:
         TrainConfig.from_yaml(f)

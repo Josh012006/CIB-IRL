@@ -1,0 +1,9 @@
+# generic + horizontal flip. Natural images only (CIFAR, STL, ...): a mirrored object is the same object.
+# NOT for digits, letters or the toy shapes: there a mirror image is another identity.
+name: natural
+description: generic + hflip
+ops:
+  - random_resized_crop: {scale: [0.7, 1.0], ratio: [0.8, 1.25]}
+  - hflip: {p: 0.5}
+  - color_jitter: {brightness: 0.2, contrast: 0.2, saturation: 0.2, p: 0.8}
+  - grayscale: {p: 0.1}

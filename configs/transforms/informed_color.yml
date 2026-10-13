@@ -1,0 +1,10 @@
+# generic + a FULL hue redraw. This is side information about the nuisance ("colour does not matter"),
+# declared as an experimental condition: the gap with `generic` measures how much a result depends on
+# a prior about the nuisance (e.g. the spurious colour of Colored MNIST).
+name: informed_color
+description: generic + full hue redraw
+ops:
+  - random_resized_crop: {scale: [0.7, 1.0], ratio: [0.8, 1.25]}
+  - hue_rotate: {max_degrees: 180, p: 1.0}
+  - color_jitter: {brightness: 0.2, contrast: 0.2, saturation: 0.2, p: 0.8}
+  - grayscale: {p: 0.1}

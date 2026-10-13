@@ -1,0 +1,11 @@
+{
+  "name": "toy_no_standardize_seed3",
+  "seed": 3,
+  "epochs": 100,
+  "spurious": 0.0,
+  "acc": 0.3546666666666667,
+  "nmi_class": 0.14873422274549777,
+  "nmi_background": 0.13471983044108857,
+  "nmi_class_background_in_data": 0.004652667412322987,
+  "clusters_used": 5
+}

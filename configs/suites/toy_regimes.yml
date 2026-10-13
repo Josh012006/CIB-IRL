@@ -1,0 +1,22 @@
+# The three nuisance regimes on the toy data, with and without a colour shortcut (README 9, protocol of
+# configs/transforms/README.md). Every run trains until convergence (label-free rule, cibirl/convergence.py).
+#
+#   oracle           T knows exactly where the background is and redraws it      (strongest prior)
+#   informed_color   generic bank + full hue redraw                             (declared side information)
+#   generic          crop + photometric jitter only; the background hue survives (no prior about the nuisance)
+#
+#   python scripts/run_suite.py configs/suites/toy_regimes.yml --cpu-count 3
+name: toy_regimes
+description: toy data, 3 transformation banks x {no shortcut, shortcut 0.9}
+seeds: [0, 1, 2, 3, 4]
+common:
+  data: toy
+  configs: [configs/toy.yml]
+  stop: {max_epochs: 300, min_epochs: 40}
+experiments:
+  - {name: oracle_spur0.0,         transform: toy_oracle,     data_params: {spurious: 0.0}}
+  - {name: oracle_spur0.9,         transform: toy_oracle,     data_params: {spurious: 0.9}}
+  - {name: informed_color_spur0.0, transform: informed_color, data_params: {spurious: 0.0}}
+  - {name: informed_color_spur0.9, transform: informed_color, data_params: {spurious: 0.9}}
+  - {name: generic_spur0.0,        transform: generic,        data_params: {spurious: 0.0}}
+  - {name: generic_spur0.9,        transform: generic,        data_params: {spurious: 0.9}}

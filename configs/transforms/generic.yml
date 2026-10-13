@@ -1,0 +1,10 @@
+# Core bank, applied UNCHANGED to every dataset (README 5.1, protocol in configs/transforms/README.md).
+# Admission rule: each operation preserves identity for ANY image content, by domain knowledge.
+# The values below are fixed before any result is seen; their effect is studied by a sensitivity sweep
+# (override files), never by picking the best value on the labels.
+name: generic
+description: crop + photometric jitter, no hue change, no flip
+ops:
+  - random_resized_crop: {scale: [0.7, 1.0], ratio: [0.8, 1.25]}
+  - color_jitter: {brightness: 0.2, contrast: 0.2, saturation: 0.2, p: 0.8}
+  - grayscale: {p: 0.1}

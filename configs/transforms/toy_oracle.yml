@@ -1,0 +1,7 @@
+# Toy data only: the background colour is redrawn exactly (the operation knows where the background is).
+# An ORACLE nuisance family: it reproduces the first toy results; `toy_background_redraw` is registered
+# by scripts/datasets.py, not by the package.
+name: toy_oracle
+description: exact background redraw of the toy images (oracle)
+ops:
+  - toy_background_redraw

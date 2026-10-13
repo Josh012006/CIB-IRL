@@ -1,0 +1,11 @@
+{
+  "name": "toy_spur0.9_seed0",
+  "seed": 0,
+  "epochs": 100,
+  "spurious": 0.9,
+  "acc": 0.6,
+  "nmi_class": 0.8096040720878851,
+  "nmi_background": 0.4204324677734235,
+  "nmi_class_background_in_data": 0.5862389315750007,
+  "clusters_used": 3
+}

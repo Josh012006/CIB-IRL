@@ -395,7 +395,9 @@ class Trainer:
                 "size_entropy": entropy, "K_eff": math.exp(entropy),
                 "churn": self._changes / max(self._revisits, 1)}
 
-    def fit(self, epochs: int, log_fn: Callable[[dict], None] = print) -> list[dict]:
+    def fit(self, epochs: int, log_fn: Callable[[dict], Any] = print) -> list[dict]:
+        """Up to `epochs` epochs. `log_fn(row)` is called after each one; if it returns True, training stops
+        there (this is how a convergence monitor ends a run, see convergence.py)."""
         history = []
         for ep in range(epochs):
             perm = torch.randperm(self.N)
@@ -411,7 +413,8 @@ class Trainer:
             row = {"epoch": ep, "iter": self.iteration, **{k: sum(v) / len(v) for k, v in agg.items()},
                    **self.epoch_stats()}
             history.append(row)
-            log_fn(row)
+            if log_fn(row):
+                break
         return history
 
     # ---------------------------------------------------------------------------------------------

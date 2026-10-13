@@ -1,0 +1,113 @@
+run folder: C:\Users\PC\Documents\Josue\Mes-documents\Professionnel\Projets-personnels\CIB-IRL\results\toy_spur0.9_seed1
+ep  0 it   15 | L_pos 1.286 L_neg 0.432 twin 0.43 KL   54.0 L_inv 0.000 m_std 0.08 | ent 0.00 | slots 0 K_eff 1.00 churn 0.00
+ep  1 it   30 | L_pos 1.210 L_neg 0.415 twin 0.80 KL  109.0 L_inv 0.000 m_std 0.40 | ent 0.00 | slots 0 K_eff 1.00 churn 0.00
+ep  2 it   45 | L_pos 0.791 L_neg 0.370 twin 0.81 KL  375.3 L_inv 0.000 m_std 0.71 | ent 0.00 | slots 0 K_eff 1.00 churn 0.00
+ep  3 it   60 | L_pos 0.464 L_neg 0.284 twin 0.80 KL  956.0 L_inv 0.000 m_std 1.17 | ent 0.00 | slots 0 K_eff 1.00 churn 0.00
+ep  4 it   75 | L_pos 0.405 L_neg 0.260 twin 0.80 KL 1242.3 L_inv 0.000 m_std 1.25 | ent 0.00 | slots 0 K_eff 1.00 churn 0.00
+ep  5 it   90 | L_pos 0.359 L_neg 0.219 twin 0.81 KL  914.4 L_inv 0.000 m_std 1.17 | ent 0.00 | slots 0 K_eff 1.00 churn 0.00
+ep  6 it  105 | L_pos 0.318 L_neg 0.240 twin 0.83 KL  570.4 L_inv 0.000 m_std 1.06 | ent 0.00 | slots 0 K_eff 1.00 churn 0.00
+ep  7 it  120 | L_pos 0.312 L_neg 0.236 twin 0.82 KL  424.6 L_inv 0.000 m_std 1.05 | ent 0.00 | slots 0 K_eff 1.00 churn 0.00
+ep  8 it  135 | L_pos 0.312 L_neg 0.210 twin 0.81 KL  348.3 L_inv 0.000 m_std 1.06 | ent 0.00 | slots 0 K_eff 1.00 churn 0.00
+ep  9 it  150 | L_pos 0.285 L_neg 0.207 twin 0.84 KL  313.1 L_inv 0.000 m_std 1.03 | ent 0.00 | slots 0 K_eff 1.00 churn 0.00
+ep 10 it  165 | L_pos 0.312 L_neg 0.204 twin 0.81 KL  285.5 L_inv 0.000 m_std 1.02 | ent 0.96 | slots 5 K_eff 4.61 churn 0.00
+ep 11 it  180 | L_pos 0.316 L_neg 0.203 twin 0.80 KL  266.8 L_inv 0.000 m_std 1.01 | ent 0.25 | slots 5 K_eff 4.41 churn 0.51
+ep 12 it  195 | L_pos 0.306 L_neg 0.195 twin 0.81 KL  248.1 L_inv 0.000 m_std 1.00 | ent 0.16 | slots 5 K_eff 4.37 churn 0.17
+ep 13 it  210 | L_pos 0.293 L_neg 0.178 twin 0.82 KL  233.0 L_inv 0.000 m_std 1.03 | ent 0.14 | slots 5 K_eff 4.35 churn 0.11
+ep 14 it  225 | L_pos 0.310 L_neg 0.186 twin 0.81 KL  221.5 L_inv 0.000 m_std 1.02 | ent 0.21 | slots 5 K_eff 4.43 churn 0.14
+ep 15 it  240 | L_pos 0.260 L_neg 0.159 twin 0.84 KL  206.7 L_inv 0.000 m_std 1.00 | ent 0.17 | slots 5 K_eff 4.40 churn 0.14
+ep 16 it  255 | L_pos 0.285 L_neg 0.170 twin 0.80 KL  190.2 L_inv 0.000 m_std 1.01 | ent 0.14 | slots 5 K_eff 4.35 churn 0.11
+ep 17 it  270 | L_pos 0.301 L_neg 0.174 twin 0.81 KL  191.1 L_inv 0.000 m_std 1.00 | ent 0.15 | slots 5 K_eff 4.35 churn 0.10
+ep 18 it  285 | L_pos 0.320 L_neg 0.173 twin 0.79 KL  184.7 L_inv 0.000 m_std 1.03 | ent 0.14 | slots 5 K_eff 4.35 churn 0.09
+ep 19 it  300 | L_pos 0.320 L_neg 0.175 twin 0.80 KL  172.0 L_inv 0.000 m_std 1.02 | ent 0.17 | slots 5 K_eff 4.36 churn 0.10
+ep 20 it  315 | L_pos 0.283 L_neg 0.155 twin 0.82 KL  163.8 L_inv 0.000 m_std 1.00 | ent 0.18 | slots 5 K_eff 4.38 churn 0.11
+ep 21 it  330 | L_pos 0.306 L_neg 0.156 twin 0.81 KL  159.4 L_inv 0.000 m_std 1.03 | ent 0.23 | slots 5 K_eff 4.39 churn 0.14
+ep 22 it  345 | L_pos 0.311 L_neg 0.146 twin 0.82 KL  150.0 L_inv 0.000 m_std 1.01 | ent 0.18 | slots 5 K_eff 4.34 churn 0.14
+ep 23 it  360 | L_pos 0.290 L_neg 0.130 twin 0.83 KL  145.4 L_inv 0.000 m_std 1.01 | ent 0.26 | slots 5 K_eff 4.46 churn 0.17
+ep 24 it  375 | L_pos 0.286 L_neg 0.127 twin 0.83 KL  147.3 L_inv 0.000 m_std 1.02 | ent 0.23 | slots 5 K_eff 4.43 churn 0.18
+ep 25 it  390 | L_pos 0.311 L_neg 0.127 twin 0.81 KL  140.1 L_inv 0.000 m_std 1.00 | ent 0.24 | slots 5 K_eff 4.32 churn 0.18
+ep 26 it  405 | L_pos 0.280 L_neg 0.116 twin 0.83 KL  140.8 L_inv 0.000 m_std 1.04 | ent 0.29 | slots 5 K_eff 4.49 churn 0.29
+ep 27 it  420 | L_pos 0.337 L_neg 0.117 twin 0.80 KL  127.7 L_inv 0.000 m_std 1.02 | ent 0.52 | slots 5 K_eff 4.46 churn 0.38
+ep 28 it  435 | L_pos 0.320 L_neg 0.116 twin 0.82 KL  123.0 L_inv 0.000 m_std 1.01 | ent 0.55 | slots 5 K_eff 4.47 churn 0.42
+ep 29 it  450 | L_pos 0.353 L_neg 0.119 twin 0.80 KL  126.8 L_inv 0.000 m_std 1.00 | ent 0.55 | slots 5 K_eff 4.51 churn 0.39
+ep 30 it  465 | L_pos 0.409 L_neg 0.134 twin 0.80 KL  123.8 L_inv 0.000 m_std 1.02 | ent 0.55 | slots 5 K_eff 4.48 churn 0.39
+ep 31 it  480 | L_pos 0.359 L_neg 0.115 twin 0.81 KL  116.8 L_inv 0.000 m_std 0.98 | ent 0.56 | slots 5 K_eff 4.50 churn 0.42
+ep 32 it  495 | L_pos 0.349 L_neg 0.112 twin 0.82 KL  113.7 L_inv 0.000 m_std 1.02 | ent 0.56 | slots 5 K_eff 4.51 churn 0.41
+ep 33 it  510 | L_pos 0.352 L_neg 0.117 twin 0.82 KL  111.7 L_inv 0.000 m_std 1.01 | ent 0.57 | slots 5 K_eff 4.50 churn 0.41
+ep 34 it  525 | L_pos 0.381 L_neg 0.124 twin 0.80 KL  102.9 L_inv 0.000 m_std 1.02 | ent 0.61 | slots 5 K_eff 4.52 churn 0.41
+ep 35 it  540 | L_pos 0.397 L_neg 0.118 twin 0.80 KL   98.6 L_inv -0.000 m_std 0.99 | ent 0.65 | slots 5 K_eff 4.55 churn 0.42
+ep 36 it  555 | L_pos 0.391 L_neg 0.124 twin 0.79 KL   99.0 L_inv 0.000 m_std 1.02 | ent 0.63 | slots 5 K_eff 4.56 churn 0.43
+ep 37 it  570 | L_pos 0.407 L_neg 0.149 twin 0.77 KL   93.0 L_inv 0.000 m_std 1.01 | ent 0.64 | slots 5 K_eff 4.53 churn 0.41
+ep 38 it  585 | L_pos 0.363 L_neg 0.139 twin 0.77 KL   99.6 L_inv 0.000 m_std 1.02 | ent 0.65 | slots 5 K_eff 4.06 churn 0.45
+ep 39 it  600 | L_pos 0.340 L_neg 0.129 twin 0.80 KL   88.4 L_inv 0.000 m_std 0.99 | ent 0.77 | slots 5 K_eff 4.92 churn 0.52
+ep 40 it  615 | L_pos 0.393 L_neg 0.142 twin 0.78 KL   89.5 L_inv 0.000 m_std 1.03 | ent 0.85 | slots 5 K_eff 4.79 churn 0.53
+ep 41 it  630 | L_pos 0.386 L_neg 0.133 twin 0.81 KL   83.2 L_inv 0.000 m_std 0.96 | ent 0.85 | slots 5 K_eff 4.95 churn 0.57
+ep 42 it  645 | L_pos 0.377 L_neg 0.129 twin 0.80 KL   83.7 L_inv 0.000 m_std 1.02 | ent 0.91 | slots 5 K_eff 4.98 churn 0.56
+ep 43 it  660 | L_pos 0.430 L_neg 0.165 twin 0.77 KL   77.8 L_inv 0.000 m_std 0.97 | ent 0.98 | slots 5 K_eff 4.97 churn 0.55
+ep 44 it  675 | L_pos 0.422 L_neg 0.148 twin 0.75 KL   80.6 L_inv -0.000 m_std 1.03 | ent 0.99 | slots 5 K_eff 4.97 churn 0.55
+ep 45 it  690 | L_pos 0.459 L_neg 0.154 twin 0.75 KL   78.0 L_inv 0.000 m_std 1.02 | ent 0.83 | slots 5 K_eff 4.79 churn 0.54
+ep 46 it  705 | L_pos 0.446 L_neg 0.138 twin 0.76 KL   73.4 L_inv 0.000 m_std 0.98 | ent 0.82 | slots 5 K_eff 4.64 churn 0.53
+ep 47 it  720 | L_pos 0.458 L_neg 0.158 twin 0.74 KL   69.2 L_inv 0.000 m_std 1.02 | ent 1.05 | slots 5 K_eff 4.90 churn 0.61
+ep 48 it  735 | L_pos 0.506 L_neg 0.168 twin 0.70 KL   66.4 L_inv -0.000 m_std 0.97 | ent 1.11 | slots 5 K_eff 5.00 churn 0.59
+ep 49 it  750 | L_pos 0.526 L_neg 0.181 twin 0.70 KL   67.5 L_inv 0.000 m_std 1.02 | ent 1.11 | slots 5 K_eff 4.99 churn 0.60
+ep 50 it  765 | L_pos 0.537 L_neg 0.160 twin 0.72 KL   66.3 L_inv -0.000 m_std 1.02 | ent 1.11 | slots 5 K_eff 4.97 churn 0.61
+ep 51 it  780 | L_pos 0.506 L_neg 0.177 twin 0.71 KL   62.4 L_inv -0.000 m_std 1.01 | ent 1.11 | slots 5 K_eff 5.00 churn 0.58
+ep 52 it  795 | L_pos 0.530 L_neg 0.171 twin 0.69 KL   62.1 L_inv 0.000 m_std 1.00 | ent 1.11 | slots 5 K_eff 5.00 churn 0.61
+ep 53 it  810 | L_pos 0.548 L_neg 0.180 twin 0.70 KL   57.0 L_inv 0.000 m_std 0.99 | ent 1.11 | slots 5 K_eff 4.99 churn 0.62
+ep 54 it  825 | L_pos 0.565 L_neg 0.170 twin 0.71 KL   56.2 L_inv -0.000 m_std 1.00 | ent 1.11 | slots 5 K_eff 4.99 churn 0.60
+ep 55 it  840 | L_pos 0.666 L_neg 0.211 twin 0.65 KL   55.8 L_inv -0.000 m_std 1.01 | ent 1.11 | slots 5 K_eff 5.00 churn 0.60
+ep 56 it  855 | L_pos 0.718 L_neg 0.222 twin 0.61 KL   51.4 L_inv 0.000 m_std 1.00 | ent 1.11 | slots 5 K_eff 5.00 churn 0.61
+ep 57 it  870 | L_pos 0.734 L_neg 0.219 twin 0.56 KL   54.1 L_inv -0.000 m_std 1.02 | ent 1.11 | slots 5 K_eff 5.00 churn 0.60
+ep 58 it  885 | L_pos 0.722 L_neg 0.214 twin 0.56 KL   63.3 L_inv -0.000 m_std 1.05 | ent 1.11 | slots 5 K_eff 4.99 churn 0.59
+ep 59 it  900 | L_pos 0.728 L_neg 0.227 twin 0.59 KL   56.4 L_inv -0.000 m_std 0.96 | ent 1.11 | slots 5 K_eff 5.00 churn 0.59
+ep 60 it  915 | L_pos 0.758 L_neg 0.232 twin 0.56 KL   48.5 L_inv 0.000 m_std 0.97 | ent 1.11 | slots 5 K_eff 5.00 churn 0.59
+ep 61 it  930 | L_pos 0.746 L_neg 0.239 twin 0.56 KL   48.3 L_inv 0.000 m_std 1.00 | ent 1.11 | slots 5 K_eff 5.00 churn 0.59
+ep 62 it  945 | L_pos 0.705 L_neg 0.199 twin 0.60 KL   50.8 L_inv -0.000 m_std 1.04 | ent 1.11 | slots 5 K_eff 4.99 churn 0.58
+ep 63 it  960 | L_pos 0.693 L_neg 0.206 twin 0.61 KL   49.7 L_inv -0.000 m_std 1.00 | ent 1.11 | slots 5 K_eff 5.00 churn 0.60
+ep 64 it  975 | L_pos 0.773 L_neg 0.240 twin 0.52 KL   47.4 L_inv 0.000 m_std 0.98 | ent 1.11 | slots 5 K_eff 4.99 churn 0.61
+ep 65 it  990 | L_pos 0.738 L_neg 0.217 twin 0.57 KL   47.3 L_inv 0.000 m_std 1.01 | ent 1.11 | slots 5 K_eff 4.98 churn 0.61
+ep 66 it 1005 | L_pos 0.757 L_neg 0.239 twin 0.56 KL   47.9 L_inv 0.000 m_std 0.99 | ent 1.11 | slots 5 K_eff 4.99 churn 0.59
+ep 67 it 1020 | L_pos 0.730 L_neg 0.216 twin 0.55 KL   51.1 L_inv -0.000 m_std 1.01 | ent 1.11 | slots 5 K_eff 4.99 churn 0.60
+ep 68 it 1035 | L_pos 0.793 L_neg 0.245 twin 0.50 KL   45.6 L_inv 0.000 m_std 0.96 | ent 1.11 | slots 5 K_eff 4.99 churn 0.61
+ep 69 it 1050 | L_pos 0.807 L_neg 0.267 twin 0.47 KL   47.4 L_inv -0.000 m_std 1.03 | ent 1.11 | slots 5 K_eff 4.99 churn 0.61
+ep 70 it 1065 | L_pos 0.771 L_neg 0.243 twin 0.51 KL   42.7 L_inv -0.000 m_std 1.00 | ent 1.11 | slots 5 K_eff 4.99 churn 0.60
+ep 71 it 1080 | L_pos 0.787 L_neg 0.256 twin 0.52 KL   48.5 L_inv 0.000 m_std 0.99 | ent 1.11 | slots 5 K_eff 4.98 churn 0.59
+ep 72 it 1095 | L_pos 0.754 L_neg 0.241 twin 0.51 KL   45.9 L_inv 0.000 m_std 1.02 | ent 1.11 | slots 5 K_eff 4.99 churn 0.61
+ep 73 it 1110 | L_pos 0.787 L_neg 0.245 twin 0.49 KL   44.2 L_inv -0.000 m_std 0.97 | ent 1.11 | slots 5 K_eff 4.99 churn 0.61
+ep 74 it 1125 | L_pos 0.727 L_neg 0.226 twin 0.51 KL   46.6 L_inv 0.000 m_std 1.02 | ent 1.11 | slots 5 K_eff 4.99 churn 0.60
+ep 75 it 1140 | L_pos 0.771 L_neg 0.235 twin 0.48 KL   41.4 L_inv 0.000 m_std 0.97 | ent 1.11 | slots 5 K_eff 5.00 churn 0.59
+ep 76 it 1155 | L_pos 0.765 L_neg 0.245 twin 0.48 KL   42.7 L_inv 0.000 m_std 1.02 | ent 1.11 | slots 5 K_eff 5.00 churn 0.61
+ep 77 it 1170 | L_pos 0.784 L_neg 0.247 twin 0.47 KL   42.3 L_inv 0.000 m_std 1.01 | ent 1.11 | slots 5 K_eff 4.98 churn 0.60
+ep 78 it 1185 | L_pos 0.765 L_neg 0.234 twin 0.48 KL   41.1 L_inv 0.000 m_std 0.99 | ent 1.11 | slots 5 K_eff 4.99 churn 0.61
+ep 79 it 1200 | L_pos 0.784 L_neg 0.228 twin 0.47 KL   40.7 L_inv 0.000 m_std 0.97 | ent 1.11 | slots 5 K_eff 5.00 churn 0.62
+ep 80 it 1215 | L_pos 0.751 L_neg 0.226 twin 0.50 KL   40.8 L_inv 0.000 m_std 1.03 | ent 1.11 | slots 5 K_eff 4.99 churn 0.59
+ep 81 it 1230 | L_pos 0.778 L_neg 0.231 twin 0.49 KL   48.4 L_inv 0.000 m_std 1.02 | ent 1.11 | slots 5 K_eff 5.00 churn 0.60
+ep 82 it 1245 | L_pos 0.770 L_neg 0.237 twin 0.53 KL   41.7 L_inv 0.000 m_std 0.99 | ent 1.11 | slots 5 K_eff 4.99 churn 0.59
+ep 83 it 1260 | L_pos 0.776 L_neg 0.239 twin 0.49 KL   42.4 L_inv 0.000 m_std 0.97 | ent 1.11 | slots 5 K_eff 4.96 churn 0.61
+ep 84 it 1275 | L_pos 0.766 L_neg 0.243 twin 0.49 KL   37.2 L_inv 0.000 m_std 0.99 | ent 1.11 | slots 5 K_eff 4.99 churn 0.60
+ep 85 it 1290 | L_pos 0.743 L_neg 0.221 twin 0.50 KL   42.7 L_inv 0.000 m_std 1.04 | ent 1.11 | slots 5 K_eff 5.00 churn 0.61
+ep 86 it 1305 | L_pos 0.746 L_neg 0.223 twin 0.50 KL   38.7 L_inv 0.000 m_std 0.99 | ent 1.11 | slots 5 K_eff 5.00 churn 0.59
+ep 87 it 1320 | L_pos 0.768 L_neg 0.226 twin 0.48 KL   39.1 L_inv 0.000 m_std 0.99 | ent 1.11 | slots 5 K_eff 4.99 churn 0.60
+ep 88 it 1335 | L_pos 0.752 L_neg 0.230 twin 0.52 KL   38.5 L_inv 0.000 m_std 1.01 | ent 1.11 | slots 5 K_eff 4.99 churn 0.61
+ep 89 it 1350 | L_pos 0.767 L_neg 0.236 twin 0.48 KL   42.5 L_inv 0.000 m_std 1.01 | ent 1.11 | slots 5 K_eff 5.00 churn 0.60
+ep 90 it 1365 | L_pos 0.764 L_neg 0.234 twin 0.51 KL   36.6 L_inv 0.000 m_std 0.97 | ent 1.11 | slots 5 K_eff 4.99 churn 0.60
+ep 91 it 1380 | L_pos 0.749 L_neg 0.229 twin 0.53 KL   37.0 L_inv 0.000 m_std 1.00 | ent 1.11 | slots 5 K_eff 5.00 churn 0.59
+ep 92 it 1395 | L_pos 0.772 L_neg 0.227 twin 0.49 KL   35.3 L_inv 0.000 m_std 1.01 | ent 1.11 | slots 5 K_eff 5.00 churn 0.59
+ep 93 it 1410 | L_pos 0.776 L_neg 0.236 twin 0.48 KL   35.8 L_inv -0.000 m_std 1.01 | ent 1.11 | slots 5 K_eff 4.99 churn 0.60
+ep 94 it 1425 | L_pos 0.780 L_neg 0.235 twin 0.46 KL   43.2 L_inv 0.000 m_std 1.02 | ent 1.11 | slots 5 K_eff 5.00 churn 0.60
+ep 95 it 1440 | L_pos 0.795 L_neg 0.253 twin 0.48 KL   37.5 L_inv 0.000 m_std 0.99 | ent 1.11 | slots 5 K_eff 5.00 churn 0.59
+ep 96 it 1455 | L_pos 0.763 L_neg 0.228 twin 0.48 KL   38.3 L_inv 0.000 m_std 1.00 | ent 1.11 | slots 5 K_eff 5.00 churn 0.60
+ep 97 it 1470 | L_pos 0.746 L_neg 0.233 twin 0.52 KL   38.0 L_inv 0.000 m_std 1.00 | ent 1.11 | slots 5 K_eff 5.00 churn 0.61
+ep 98 it 1485 | L_pos 0.746 L_neg 0.228 twin 0.51 KL   36.4 L_inv 0.000 m_std 1.01 | ent 1.11 | slots 5 K_eff 4.99 churn 0.59
+ep 99 it 1500 | L_pos 0.775 L_neg 0.240 twin 0.47 KL   35.4 L_inv 0.000 m_std 0.99 | ent 1.11 | slots 5 K_eff 5.00 churn 0.60
+
+                          name: toy_spur0.9_seed1
+                          seed: 1
+                        epochs: 100
+                      spurious: 0.900
+                           acc: 0.600
+                     nmi_class: 0.768
+                nmi_background: 0.372
+  nmi_class_background_in_data: 0.451
+                 clusters_used: 3
+
+figures and metrics in C:\Users\PC\Documents\Josue\Mes-documents\Professionnel\Projets-personnels\CIB-IRL\results\toy_spur0.9_seed1
