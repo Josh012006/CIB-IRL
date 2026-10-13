@@ -1,4 +1,5 @@
 torch>=2.2
 numpy
-scipy        # Hungarian matching in the smoke test / eval
-pytest       # optional: python -m pytest tests -q
+scipy    # Hungarian matching in the smoke test / eval
+pyyaml   # configs/*.yml
+pytest   # python -m pytest tests -q

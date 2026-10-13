@@ -1,0 +1,2 @@
+# Raw reward in the RL return instead of the per-state centered one
+center_reward: false

@@ -1,0 +1,2 @@
+# Explicit anti-collapse entropy term (off by default)
+rho: 0.1

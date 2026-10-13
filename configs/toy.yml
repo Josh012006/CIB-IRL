@@ -1,0 +1,14 @@
+# Synthetic data of scripts/smoke_toy.py (5 classes of white block-shapes on a random background).
+# Only what differs from the defaults of TrainConfig (cibirl/train.py) is written here.
+num_slots: 5              # K, upper bound (the toy has 5 classes)
+image_size: 16
+in_channels: 3
+
+orbits_per_episode: 3     # B <= K
+views_per_orbit: 2        # n >= 2
+num_expert_episodes: 2000
+expert_fraction: 0.3
+
+learner_batch: 100
+reward_warmup_iters: 150
+beta_warmup_iters: 300

@@ -1,11 +1,12 @@
 """End-to-end smoke test on synthetic data: does the Phase 1 pipeline run, and does it find the classes?
-Usage: python scripts/smoke_toy.py [--epochs 30] [--spurious 0.0]"""
+Usage: python scripts/smoke_toy.py [--config configs/toy.yml configs/ablations/gamma0.yml] [--set seed=3] [--epochs 30]"""
 import argparse
 import sys
 from pathlib import Path
 
 import numpy as np
 import torch
+import yaml
 from scipy.optimize import linear_sum_assignment
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -38,18 +39,20 @@ def cluster_acc(pred, labels, k):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
+    ap.add_argument("--config", nargs="+", default=["configs/toy.yml"],
+                    help="YAML files merged left to right, e.g. configs/toy.yml configs/ablations/gamma0.yml")
+    ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE", help="overrides, e.g. --set gamma=0 seed=3")
     ap.add_argument("--epochs", type=int, default=30)
-    ap.add_argument("--spurious", type=float, default=0.0)
     ap.add_argument("--classes", type=int, default=5)
-    ap.add_argument("--slots", type=int, default=5)
-    ap.add_argument("--no-standardize", action="store_true")
-    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--spurious", type=float, default=0.0, help="prob. that the background colour follows the class")
     args = ap.parse_args()
 
-    x, y, bg = make_toy(n_per_class=300, n_classes=args.classes, spurious=args.spurious, seed=args.seed)
-    cfg = TrainConfig(num_slots=args.slots, image_size=16, orbits_per_episode=3, num_expert_episodes=2000,
-                      expert_fraction=0.3, learner_batch=100, reward_warmup_iters=150, beta_warmup_iters=300,
-                      intent_standardize=not args.no_standardize, seed=args.seed)
+    root = Path(__file__).resolve().parents[1]
+    overrides = {k: yaml.safe_load(v) for k, v in (kv.split("=", 1) for kv in args.set)}
+    cfg = TrainConfig.from_yaml(*[root / c for c in args.config], **overrides)
+    print("config:", {k: v for k, v in vars(cfg).items()}, flush=True)
+
+    x, y, bg = make_toy(n_per_class=300, n_classes=args.classes, spurious=args.spurious, seed=cfg.seed)
     tr = Trainer(cfg, x, background_redraw)
 
     def log(r):
@@ -61,5 +64,5 @@ if __name__ == "__main__":
     tr.fit(args.epochs, log_fn=log)
     pred = tr.predict().cpu().numpy()
     y_np, bg_np = y.numpy(), bg.numpy()
-    print(f"\nACC {cluster_acc(pred, y_np, args.slots):.3f}  NMI(cluster,class) {nmi(pred, y_np):.3f}  "
+    print(f"\nACC {cluster_acc(pred, y_np, cfg.num_slots):.3f}  NMI(cluster,class) {nmi(pred, y_np):.3f}  "
           f"NMI(cluster,background) {nmi(pred, bg_np):.3f}  clusters used {len(np.unique(pred))}")

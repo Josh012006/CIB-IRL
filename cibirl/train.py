@@ -17,11 +17,13 @@ Who receives which gradient (README 6.5):
 """
 from __future__ import annotations
 
+import difflib
 import itertools
 import math
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
-from typing import Callable, Optional
+from dataclasses import asdict, dataclass, fields
+from pathlib import Path
+from typing import Any, Callable, Optional
 
 import torch
 from torch import Tensor
@@ -83,6 +85,79 @@ class TrainConfig:
     learner_batch: int = 128
     reward_warmup_iters: int = 200  # reward / encoder / intent on the experts alone, no learner rollout
     seed: int = 0
+
+    # ---------------------------------------------------------------------------------------------
+    # Loading from YAML (the VALUES of an experiment live in configs/, this class is the schema and
+    # the defaults). Several files are merged left to right, then `overrides` win:
+    #     TrainConfig.from_yaml("configs/toy.yml", "configs/ablations/gamma0.yml", seed=3)
+    # A file may start from others with `base: other.yml` (path relative to the file, or a list).
+    # ---------------------------------------------------------------------------------------------
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "TrainConfig":
+        """Strict: an unknown key is an error (with a suggestion), values are cast to the field type."""
+        known = {f.name: f.type for f in fields(cls)}
+        for key in d:
+            if key not in known:
+                hint = difflib.get_close_matches(key, known, n=1)
+                raise KeyError(f"unknown config key '{key}'" + (f" (did you mean '{hint[0]}'?)" if hint else ""))
+        return cls(**{k: _coerce(k, v, known[k]) for k, v in d.items()})
+
+    @classmethod
+    def _load_one(cls, path: str | Path, _chain: tuple = ()) -> dict[str, Any]:
+        import yaml  # imported here so that the package does not need PyYAML unless a YAML is loaded
+        path = Path(path).resolve()
+        if path in _chain:
+            raise ValueError(f"circular 'base' in {path}")
+        raw = yaml.safe_load(path.read_text()) or {}
+        if not isinstance(raw, dict):
+            raise ValueError(f"{path}: a config file must be a mapping key: value")
+        bases = raw.pop("base", [])
+        merged: dict[str, Any] = {}
+        for b in ([bases] if isinstance(bases, str) else bases):
+            merged.update(cls._load_one(path.parent / b, _chain + (path,)))
+        merged.update(raw)
+        return merged
+
+    @classmethod
+    def from_yaml(cls, *paths: str | Path, **overrides: Any) -> "TrainConfig":
+        merged: dict[str, Any] = {}
+        for p in paths:
+            merged.update(cls._load_one(p))
+        merged.update(overrides)
+        return cls.from_dict(merged)
+
+    def to_yaml(self, path: str | Path) -> None:
+        """Write the RESOLVED config (defaults + files + overrides) next to a run, to reproduce it."""
+        import yaml
+        Path(path).write_text(yaml.safe_dump(asdict(self), sort_keys=False))
+
+
+def _coerce(name: str, value: Any, type_str: str) -> Any:
+    """Cast a value read from YAML to the declared field type. Needed because YAML 1.1 reads `1e-3`
+    (no dot) as a STRING, and because `True` would silently become 1 / 1.0 in an int / float field."""
+    optional = type_str.startswith("Optional[")
+    base = type_str[len("Optional["):-1] if optional else type_str
+    if value is None:
+        if optional:
+            return None
+        raise ValueError(f"config '{name}' cannot be null")
+    if base == "bool":
+        if not isinstance(value, bool):
+            raise ValueError(f"config '{name}' expects true/false, got {value!r}")
+        return value
+    if isinstance(value, bool):
+        raise ValueError(f"config '{name}' expects a number, got {value!r}")
+    try:
+        if base == "float":
+            return float(value)
+        if base == "int":
+            f = float(value)
+            if f != int(f):
+                raise ValueError
+            return int(f)
+    except (TypeError, ValueError):
+        raise ValueError(f"config '{name}' expects {base}, got {value!r}") from None
+    return value
 
 
 @dataclass

@@ -1,0 +1,2 @@
+# README to the letter: no batch standardization of the intent (m can collapse, see the smoke test)
+intent_standardize: false
