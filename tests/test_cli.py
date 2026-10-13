@@ -30,4 +30,22 @@ def test_existing_run_is_not_overwritten_silently(tmp_path):
 def test_suite_runner_help():
     res = subprocess.run([sys.executable, str(ROOT / "scripts" / "run_toy_suite.py"), "--help"],
                          capture_output=True, text=True, encoding="utf-8")
-    assert res.returncode == 0 and "--seeds" in res.stdout
+    assert res.returncode == 0 and "--seeds" in res.stdout and "--cpu-count" in res.stdout
+
+
+def test_suite_runs_in_parallel_and_resumes(tmp_path):
+    suite = [sys.executable, str(ROOT / "scripts" / "run_toy_suite.py"), "--seeds", "0", "--epochs", "1",
+             "--out-root", str(tmp_path), "--cpu-count", "2", "--skip-existing"]
+    res = subprocess.run(suite, capture_output=True, text=True, encoding="utf-8")
+    assert res.returncode == 0, (res.stdout + res.stderr)[-2000:]
+    for name in ("toy", "toy_spur0.9", "toy_no_standardize"):
+        assert (tmp_path / f"{name}_seed0" / "final_metrics.json").exists(), name
+        assert (tmp_path / "_logs" / f"{name}_seed0.log").exists(), name
+    again = subprocess.run(suite, capture_output=True, text=True, encoding="utf-8")   # everything is done: nothing relaunched
+    assert again.returncode == 0 and again.stdout.count("skip ") == 3
+
+
+def test_suite_rejects_bad_cpu_count():
+    res = subprocess.run([sys.executable, str(ROOT / "scripts" / "run_toy_suite.py"), "--cpu-count", "0"],
+                         capture_output=True, text=True, encoding="utf-8")
+    assert res.returncode != 0 and "--cpu-count" in res.stderr
