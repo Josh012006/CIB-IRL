@@ -121,20 +121,12 @@ Six papers cover the theoretical foundations of the framework:
   cluster assignments of two augmented views of the same image. Our forced moves and
   invariance term play a similar role in a different formalism.
 
-- [ ] Babeş-Vroman, M., Marivate, V., Subramanian, K., & Littman, M. (2011).
+- [x] Babeş-Vroman, M., Marivate, V., Subramanian, K., & Littman, M. (2011).
   *Apprenticeship Learning About Multiple Intentions*. ICML 2011.
   [Paper page](https://mlanthology.org/icml/2011/babes2011icml-apprenticeship)
   Early "clustering and IRL together" — clusters unlabeled trajectories by inferring one
   objective per cluster with an EM procedure over IRL. Closest ancestor of the idea that a
   cluster is defined by its reward.
-
-- [ ] Le-Khac, P. H., Healy, G., & Smeaton, A. F. (2020).
-  *Contrastive Representation Learning: A Framework and Review*. IEEE Access, 8.
-  [PDF](https://arxiv.org/pdf/2010.05113.pdf)
-  Core contrastive-learning overview — a review that unifies the methods (positive and negative
-  pairs, loss functions, families of methods) and gives the vocabulary used by the other
-  papers. Enough to understand what our `L_pos` and `L_neg` borrow from contrastive learning
-  (Section 5.3).
 
 Additional references used by the expert design ([Section 5](#5-where-do-the-experts-come-from)): **Debiased Contrastive Learning** (Chuang et al., NeurIPS 2020), **SCAN: Learning to Classify Images without Labels** (Van Gansbeke et al., ECCV 2020), **SimCLR** (Chen et al., 2020), **MoCo v3** (Chen, Xie, He, 2021), and **Waterbirds / Group DRO** (Sagawa et al., 2020).
 
