@@ -108,7 +108,7 @@ class TrainConfig:
         path = Path(path).resolve()
         if path in _chain:
             raise ValueError(f"circular 'base' in {path}")
-        raw = yaml.safe_load(path.read_text()) or {}
+        raw = yaml.safe_load(path.read_text(encoding="utf-8-sig")) or {}   # -sig: tolerate a BOM (Notepad)
         if not isinstance(raw, dict):
             raise ValueError(f"{path}: a config file must be a mapping key: value")
         bases = raw.pop("base", [])
@@ -129,7 +129,7 @@ class TrainConfig:
     def to_yaml(self, path: str | Path) -> None:
         """Write the RESOLVED config (defaults + files + overrides) next to a run, to reproduce it."""
         import yaml
-        Path(path).write_text(yaml.safe_dump(asdict(self), sort_keys=False))
+        Path(path).write_text(yaml.safe_dump(asdict(self), sort_keys=False), encoding="utf-8")
 
 
 def _coerce(name: str, value: Any, type_str: str) -> Any:
@@ -372,14 +372,20 @@ class Trainer:
         return stats
 
     @torch.no_grad()
+    def intents(self, images: Tensor | None = None, batch_size: int = 512) -> Tensor:
+        """m = mu_psi(mu_phi(x)) for every image, deterministic, with the current networks: [N, m_dim]."""
+        images = self.images if images is None else images
+        out = []
+        for s in range(0, images.shape[0], batch_size):
+            x = images[s:s + batch_size].to(self.device)
+            out.append(self.intent.mean(self.encoder(x, sample=False).z))
+        return torch.cat(out)
+
+    @torch.no_grad()
     def recompute_memory(self, batch_size: int = 512) -> None:
         """End of epoch: the encoder moved, so the stored summaries are stale. Recompute them
         from the member lists with the current encoder (README 4.2)."""
-        ms = []
-        for s in range(0, self.N, batch_size):
-            idx = torch.arange(s, min(s + batch_size, self.N))
-            ms.append(self.intent.mean(self.encoder(self._fetch(idx), sample=False).z))
-        self.memory.recompute(torch.cat(ms))
+        self.memory.recompute(self.intents(batch_size=batch_size))
 
     def epoch_stats(self) -> dict:
         sizes = self.memory.sizes()

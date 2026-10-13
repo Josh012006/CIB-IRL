@@ -12,7 +12,7 @@ from cibirl.train import TrainConfig   # noqa: E402
 
 def write(tmp_path, name, text):
     p = tmp_path / name
-    p.write_text(text)
+    p.write_text(text, encoding="utf-8")
     return p
 
 
@@ -81,3 +81,10 @@ def test_to_yaml_round_trip(tmp_path):
     out = tmp_path / "resolved.yml"
     cfg.to_yaml(out)
     assert TrainConfig.from_yaml(out) == cfg
+
+
+def test_yaml_with_accents_and_bom_is_read_as_utf8(tmp_path):
+    """Windows editors (Notepad) save UTF-8 with a BOM, and French comments contain accents."""
+    p = tmp_path / "fr.yml"
+    p.write_bytes("﻿# Réglages du test — été\nnum_slots: 7\n".encode("utf-8"))
+    assert TrainConfig.from_yaml(p).num_slots == 7
