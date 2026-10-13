@@ -1,0 +1,4 @@
+torch>=2.2
+numpy
+scipy        # Hungarian matching in the smoke test / eval
+pytest       # optional: python -m pytest tests -q
