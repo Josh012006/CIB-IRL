@@ -1,5 +1,7 @@
 torch>=2.2
 numpy
-scipy    # Hungarian matching in the smoke test / eval
-pyyaml   # configs/*.yml
-pytest   # python -m pytest tests -q
+scipy          # Hungarian matching (eval/metrics.py)
+matplotlib     # figures (eval/visualize.py)
+pyyaml         # configs/*.yml
+scikit-learn   # optional: t-SNE of the intent space (falls back to PCA)
+pytest         # python -m pytest tests -q
