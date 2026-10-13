@@ -27,7 +27,7 @@ def same(a, b):
     return all(torch.equal(x, y) for x, y in zip(a, b))
 
 
-def setup():
+def make_state():
     tr = make_trainer()
     tr.iteration = 10_000                                   # past all warm-ups
     roll = tr.learner_rollout(torch.arange(32))
@@ -36,7 +36,7 @@ def setup():
 
 
 def test_reward_step_does_not_touch_policy():
-    tr, roll, eb = setup()
+    tr, roll, eb = make_state()
     pol_before = snap(tr.policy, tr.value)
     enc_before = snap(tr.encoder, tr.intent, tr.reward)
     tr.reward_step(eb, roll)
@@ -46,7 +46,7 @@ def test_reward_step_does_not_touch_policy():
 
 
 def test_policy_step_only_touches_policy_and_critic():
-    tr, roll, _ = setup()
+    tr, roll, _ = make_state()
     frozen_before = snap(tr.encoder, tr.intent, tr.reward)
     pol_before = snap(tr.policy, tr.value)
     tr.policy_step(roll)
@@ -56,7 +56,7 @@ def test_policy_step_only_touches_policy_and_critic():
 
 def test_reward_loss_does_not_update_intent():
     """Remove L_psi (zero loss, still connected to the graph): psi must not move at all."""
-    tr, roll, eb = setup()
+    tr, roll, eb = make_state()
     orig = L.intent_nll
     L.intent_nll = lambda mu, lv, t: (mu * 0).sum() + (lv * 0).sum()
     try:
@@ -71,7 +71,7 @@ def test_reward_loss_does_not_update_intent():
 
 def test_invariance_loss_only_updates_the_encoder():
     """Keep only lambda * L_inv: only phi may move."""
-    tr, roll, eb = setup()
+    tr, roll, eb = make_state()
     orig_e, orig_i = L.expert_loss, L.intent_nll
     L.intent_nll = lambda mu, lv, t: (mu * 0).sum() + (lv * 0).sum()
     def zero_expert(scores, *a, **k):
