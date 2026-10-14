@@ -1,0 +1,27 @@
+# Is the early, partial memory what contaminates the clusters? (docs/protocol-decisions.md, section 5.3)
+# Same setting as the `ref` runs of toy_dynamics (toy, oracle bank, 100 epochs, beta default 1e-4). Every run now also
+# writes the label-based placement statistics `eval_place*`, `eval_purity`, `eval_depleted` in metrics.jsonl
+# (evaluation only, they change nothing in the training).
+#
+#   ref     reference. Test 1 = read its eval_place* columns: where (how many slots occupied, which epoch) and of
+#           which kind (wrong join / wrong open) are the placement errors?
+#   warm    ORACLE DIAGNOSTIC (uses the true classes): when the learner starts to act, the memory already holds 5
+#           images of every class (slot c = class c). Complete and informative from the first placement.
+#   burn3   burn-in (no labels): 3 epochs after the learner started to place images, the memory is rebuilt from a
+#   burn8   random 10 % of the members of each cluster (at least one); the other images are placed again by the policy.
+#
+#   python scripts/run_suite.py configs/suites/toy_formation.yml --cpu-count 2
+name: toy_formation
+description: toy data, 100 epochs, placement diagnostics, oracle warm memory, burn-in of the memory
+seeds: [0, 1, 2, 3, 4]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  fixed_epochs: 100
+experiments:
+  - {name: ref}
+  - {name: warm,  set: {oracle_warm_memory: 5}}
+  - {name: burn3, set: {burn_in_epochs: 3, burn_in_fraction: 0.1}}
+  - {name: burn8, set: {burn_in_epochs: 8, burn_in_fraction: 0.1}}

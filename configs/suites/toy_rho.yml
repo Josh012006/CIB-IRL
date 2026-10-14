@@ -1,0 +1,17 @@
+# Does the anti-collapse term rho really help against the merges? 10 seeds, same setting as toy_dynamics `ref`.
+#   rho = -rho * entropy of the reward's marginal over slots on expert states (cibirl/losses.py), off by default.
+#
+#   python scripts/run_suite.py configs/suites/toy_rho.yml --cpu-count 2 --skip-existing
+name: toy_rho
+description: toy data, 100 epochs, anti-collapse term rho in {0, 0.1, 0.3}, 10 seeds
+seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  fixed_epochs: 100
+experiments:
+  - {name: ref}
+  - {name: rho0.1, set: {rho: 0.1}}
+  - {name: rho0.3, set: {rho: 0.3}}

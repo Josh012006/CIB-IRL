@@ -14,6 +14,8 @@ Memories are constants for autograd: nothing in this file carries gradients.
 """
 from __future__ import annotations
 
+import math
+
 import torch
 import torch.nn.functional as F
 from torch import Tensor
@@ -114,6 +116,20 @@ class ClusterMemory:
         self.counts = torch.bincount(self.assign[placed], minlength=self.K).float()
         self.summaries = sums / self.counts.clamp(min=1).unsqueeze(-1)
         self.member_m = m_all.clone()
+
+    @torch.no_grad()
+    def subsample(self, m_all: Tensor, fraction: float) -> None:
+        """Keep a random `fraction` of the members of every non-empty slot (at least one) and forget the others:
+        their assignment goes back to -1 and the summaries are recomputed from the kept members only.
+        Used once, early, as a burn-in: the memory is rebuilt from a sample of what the clusters contain."""
+        keep = torch.zeros(self.assign.shape[0], dtype=torch.bool, device=self.device)
+        for k in range(self.K):
+            members = (self.assign == k).nonzero().flatten()
+            if len(members):
+                n_keep = max(1, math.ceil(fraction * len(members)))
+                keep[members[torch.randperm(len(members), device=members.device)[:n_keep]]] = True
+        self.assign = torch.where(keep, self.assign, torch.full_like(self.assign, -1))
+        self.recompute(m_all)
 
     def sizes(self) -> Tensor:
         return self.counts.clone()

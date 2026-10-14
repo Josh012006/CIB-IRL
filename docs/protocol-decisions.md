@@ -78,5 +78,30 @@ Lecture :
 - Test de la mémoire idéale (slots = vrais centres de classe) : avec les 5 slots occupés, récompense et politique placent 100 % des images dans leur classe ; avec 1 a 4 slots occupés, 50 a 95 % seulement (décider d'ouvrir un slot ou de rejoindre un slot existant sous une mémoire partielle). link 1,0 améliore la récompense seule avec 1 slot occupé (0,92 contre 0,52 a 0,76), pas la politique.
 - `rho` est le seul levier qui bouge quelque chose, de façon modeste sur 5 graines (ACC finale +0,08 a +0,10, un peu plus d'epochs a >= 0,95, plus proche de 5 clusters), avec des écarts de l'ordre de l'écart-type : indice, pas preuve. Les graines 3 et 4 avec rho 1,0 atteignent 1,0 puis redescendent vers 0,6 vers l'epoch 100 : la dérive tardive reste.
 
+### 5.3 Suite `toy_formation` (mêmes conditions que la référence ; 5 graines ; diagnostics de placement)
+Hypothèse testée : « au début la mémoire est peu informative, l'incertitude contamine les clusters et la contamination persiste ».
+Nouveautés : `cibirl/diagnostics.py` (statistiques `eval_place`, `eval_purity`, `eval_depleted` par epoch, avec les labels, évaluation seulement ; sans effet sur l'entraînement : 0 écart sur 48 valeurs et mêmes ACC/NMI que l'ancienne référence), `oracle_warm_memory` (DIAGNOSTIC ORACLE : 5 images par classe dans la mémoire au moment où l'apprenant commence à agir), `burn_in_epochs` / `burn_in_fraction` (sans labels : la mémoire est reconstruite à partir d'un tirage de 10 % des membres de chaque cluster, compté en epochs depuis le début des placements).
+
+Test 1, sur la référence :
+- La mémoire est pleine presque tout le temps : sur 37 500 placements des epochs 10 à 14 (l'apprenant ne place rien avant l'epoch 10, à cause du préchauffage de 150 itérations de la récompense), 63 seulement ont lieu avec moins de 5 slots occupés. L'hypothèse « mémoire partielle » est donc écartée (elle était une extrapolation du test à mémoire idéale, qui ne décrit pas les états réellement visités).
+- Aucun slot ne se vide pendant une run (0 sur 20). Les erreurs de placement (21 à 37 % des placements) viennent d'une mémoire pleine ; elles reflètent surtout les classes fusionnées.
+
+Interventions (ACC finale, moyenne +- écart-type ; référence 0,74 +- 0,17) : warm 0,80 +- 0,13 ; burn3 0,78 +- 0,15 ; burn8 0,69 +- 0,20. Aucune ne se distingue de la référence.
+Réserve sur warm : la politique non entraînée écrase la mémoire de départ en ~25 placements (pureté 0,6 à 0,8 à l'epoch 12 malgré un départ propre).
+
+Ce qui contredit la contamination précoce comme cause principale : 8 runs sur 20 atteignent un état pur (ACC >= 0,95 pendant au moins 10 epochs consécutives) et 4 le perdent ensuite. Graine 4 : pureté ~1,0, politique déterministe, ACC 1,0 de l'epoch 13 à 24, puis rupture brutale (churn de 0,04 à 0,41, un cluster sur cinq se défait) sans signe dans twin_acc ni dans les pertes de la récompense. Elle survient aux epochs 24 à 29 dans quatre conditions différentes (référence, warm, burn3, burn8), tandis que la graine 2 reste pure jusqu'au bout dans trois d'entre elles. L'équilibre pur est donc instable pour certaines graines, indépendamment de l'historique de la mémoire.
+Prochaine étape proposée : autopsie de la graine 4 (sauvegarder m et les marges de la politique aux epochs 22 à 28).
+
+### 5.4 Suite `toy_rho` (10 graines) : correction de 5.2
+Même cadre que la référence (beta = 1e-4, 100 epochs). Résultats sur 10 graines (ACC finale, moyenne +- écart-type ; différence appariée avec la référence +- erreur standard) :
+
+| condition | ACC finale | ACC moy. 20 dernières | epochs >= 0,95 | clusters | différence finale vs ref |
+|---|---|---|---|---|---|
+| ref | 0,70 +- 0,16 | 0,73 | 24 | 4,2 | |
+| rho 0,1 | 0,77 +- 0,15 | 0,78 | 26 | 4,5 | +0,07 +- 0,06 |
+| rho 0,3 | 0,71 +- 0,10 | 0,74 | 14 | 4,0 | +0,01 +- 0,07 |
+
+Le gain de `rho` vu sur 3 à 5 graines (5.2) ne se confirme pas : +0,07 est à environ 1,2 erreur standard pour rho 0,1, et rho 0,3 ne change rien (moins d'epochs à >= 0,95). Conclusion : `rho` n'est pas un levier contre les fusions ; il reste désactivé par défaut. Avec 10 graines la référence vaut 0,70 +- 0,16 (0,74 sur les graines 0 à 4), ce qui donne l'ordre de grandeur du bruit entre jeux de graines.
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.

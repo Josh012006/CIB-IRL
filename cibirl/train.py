@@ -29,6 +29,7 @@ import torch
 from torch import Tensor
 
 from . import losses as L
+from .diagnostics import PlacementDiagnostics
 from .encoder import build_encoder
 from .experts import ExpertBatch, ExpertEpisodes, OrbitSampler, Transform, split_expert_portion
 from .intent import IntentPredictor
@@ -65,6 +66,12 @@ class TrainConfig:
     rho: float = 0.0               # anti-collapse entropy term, off by default
     expert_oracle_link: float = 0.0  # ORACLE DIAGNOSTIC, uses the true classes (needs oracle_labels): probability
                                      # that the orbits of one class are linked in an expert episode. 0 = Phase 1.
+    oracle_warm_memory: int = 0      # ORACLE DIAGNOSTIC (true classes): when the learner starts acting, the memory
+                                     # already holds this many images of every class, slot c = class c. 0 = empty.
+    burn_in_epochs: int = 0          # once the learner has been placing images for this many epochs (the reward
+                                     # warm-up does not count), the memory is rebuilt from a random sample of the
+                                     # members of each cluster (no labels). 0 = never.
+    burn_in_fraction: float = 0.1    # share of each cluster kept by the burn-in (at least one member)
 
     # compression and invariance
     beta: float = 1e-4             # 1e-3 degraded the reward on the toy (docs/protocol-decisions.md, 3 and 5)
@@ -198,17 +205,28 @@ def freeze(*modules: torch.nn.Module):
 class Trainer:
     def __init__(self, cfg: TrainConfig, images: Tensor, transform: Transform,
                  expert_ids: Tensor | None = None, device: str | torch.device = "cpu",
-                 oracle_labels: Tensor | None = None):
+                 oracle_labels: Tensor | None = None, eval_labels: Tensor | None = None):
         """images [N, C, H, W] float in [0, 1] (on any device); transform = the nuisance family T.
 
-        `oracle_labels` [N] is read ONLY when cfg.expert_oracle_link > 0 (a diagnostic that cheats on purpose)."""
+        `oracle_labels` [N] is read ONLY by the oracle diagnostics (cfg.expert_oracle_link > 0 or
+        cfg.oracle_warm_memory > 0), which cheat on purpose. `eval_labels` [N] only feeds the `eval_*` placement
+        statistics of cibirl/diagnostics.py: it never influences training (a test checks it)."""
         if cfg.phase != 1:
             raise NotImplementedError("Only Phase 1 is implemented (README Section 5.5)")
         if not 0.0 <= cfg.expert_oracle_link <= 1.0:
             raise ValueError(f"expert_oracle_link must be in [0, 1], got {cfg.expert_oracle_link}")
-        if cfg.expert_oracle_link > 0 and oracle_labels is None:
-            raise ValueError("expert_oracle_link > 0 is an oracle diagnostic: pass oracle_labels to the Trainer")
-        self._oracle_labels = oracle_labels.cpu().long() if cfg.expert_oracle_link > 0 else None
+        if cfg.oracle_warm_memory < 0 or cfg.burn_in_epochs < 0 or not 0.0 < cfg.burn_in_fraction <= 1.0:
+            raise ValueError("oracle_warm_memory, burn_in_epochs must be >= 0 and burn_in_fraction in (0, 1]")
+        oracle_on = cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0
+        if oracle_on and oracle_labels is None:
+            raise ValueError("expert_oracle_link / oracle_warm_memory are oracle diagnostics: pass oracle_labels "
+                             "to the Trainer")
+        self._oracle_labels = oracle_labels.cpu().long() if oracle_on else None
+        if cfg.oracle_warm_memory > 0 and int(self._oracle_labels.max()) + 1 > cfg.num_slots:
+            raise ValueError("oracle_warm_memory needs one slot per class (num_slots >= number of classes)")
+        self._warmed = False
+        self._acting_epochs = 0
+        self._diag = PlacementDiagnostics(eval_labels, cfg.num_slots) if eval_labels is not None else None
         self.cfg, self.device = cfg, torch.device(device)
         torch.manual_seed(cfg.seed)
 
@@ -287,7 +305,10 @@ class Trainer:
             a, lp = self.policy.act(z[t:t + 1], m[t:t + 1], summ.unsqueeze(0), empty.unsqueeze(0))
             actions[t], logps[t] = a[0], lp[0]
             item = int(idx[t])
-            had_slot = int(self.memory.assign[item]) >= 0
+            prev = int(self.memory.assign[item])
+            had_slot = prev >= 0
+            if self._diag is not None:                       # evaluation only: reads the state before the update
+                self._diag.record(item, int(a[0]), prev)
             changed = self.memory.place(item, m[t], int(a[0]))
             self._revisits += int(had_slot)
             self._changes += int(changed)
@@ -380,11 +401,27 @@ class Trainer:
             # warm-up: the reward learns from the forced moves before the policy acts alone
             stats = self.reward_step(eb, None)
         else:
+            if self.cfg.oracle_warm_memory > 0 and not self._warmed:
+                self._warm_memory()
             roll = self.learner_rollout(idx)
             stats = self.reward_step(eb, roll)
             stats.update(self.policy_step(roll))
         self.iteration += 1
         return stats
+
+    @torch.no_grad()
+    def _warm_memory(self) -> None:
+        """ORACLE DIAGNOSTIC: put `oracle_warm_memory` random images of every class into slot = class, so that the
+        learner starts acting with an informative, complete memory instead of an empty one."""
+        self._warmed = True
+        labels = self._oracle_labels
+        for c in range(int(labels.max()) + 1):
+            ids = (labels == c).nonzero().flatten()
+            pick = ids[torch.randperm(len(ids))[:self.cfg.oracle_warm_memory]]
+            for i, m_i in zip(pick.tolist(), self.intents(self.images[pick])):
+                self.memory.place(i, m_i, c)
+        if self._diag is not None:
+            self._diag.sync(self.memory.assign)
 
     @torch.no_grad()
     def intents(self, images: Tensor | None = None, batch_size: int = 512) -> Tensor:
@@ -425,6 +462,8 @@ class Trainer:
         for ep in range(epochs):
             perm = torch.randperm(self.N)
             self._changes = self._revisits = 0
+            if self._diag is not None:
+                self._diag.start_epoch(self.memory.assign)
             agg: dict[str, list[float]] = {}
             for s in range(0, self.N, self.cfg.learner_batch):
                 idx = perm[s:s + self.cfg.learner_batch]
@@ -432,12 +471,22 @@ class Trainer:
                     continue
                 for k, v in self.train_iteration(idx).items():
                     agg.setdefault(k, []).append(v)
+            report = {}
+            if self._diag is not None:
+                report = self._diag.report()                 # placements of this epoch (before the recompute)
             self.recompute_memory()
+            if self._diag is not None:
+                self._diag.sync(self.memory.assign)
+                report["eval_purity"] = self._diag.purity()   # purity of the memory the next epoch starts from
             row = {"epoch": ep, "iter": self.iteration, **{k: sum(v) / len(v) for k, v in agg.items()},
-                   **self.epoch_stats()}
+                   **self.epoch_stats(), **report}
             history.append(row)
             if log_fn(row):
                 break
+            if bool((self.memory.assign >= 0).any()):
+                self._acting_epochs += 1                      # epochs since the learner started to place images
+            if self.cfg.burn_in_epochs and self._acting_epochs == self.cfg.burn_in_epochs:
+                self.memory.subsample(self.intents(), self.cfg.burn_in_fraction)
         return history
 
     # ---------------------------------------------------------------------------------------------

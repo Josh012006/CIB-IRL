@@ -178,3 +178,96 @@ def test_an_oracle_epoch_runs():
                       learner_batch=32, episodes_per_batch=8, reward_warmup_iters=2, expert_oracle_link=0.5)
     hist = Trainer(cfg, x, background_redraw, oracle_labels=y).fit(2, log_fn=lambda r: False)
     assert len(hist) == 2
+
+
+# ---- placement diagnostics (evaluation only), oracle warm memory, burn-in --------------------------------
+from cibirl.diagnostics import PlacementDiagnostics     # noqa: E402
+from cibirl.memory import ClusterMemory                 # noqa: E402
+
+
+def _tiny(**kw):
+    x, y, _ = make_toy(n_per_class=30, n_classes=4)
+    cfg = TrainConfig(num_slots=4, image_size=16, orbits_per_episode=3, num_expert_episodes=100, expert_fraction=0.5,
+                      learner_batch=32, episodes_per_batch=8, reward_warmup_iters=2, beta_warmup_iters=0,
+                      **{k: v for k, v in kw.items() if k in TrainConfig.__dataclass_fields__})
+    extra = {k: v for k, v in kw.items() if k not in TrainConfig.__dataclass_fields__}
+    return Trainer(cfg, x, background_redraw, **extra), y
+
+
+def test_diagnostics_classify_joins_and_opens():
+    y = torch.tensor([0, 0, 1, 1, 2, 2])
+    d = PlacementDiagnostics(y, num_slots=3)
+    d.start_epoch(torch.full((6,), -1))
+    d.record(0, 0, -1)          # open an empty slot, nothing occupied: right
+    d.record(1, 0, -1)          # join slot 0 (class 0) with a class-0 image: right
+    d.record(2, 0, -1)          # join slot 0 with a class-1 image: wrong join
+    d.record(3, 1, -1)          # open although... class 1 is not dominant anywhere (slot 0 = 0,0,1): right
+    d.record(4, 2, -1)          # open the empty slot for class 2: right
+    d.record(5, 1, -1)          # join slot 1 (class 1) with a class-2 image: wrong join
+    rep = d.report()["eval_place"]
+    assert rep["0"] == [1, 0, 0] and rep["1"] == [2, 1, 0] and rep["2"] == [1, 0, 0] and rep["3"] == [0, 1, 0]
+    d.record(0, 1, 0)           # image 0 (class 0) moves from slot 0 to slot 1: bookkeeping follows
+    assert int(d.cc[0, 0]) == 1 and int(d.cc[1, 0]) == 1
+    d.record(1, 2, 0)           # slot 0 loses its last class-0 member but still holds image 2: not depleted
+    assert d.depleted == 0
+    d.record(2, 2, 0)           # now slot 0 is empty
+    assert d.depleted == 1
+
+
+def test_a_wrong_open_is_detected():
+    d = PlacementDiagnostics(torch.tensor([0, 0, 1]), num_slots=3)
+    d.start_epoch(torch.full((3,), -1))
+    d.record(0, 0, -1)
+    d.record(1, 1, -1)          # opens a new slot for a class-0 image although slot 0 is class 0
+    assert d.report()["eval_place"]["1"] == [0, 0, 1]
+
+
+def test_diagnostics_do_not_change_training():
+    x, y, _ = make_toy(n_per_class=30, n_classes=4)
+    cfg = TrainConfig(num_slots=4, image_size=16, orbits_per_episode=3, num_expert_episodes=100, expert_fraction=0.5,
+                      learner_batch=32, episodes_per_batch=8, reward_warmup_iters=2, beta_warmup_iters=0)
+    plain = Trainer(cfg, x, background_redraw).fit(2, log_fn=lambda r: False)          # seeded in __init__
+    with_diag = Trainer(cfg, x, background_redraw, eval_labels=y).fit(2, log_fn=lambda r: False)
+    for ra, rc in zip(plain, with_diag):
+        keys = [k for k in ra if not k.startswith("eval_")]
+        assert keys and all(ra[k] == rc[k] for k in keys)
+    assert "eval_place" in with_diag[0] and "eval_place" not in plain[0]
+    placed = sum(sum(v) for v in with_diag[1]["eval_place"].values())     # epoch 0 has the reward warm-up
+    assert placed >= x.shape[0] - 32                         # every image of the epoch but a possible short tail
+
+
+def test_warm_memory_seeds_one_slot_per_class_and_needs_labels():
+    with pytest.raises(ValueError):
+        _tiny(oracle_warm_memory=2)
+    x, y, _ = make_toy(n_per_class=30, n_classes=4)
+    tr, _ = _tiny(oracle_warm_memory=3, oracle_labels=y)
+    tr._warm_memory()
+    mem = tr.memory
+    assert torch.equal(mem.counts, torch.full((4,), 3.0))
+    for c in range(4):
+        assert (y[(mem.assign == c).nonzero().flatten()] == c).all()      # slot c holds only class c
+
+
+def test_burn_in_keeps_a_sample_of_every_cluster():
+    torch.manual_seed(0)
+    mem = ClusterMemory(40, 3, 2)
+    assign = torch.arange(40) % 3
+    m = torch.randn(40, 2)
+    mem.assign = assign.clone()
+    mem.recompute(m)
+    sizes = mem.counts.clone()
+    mem.subsample(m, 0.25)
+    assert (mem.counts >= 1).all() and (mem.counts < sizes).all()
+    kept = mem.assign >= 0
+    assert torch.equal(mem.assign[kept], assign[kept])                    # nobody changes slot
+    assert torch.equal(mem.counts, torch.bincount(mem.assign[kept], minlength=3).float())
+    for k in range(3):
+        assert torch.allclose(mem.summaries[k], m[mem.assign == k].mean(0), atol=1e-6)
+
+
+def test_burn_in_runs_in_the_loop_and_rejects_a_bad_fraction():
+    tr, _ = _tiny(burn_in_epochs=1, burn_in_fraction=0.2)
+    hist = tr.fit(2, log_fn=lambda r: False)
+    assert len(hist) == 2
+    with pytest.raises(ValueError):
+        _tiny(burn_in_fraction=0.0)

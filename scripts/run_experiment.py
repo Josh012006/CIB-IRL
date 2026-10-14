@@ -129,15 +129,17 @@ def main(argv=None) -> None:
     (out / "transform.yml").write_text(yaml.safe_dump(bank.spec, sort_keys=False, allow_unicode=True), encoding="utf-8")
     (out / "run.yml").write_text(yaml.safe_dump(
         {"data": args.data, "data_params": data.info, "transform": bank.name, "stop": stop.to_dict(),
-         "device": args.device, "uses_labels_for_training": cfg.expert_oracle_link > 0,
+         "device": args.device, "uses_labels_for_training": cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0,
          "command": " ".join(sys.argv)}, sort_keys=False, allow_unicode=True), encoding="utf-8")
     print(f"run folder: {out}\n{bank!r}\nstop: {stop}", flush=True)
 
-    oracle = cfg.expert_oracle_link > 0
+    oracle = cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0
     if oracle:
-        print("WARNING: expert_oracle_link > 0 uses the TRUE CLASSES to build the expert episodes. "
+        print("WARNING: expert_oracle_link / oracle_warm_memory use the TRUE CLASSES to train. "
               "Diagnostic only, not a result of the method.", flush=True)
-    tr = Trainer(cfg, images, bank, device=args.device, oracle_labels=data.labels if oracle else None)
+    # eval_labels only feed the eval_* placement statistics (cibirl/diagnostics.py), never the training
+    tr = Trainer(cfg, images, bank, device=args.device, oracle_labels=data.labels if oracle else None,
+                 eval_labels=data.labels)
     monitor = ConvergenceMonitor(stop)
     history: list[dict] = []
     metrics_file = open(out / "metrics.jsonl", "w", encoding="utf-8")
