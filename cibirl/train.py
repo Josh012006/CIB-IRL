@@ -72,6 +72,11 @@ class TrainConfig:
                                      # warm-up does not count), the memory is rebuilt from a random sample of the
                                      # members of each cluster (no labels). 0 = never.
     burn_in_fraction: float = 0.1    # share of each cluster kept by the burn-in (at least one member)
+    recompute_every: int = 0         # also recompute the summaries from the current encoder every this many
+                                     # iterations (the stored intents drift while the encoder trains). 0 = once per epoch.
+    freeze_repr_after: int = 0       # once the learner has been placing images for this many epochs, the learning rate of
+                                     # the encoder and of the intent predictor is multiplied by `repr_lr_scale`. 0 = never.
+    repr_lr_scale: float = 0.0       # 0 = frozen (weights and BatchNorm statistics: m no longer moves), 0.1 = slowed
 
     # compression and invariance
     beta: float = 1e-4             # 1e-3 degraded the reward on the toy (docs/protocol-decisions.md, 3 and 5)
@@ -217,6 +222,8 @@ class Trainer:
             raise ValueError(f"expert_oracle_link must be in [0, 1], got {cfg.expert_oracle_link}")
         if cfg.oracle_warm_memory < 0 or cfg.burn_in_epochs < 0 or not 0.0 < cfg.burn_in_fraction <= 1.0:
             raise ValueError("oracle_warm_memory, burn_in_epochs must be >= 0 and burn_in_fraction in (0, 1]")
+        if cfg.recompute_every < 0 or cfg.freeze_repr_after < 0 or not 0.0 <= cfg.repr_lr_scale <= 1.0:
+            raise ValueError("recompute_every, freeze_repr_after must be >= 0 and repr_lr_scale in [0, 1]")
         oracle_on = cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0
         if oracle_on and oracle_labels is None:
             raise ValueError("expert_oracle_link / oracle_warm_memory are oracle diagnostics: pass oracle_labels "
@@ -253,10 +260,12 @@ class Trainer:
                                             cfg.views_per_orbit, K, seed=cfg.seed)
 
         # two optimizers = the two steps of the alternation
-        self.reward_params = list(itertools.chain(self.encoder.parameters(), self.intent.parameters(),
-                                                  self.reward.parameters()))
+        repr_params = list(itertools.chain(self.encoder.parameters(), self.intent.parameters()))
+        self.reward_params = repr_params + list(self.reward.parameters())
         self.policy_params = list(itertools.chain(self.policy.parameters(), self.value.parameters()))
-        self.opt_reward = torch.optim.Adam(self.reward_params, lr=cfg.lr_reward)
+        # two groups (the representation, then the reward head) so that the representation alone can be frozen or slowed
+        self.opt_reward = torch.optim.Adam([{"params": repr_params},
+                                            {"params": list(self.reward.parameters())}], lr=cfg.lr_reward)
         self.opt_policy = torch.optim.Adam(self.policy_params, lr=cfg.lr_policy)
 
         self.iteration = 0
@@ -407,7 +416,16 @@ class Trainer:
             stats = self.reward_step(eb, roll)
             stats.update(self.policy_step(roll))
         self.iteration += 1
+        if self.cfg.recompute_every and self.iteration % self.cfg.recompute_every == 0 and bool((self.memory.assign >= 0).any()):
+            self.memory.recompute(self.intents())
         return stats
+
+    def _slow_representation(self) -> None:
+        """Multiply the learning rate of the encoder and of the intent predictor by `repr_lr_scale`. At 0 the
+        BatchNorm statistics of the intent are frozen too (momentum 0), otherwise m would keep moving."""
+        self.opt_reward.param_groups[0]["lr"] = self.cfg.lr_reward * self.cfg.repr_lr_scale
+        if self.cfg.repr_lr_scale == 0.0 and isinstance(self.intent.norm, torch.nn.BatchNorm1d):
+            self.intent.norm.momentum = 0.0
 
     @torch.no_grad()
     def _warm_memory(self) -> None:
@@ -487,6 +505,8 @@ class Trainer:
                 self._acting_epochs += 1                      # epochs since the learner started to place images
             if self.cfg.burn_in_epochs and self._acting_epochs == self.cfg.burn_in_epochs:
                 self.memory.subsample(self.intents(), self.cfg.burn_in_fraction)
+            if self.cfg.freeze_repr_after and self._acting_epochs == self.cfg.freeze_repr_after:
+                self._slow_representation()
         return history
 
     # ---------------------------------------------------------------------------------------------

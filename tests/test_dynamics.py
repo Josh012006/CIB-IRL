@@ -271,3 +271,48 @@ def test_burn_in_runs_in_the_loop_and_rejects_a_bad_fraction():
     assert len(hist) == 2
     with pytest.raises(ValueError):
         _tiny(burn_in_fraction=0.0)
+
+
+# ---- stale summaries: recompute_every and the frozen / slowed representation ----------------------------------
+def test_new_options_are_off_by_default_and_validated():
+    cfg = TrainConfig()
+    assert cfg.recompute_every == 0 and cfg.freeze_repr_after == 0 and cfg.repr_lr_scale == 0.0
+    for bad in ({"recompute_every": -1}, {"freeze_repr_after": -1}, {"repr_lr_scale": 1.5}):
+        with pytest.raises(ValueError):
+            _tiny(**bad)
+
+
+def test_recompute_every_keeps_the_summaries_current_with_the_encoder():
+    def after_four_iterations(every):
+        tr, _ = _tiny(recompute_every=every)       # warm-up: 2 iterations, then the learner places images
+        for _ in range(4):
+            tr.train_iteration(torch.arange(32))
+        return tr
+    tr = after_four_iterations(1)
+    placed = tr.memory.assign >= 0
+    assert placed.any()
+    # the recompute ran after the last gradient step: stored intents = intents of the networks as they are now
+    assert torch.allclose(tr.memory.member_m[placed], tr.intents()[placed], atol=1e-6)
+    old = after_four_iterations(0)                  # default: the stored intents are those of placement time
+    assert not torch.allclose(old.memory.member_m[old.memory.assign >= 0], old.intents()[old.memory.assign >= 0], atol=1e-6)
+
+
+def test_frozen_representation_stops_moving_m():
+    tr, _ = _tiny(freeze_repr_after=1, repr_lr_scale=0.0)
+    tr.fit(2, log_fn=lambda r: False)         # epoch 0 = warm-up + first placements; frozen at its end
+    assert tr._acting_epochs >= 1
+    snap = [p.detach().clone() for p in list(tr.encoder.parameters()) + list(tr.intent.parameters())]
+    bn = (tr.intent.norm.running_mean.clone(), tr.intent.norm.running_var.clone())
+    m0 = tr.intents()
+    tr.fit(2, log_fn=lambda r: False)
+    for a, b in zip(snap, list(tr.encoder.parameters()) + list(tr.intent.parameters())):
+        assert torch.equal(a, b)
+    assert torch.equal(bn[0], tr.intent.norm.running_mean) and torch.equal(bn[1], tr.intent.norm.running_var)
+    assert torch.equal(m0, tr.intents())
+
+
+def test_slowed_representation_still_moves_but_less():
+    tr, _ = _tiny(freeze_repr_after=1, repr_lr_scale=0.1)
+    tr.fit(1, log_fn=lambda r: False)
+    assert tr.opt_reward.param_groups[0]["lr"] == pytest.approx(0.1 * tr.cfg.lr_reward)
+    assert tr.opt_reward.param_groups[1]["lr"] == pytest.approx(tr.cfg.lr_reward)

@@ -1,0 +1,23 @@
+# Are the stored intents going stale? The encoder keeps training while the memory holds intents computed at placement
+# time (summaries are recomputed once per epoch). Two remedies, 5 seeds, same setting as toy_dynamics `ref`:
+#   rec5 / rec1     recompute the summaries from the current encoder every 5 / every iteration (15 iterations per epoch)
+#   freeze4         encoder + intent predictor frozen (weights and BatchNorm statistics) 4 epochs after the learner
+#                   started placing images, so m no longer moves; only the reward head and the policy keep learning
+#   slow4           same moment, learning rate of the encoder + intent predictor x0.1 instead of 0
+#
+#   python scripts/run_suite.py configs/suites/toy_stale.yml --cpu-count 2 --skip-existing
+name: toy_stale
+description: toy data, 100 epochs, recompute_every and frozen / slowed representation, 5 seeds
+seeds: [0, 1, 2, 3, 4]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  fixed_epochs: 100
+experiments:
+  - {name: ref}
+  - {name: rec5, set: {recompute_every: 5}}
+  - {name: rec1, set: {recompute_every: 1}}
+  - {name: freeze4, set: {freeze_repr_after: 4, repr_lr_scale: 0.0}}
+  - {name: slow4, set: {freeze_repr_after: 4, repr_lr_scale: 0.1}}

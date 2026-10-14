@@ -119,5 +119,31 @@ Rejeu déterministe (1 thread, identique à la suite), mesures sur les epochs 18
 Lecture : la dérive entre epochs est du même ordre dans les deux graines ; ce qui diffère est la distance minimale entre classes, qui s'effondre dans la graine 4 (médiane des distances de paires 0,80 -> 0,32, alors que la plus grande reste ~10 : une classe très éloignée écrase les autres dans un coin de l'espace standardisé). Quand la dérive dépasse la séparation, des résumés construits en cours d'epoch ne désignent plus la bonne classe. Limites : une seule graine instable et un seul contrôle ; la dérive dépasse déjà la séparation aux epochs 19-21 de la graine 4 sans casse, donc ce n'est pas une condition suffisante ; la cause de l'effondrement de la séparation n'est pas établie ; la géométrie de la graine 2 (max/médiane des paires) n'a pas été mesurée.
 Pistes à tester ensuite : (a) recalcul des résumés plus souvent qu'une fois par epoch ; (b) geler ou ralentir l'encodeur après la formation ; (c) comprendre pourquoi la séparation minimale décroît (rôle de la standardisation BN avec une classe très éloignée, et de `L_neg` seul sur les mouvements libres).
 
+### 5.6 Les trois analyses de la casse : géométrie de m sur 10 graines, recalcul fréquent, encodeur gelé
+Même cadre que la référence (beta = 1e-4, 100 epochs ; les résultats de `ref` sont ceux de `toy_formation`, reproduits à l'identique). Les labels ne servent qu'à l'évaluation.
+
+**(c) Géométrie de m sur les 10 graines de `toy_rho/ref` (rejeu de 50 epochs).**
+* La séparation minimale entre classes ne prédit pas la casse : la graine 9 a une séparation de 0,03 à 0,26 entre les epochs 20 et 49 (souvent plus petite que la dérive des intentions stockées, 0,15 à 0,26) et reste pure 37 epochs sur 40 ; la graine 2 a une séparation de 1,2 et reste pure.
+* Ce qui s'associe à l'instabilité (graine 4 : casse ; graine 3 : jamais pure, ACC qui oscille) est l'effondrement de la distance MÉDIANE entre moyennes de classes : 0,57 (graine 3) et 0,80 (graine 4) à l'epoch 14, contre 3,7 à 7,0 pour les 8 autres graines ; une classe reste à distance ~10 pendant que les quatre autres se tassent. Association sur 2 graines, pas une preuve.
+* BN n'est pas la cause directe : la compression est déjà présente avant la standardisation (distance médiane brute 1,0 à l'epoch 14 pour la graine 4, contre 8,7 pour la graine 9). Hypothèse non testée : `L_psi` (cohérence d'orbite) n'a aucun terme de répulsion entre classes, et la variance unitaire par dimension imposée par BN est satisfaite par une seule classe éloignée ; `L_neg` agit sur la reward et ne passe pas par m (l'intent n'est pas entraîné par la reward).
+* Les graines 0, 1, 5, 7, 8 (ACC 0,5 à 0,7, jamais pures) n'ont pas cet effondrement (distance médiane >= 3,7 à l'epoch 14) : leur échec est un autre mode, la fusion à la formation.
+
+**(a) et (b) : `toy_stale`, 5 graines.** Options ajoutées (désactivées par défaut, chemin par défaut inchangé bit à bit) : `recompute_every` (recalcul des résumés toutes les n itérations), `freeze_repr_after` + `repr_lr_scale` (4 epochs après les premiers placements, l'encodeur et l'intent predictor sont gelés, poids et statistiques BN, ou ralentis).
+
+| condition | ACC finale par graine (0,1,2,3,4) | moyenne | diff. appariée vs ref | epochs >= 0,9 par graine |
+|---|---|---|---|---|
+| ref | 0,60 0,80 1,00 0,52 0,80 | 0,745 | | 0, 5, 89, 0, 28 |
+| rec5 | 0,80 1,00 1,00 0,53 0,51 | 0,766 | +0,02 +- 0,09 | 0, 11, 89, 0, 0 |
+| rec1 | 0,75 0,80 0,60 0,60 1,00 | 0,749 | +0,01 +- 0,11 | 0, 0, 0, 0, 88 |
+| freeze4 | 0,70 0,72 1,00 0,73 1,00 | 0,832 | +0,09 +- 0,06 | 0, 0, 89, 0, 88 |
+| slow4 (x0,1) | 0,70 0,70 1,00 0,71 1,00 | 0,824 | +0,08 +- 0,06 | 0, 0, 89, 0, 79 |
+
+* Graine 4 (celle qui cassait) : `freeze4` donne ACC 1,00 avec 88 epochs purs et aucune casse (réf. : 28 epochs purs, 11 casses). Le rejeu est identique à la référence jusqu'à l'epoch 13 (L_psi, L_neg, KL, m_std), donc l'amélioration est causée par le gel seul. `slow4` : 79 epochs purs, 2 casses. `rec1` : 88 epochs purs, mais `rec1` dégrade la graine 2, pure en référence (ACC 0,60, aucun epoch pur), parce que le recalcul à chaque itération modifie la formation ; `rec5` n'aide pas la graine 4 (0 epoch pur). Les deux options de recalcul ont donc un effet net nul.
+* Graine 2 (contrôle) : gel et ralentissement ne changent rien (89 epochs purs). Graines 0, 1, 3 (jamais pures en référence) : aucune variante ne produit de phase pure (ACC finale 0,70 à 0,80 ; le gain de la graine 3, 0,52 -> 0,73 avec gel, ne l'amène pas au régime pur).
+* Les gains moyens de `freeze4` et `slow4` (+0,09 et +0,08, environ 1,5 erreur standard) ne sont pas significatifs à 5 graines ; ce qui est établi est le mécanisme sur la graine 4.
+
+**Lecture.** L'instabilité tardive de la graine 4 est bien un problème de péremption des intentions stockées : figer m (ou presque) la supprime sans effet sur une graine déjà stable. Mais elle ne concerne qu'une graine sur cinq. Le problème dominant reste la fusion à la formation (graines 0, 1, 3 ; 5, 7, 8 sur les 10 graines), que ni la mémoire, ni le recalcul, ni le gel, ni `rho`, ni des experts oracles n'ont réglée. Le gel est une règle de calendrier (4 epochs après les premiers placements), valable sur le jouet où la représentation est terminée à l'epoch 12 (précision du centroïde = 1,00) ; sur des données réelles, il faudrait un critère sans labels pour décider du moment (par exemple la stabilité de m entre epochs). Conséquence : `freeze_repr_after` reste désactivé par défaut.
+Prochaine étape proposée : traiter la formation, où le défaut se situe dans les premiers epochs d'actions (nombre de clusters ouverts et fusions initiales), avec l'hypothèse de l'absence de répulsion de `L_psi` entre classes comme piste (mesurer la distance médiane entre classes dès l'epoch 10 sur les graines qui fusionnent).
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.
