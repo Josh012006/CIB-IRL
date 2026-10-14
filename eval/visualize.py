@@ -35,20 +35,24 @@ def plot_curves(history: list[dict], path) -> None:
         ("Expert losses", ["L_pos", "L_neg"]),
         ("Twin accuracy (forced moves)", ["twin_acc"]),
         ("Intent L_psi and KL / 100", ["L_psi", "KL_scaled"]),
-        ("Clusters: non-empty slots and K_eff", ["nonempty_slots", "K_eff"]),
-        ("Churn (share of images changing slot)", ["churn"]),
+        ("Clusters: non-empty slots, argmax clusters, K_eff", ["nonempty_slots", "n_clusters", "K_eff"]),
+        ("Churn (sampled) and argmax partition change", ["churn", "part_change", "slot_change"]),
         ("Policy entropy and m_std (collapse check)", ["pi_entropy", "m_std"]),
+        ("EVALUATION ONLY: uses labels, never used to train or to stop", ["eval_acc", "eval_nmi_class", "eval_nmi_background"]),
     ]
     rows = [dict(r, KL_scaled=r.get("KL", 0.0) / 100.0) for r in history]
     ep = [r["epoch"] for r in rows]
-    fig, axes = plt.subplots(2, 3, figsize=(14, 7))
-    for ax, (title, keys) in zip(axes.ravel(), panels):
+    fig, axes = plt.subplots(3, 3, figsize=(14, 10))
+    flat = axes.ravel()
+    for ax, (title, keys) in zip(flat, panels):
         for k in keys:
             ax.plot(ep, [r.get(k, np.nan) for r in rows], label=k, marker="o", ms=2.5)
-        ax.set_title(title, fontsize=10)
+        ax.set_title(title, fontsize=9)
         ax.set_xlabel("epoch")
         ax.grid(alpha=0.3)
         ax.legend(fontsize=8)
+    for ax in flat[len(panels):]:
+        ax.axis("off")
     fig.tight_layout()
     _save(fig, path)
 
