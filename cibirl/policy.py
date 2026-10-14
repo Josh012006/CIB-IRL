@@ -14,13 +14,24 @@ from .reward import RelationEncoder, SlotScorer, mlp
 
 
 class PolicyNet(nn.Module):
-    def __init__(self, z_dim: int, m_dim: int, hidden: int = 128, rel_dim: int = 64, use_z: bool = True):
+    def __init__(self, z_dim: int, m_dim: int, hidden: int = 128, rel_dim: int = 64, use_z: bool = True,
+                 temperature: float = 1.0):
         super().__init__()
+        if temperature <= 0:
+            raise ValueError(f"temperature must be > 0, got {temperature}")
         self.scorer = SlotScorer(z_dim, m_dim, hidden, rel_dim, use_z)
+        self.temperature = float(temperature)
 
     def log_probs(self, z: Tensor, m: Tensor, summaries: Tensor, empty: Tensor) -> Tensor:
-        """log pi(a | s) over the valid slots: [B, K] (-inf on invalid slots)."""
-        return masked_log_softmax(self.scorer(z, m, summaries, empty), valid_slot_mask(empty))
+        """log pi(a | s) over the valid slots: [B, K] (-inf on invalid slots).
+
+        pi = softmax(scores / T). T is part of the DEFINITION of the policy, so sampling, the PPO ratio and
+        the entropy all use the same distribution. T < 1 sharpens it (less exploration); it never changes the argmax.
+        """
+        scores = self.scorer(z, m, summaries, empty)
+        if self.temperature != 1.0:
+            scores = scores / self.temperature
+        return masked_log_softmax(scores, valid_slot_mask(empty))
 
     @torch.no_grad()
     def act(self, z: Tensor, m: Tensor, summaries: Tensor, empty: Tensor, greedy: bool = False):

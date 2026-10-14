@@ -73,6 +73,9 @@ class TrainConfig:
     gamma: float = 0.9
     gae_lambda: float = 0.95
     alpha: float = 0.01            # entropy bonus
+    policy_temperature: float = 1.0  # pi = softmax(scores / T); T < 1: sharper policy, less exploration
+    consolidate: bool = False      # end of epoch: rebuild the memory from the greedy partition (argmax of pi,
+                                   # memory frozen) instead of the sampled placements of the epoch
     ppo_clip: float = 0.2
     ppo_epochs: int = 4
     value_coef: float = 0.5
@@ -210,7 +213,8 @@ class Trainer:
         self.encoder = build_encoder("small_cnn", cfg.z_dim, cfg.in_channels, cfg.image_size).to(dev)
         self.intent = IntentPredictor(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.intent_standardize).to(dev)
         self.reward = RewardModel(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.rel_dim, cfg.use_z).to(dev)
-        self.policy = PolicyNet(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.rel_dim, cfg.use_z).to(dev)
+        self.policy = PolicyNet(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.rel_dim, cfg.use_z,
+                                temperature=cfg.policy_temperature).to(dev)
         self.value = ValueNet(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.rel_dim, cfg.use_z).to(dev)
 
         # memory and experts
@@ -384,8 +388,16 @@ class Trainer:
     @torch.no_grad()
     def recompute_memory(self, batch_size: int = 512) -> None:
         """End of epoch: the encoder moved, so the stored summaries are stale. Recompute them
-        from the member lists with the current encoder (README 4.2)."""
-        self.memory.recompute(self.intents(batch_size=batch_size))
+        from the member lists with the current encoder (README 4.2).
+
+        With `consolidate`, the member lists are first replaced by the greedy partition (argmax of pi against
+        the memory just recomputed), then the summaries are recomputed once more: the sampled placements of
+        the exploration are forgotten, the next epoch starts from the partition the model would output."""
+        m_all = self.intents(batch_size=batch_size)
+        self.memory.recompute(m_all)
+        if self.cfg.consolidate:
+            self.memory.assign = self.predict(batch_size=batch_size).to(self.memory.device)
+            self.memory.recompute(m_all)
 
     def epoch_stats(self) -> dict:
         sizes = self.memory.sizes()

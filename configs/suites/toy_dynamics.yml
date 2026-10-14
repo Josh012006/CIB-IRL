@@ -1,0 +1,25 @@
+# Which knob explains the unstable assignments seen on the toy (docs/protocol-decisions.md, section 3, problem 2)?
+# Every run: toy data without shortcut, oracle bank, beta = 1e-4 (problem 1 removed), exactly 100 epochs (no
+# early stop: the trajectory is the object of study; eval_* in metrics.jsonl follow it with the labels).
+#
+#   ref          reference, nothing else changed
+#   consolidate  end of epoch: memory rebuilt from the greedy partition instead of the sampled placements
+#   cold         less exploration: policy = softmax(scores / 0.5), no entropy bonus
+#   orbits5      expert episodes with B = 5 orbits (= K) instead of 3, so the reward sees up to 5 occupied slots
+#
+#   python scripts/run_suite.py configs/suites/toy_dynamics.yml --cpu-count 2
+name: toy_dynamics
+description: toy data, beta 1e-4, 100 epochs, reference vs consolidation vs low exploration vs 5 orbits per episode
+seeds: [0, 1, 2, 3, 4]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  fixed_epochs: 100
+  set: {beta: 1.0e-4}
+experiments:
+  - {name: ref}
+  - {name: consolidate, set: {consolidate: true}}
+  - {name: cold,        set: {policy_temperature: 0.5, alpha: 0.0}}
+  - {name: orbits5,     set: {orbits_per_episode: 5}}
