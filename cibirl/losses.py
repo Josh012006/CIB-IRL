@@ -76,7 +76,7 @@ class ExpertLossOut:
 
 
 def expert_loss(scores: Tensor, empty: Tensor, slot: Tensor, is_first: Tensor, neg_mask: Tensor,
-                tau_plus: float, rho: float = 0.0) -> ExpertLossOut:
+                tau_plus: float, rho: float = 0.0, free_debias: float = 1.0) -> ExpertLossOut:
     """Maximum-likelihood IRL of the expert's relational decisions under q_theta = softmax(R_theta).
 
     scores [E, T, K]  raw rewards R_theta(s^E_t, a)
@@ -87,6 +87,9 @@ def expert_loss(scores: Tensor, empty: Tensor, slot: Tensor, is_first: Tensor, n
     L_neg   repulsion  : l(u,v) = -log(1 - q(k(v)))            for previously placed views v of other orbits,
                          debiased as in Chuang et al. 2020:
                          max{ ( E_v l(u,v) - tau+ * l(u,v+) ) / (1 - tau+), 0 }
+    free_debias multiplies tau+ on the FREE moves only (1 = as above; 0 = plain repulsion -log(1-q) there, no
+    correction): the correction cancels the repulsion as soon as q(wrong slot) < 1 - exp(-tau+ * l+), see
+    docs/protocol-decisions.md 5.9.
     """
     E, T, K = scores.shape
     valid = valid_slot_mask(empty)
@@ -110,7 +113,11 @@ def expert_loss(scores: Tensor, empty: Tensor, slot: Tensor, is_first: Tensor, n
     batch_plus = ell_twin[forced].mean() if forced.any() else torch.zeros((), device=scores.device)
     ell_plus = torch.where(forced, ell_twin, batch_plus.expand_as(ell_twin))
 
-    per_view = ((mean_ell - tau_plus * ell_plus) / (1.0 - tau_plus)).clamp(min=0.0)
+    if free_debias == 1.0:
+        per_view = ((mean_ell - tau_plus * ell_plus) / (1.0 - tau_plus)).clamp(min=0.0)
+    else:
+        tau = torch.where(forced, torch.full_like(ell_plus, tau_plus), torch.full_like(ell_plus, tau_plus * free_debias))
+        per_view = ((mean_ell - tau * ell_plus) / (1.0 - tau)).clamp(min=0.0)
     l_neg = per_view[has_neg].mean() if has_neg.any() else scores.sum() * 0.0
 
     # --- optional anti-collapse safeguard (rho = 0 by default) -------------------------------------

@@ -316,3 +316,94 @@ def test_slowed_representation_still_moves_but_less():
     tr.fit(1, log_fn=lambda r: False)
     assert tr.opt_reward.param_groups[0]["lr"] == pytest.approx(0.1 * tr.cfg.lr_reward)
     assert tr.opt_reward.param_groups[1]["lr"] == pytest.approx(tr.cfg.lr_reward)
+
+
+# ---- teacher phase and discarded memory (formation) ------------------------------------------------------------
+def test_formation_options_are_off_by_default_and_validated():
+    cfg = TrainConfig()
+    assert cfg.policy_teacher_iters == 0 and cfg.memory_discard_epochs == 0
+    for bad in ({"policy_teacher_iters": -1}, {"memory_discard_epochs": -1}):
+        with pytest.raises(ValueError):
+            _tiny(**bad)
+
+
+def test_teacher_phase_acts_like_the_reward_and_distills_the_policy():
+    tr, _ = _tiny(policy_teacher_iters=40)
+    with torch.no_grad():
+        for p in tr.reward.parameters():
+            p.mul_(6.0)                                         # a sharp, non-uniform teacher
+    roll = tr.learner_rollout(torch.arange(32), teacher=True)
+    first = tr.distill_step(roll)["distill_kl"]
+    for _ in range(25):
+        last = tr.distill_step(roll)["distill_kl"]              # same states: the KL must go down
+    assert first > 1e-3 and last < 0.5 * first and last >= -1e-6
+    # the sampled actions are valid slots of the memory the policy saw
+    valid = ~roll.empty | ((roll.empty.long().cumsum(-1) == 1) & roll.empty)
+    assert valid.gather(1, roll.actions.unsqueeze(1)).all()
+
+
+def test_teacher_phase_ends_and_ppo_resumes():
+    tr, _ = _tiny(policy_teacher_iters=3)
+    out = [tr.train_iteration(torch.randperm(tr.N)[:32]) for _ in range(8)]      # iterations 0-1 warm-up
+    assert ["distill_kl" in o for o in out[2:]] == [True, True, True, False, False, False]
+    assert all("pi_entropy" in o for o in out[5:])
+
+
+def test_memory_clear_forgets_everything():
+    mem = ClusterMemory(10, 3, 2)
+    mem.place(0, torch.ones(2), 1)
+    mem.place(1, torch.ones(2), 2)
+    mem.clear()
+    assert (mem.assign == -1).all() and (mem.counts == 0).all() and (mem.summaries == 0).all()
+
+
+def test_discarded_epochs_empty_the_memory_and_then_it_persists():
+    tr, _ = _tiny(memory_discard_epochs=1)
+    tr.fit(1, log_fn=lambda r: False)             # epoch 0 places images (after 2 warm-up iterations), then is discarded
+    assert (tr.memory.assign == -1).all() and tr.memory.num_nonempty() == 0
+    tr.fit(1, log_fn=lambda r: False)             # second epoch of placements: kept
+    assert (tr.memory.assign >= 0).sum() > 0
+
+
+# ---- free_debias_scale: the correction of L_neg on free moves ---------------------------------------------------
+def _expert_inputs(seed=0, E=6, T=6, K=5):
+    g = torch.Generator().manual_seed(seed)
+    scores = torch.randn(E, T, K, generator=g) * 2
+    empty = torch.ones(E, T, K, dtype=torch.bool)
+    orbit = torch.arange(3).repeat_interleave(2).repeat(E, 1)                 # views 0,1 / 2,3 / 4,5
+    is_first = torch.tensor([True, False] * 3).repeat(E, 1)
+    slot = orbit.clone()
+    for t in range(T):
+        empty[:, t, :] = True
+        placed = slot[:, :t]
+        for e in range(E):
+            empty[e, t, placed[e]] = False
+    neg = (orbit.unsqueeze(2) != orbit.unsqueeze(1)) & (torch.arange(T).view(1, 1, T) < torch.arange(T).view(1, T, 1))
+    return scores, empty, slot, is_first, neg
+
+
+def test_free_debias_one_is_the_old_loss_and_zero_removes_the_dead_zone():
+    from cibirl import losses as L
+    s, empty, slot, first, neg = _expert_inputs()
+    old = L.expert_loss(s, empty, slot, first, neg, 0.2)
+    same = L.expert_loss(s, empty, slot, first, neg, 0.2, free_debias=1.0)
+    assert torch.equal(old.loss, same.loss)
+    # confident twin (large l+) puts the free-move repulsion in the dead zone; without the correction it comes back
+    sharp = s.clone()
+    for e in range(sharp.shape[0]):
+        for t in (1, 3, 5):                                                   # forced moves: the twin's slot dominates
+            sharp[e, t, slot[e, t]] += 12.0
+    s_req = sharp.clone().requires_grad_(True)
+    L.expert_loss(s_req, empty, slot, first, neg, 0.2, free_debias=1.0).loss.backward()
+    g_old = s_req.grad[:, [0, 2, 4]].abs().sum()
+    s_req2 = sharp.clone().requires_grad_(True)
+    L.expert_loss(s_req2, empty, slot, first, neg, 0.2, free_debias=0.0).loss.backward()
+    g_new = s_req2.grad[:, [0, 2, 4]].abs().sum()                             # gradient on free-move rows
+    assert g_new > g_old
+
+
+def test_free_debias_scale_is_validated_and_runs():
+    with pytest.raises(ValueError):
+        _tiny(free_debias_scale=1.5)
+    tr, _ = _tiny(free_debias_scale=0.0)
+    assert len(tr.fit(2, log_fn=lambda r: False)) == 2

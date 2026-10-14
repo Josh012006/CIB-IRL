@@ -1,0 +1,20 @@
+# Does a teacher phase fix the formation lottery? (docs/protocol-decisions.md, 5.8)
+#   teacher30          for the first 30 iterations of placements the learner acts by sampling from softmax(reward) and the
+#                      policy is distilled toward it (instead of PPO); then the policy acts alone
+#   teacher30_freeze4  same, plus the encoder + intent predictor frozen 4 epochs after the first placements (5.6)
+# Same setting as toy_dynamics `ref`, 5 seeds, 100 epochs. `ref` is also in toy_stale / toy_formation (same runs).
+#
+#   python scripts/run_suite.py configs/suites/toy_teacher.yml --cpu-count 2 --skip-existing
+name: toy_teacher
+description: toy data, 100 epochs, teacher phase for the policy, with and without frozen representation, 5 seeds
+seeds: [4, 3, 2, 1, 0]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  fixed_epochs: 100
+experiments:
+  - {name: ref}
+  - {name: teacher30, set: {policy_teacher_iters: 30}}
+  - {name: teacher30_freeze4, set: {policy_teacher_iters: 30, freeze_repr_after: 4, repr_lr_scale: 0.0}}

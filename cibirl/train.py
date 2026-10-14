@@ -33,7 +33,7 @@ from .diagnostics import PlacementDiagnostics
 from .encoder import build_encoder
 from .experts import ExpertBatch, ExpertEpisodes, OrbitSampler, Transform, split_expert_portion
 from .intent import IntentPredictor
-from .memory import ClusterMemory, expert_memory_states, valid_slot_mask
+from .memory import ClusterMemory, expert_memory_states, masked_log_softmax, valid_slot_mask
 from .policy import PolicyNet, ValueNet
 from .reward import RewardModel
 
@@ -76,6 +76,13 @@ class TrainConfig:
                                      # iterations (the stored intents drift while the encoder trains). 0 = once per epoch.
     freeze_repr_after: int = 0       # once the learner has been placing images for this many epochs, the learning rate of
                                      # the encoder and of the intent predictor is multiplied by `repr_lr_scale`. 0 = never.
+    policy_teacher_iters: int = 0    # for the first this many iterations of placements the learner acts by sampling from
+                                     # softmax(reward) (its own memory, its own states) and the policy is distilled
+                                     # toward softmax(reward) instead of PPO; then the policy acts alone. 0 = never.
+    memory_discard_epochs: int = 0   # the memory written during the first this many epochs of placements is thrown away at
+                                     # the end of each of them (the policy trains, the next epoch starts empty). 0 = never.
+    free_debias_scale: float = 1.0   # multiplies tau+ in the debiased repulsion L_neg on FREE moves (the first view of an
+                                     # orbit): 1 = as in the README, 0 = no correction there (losses.expert_loss).
     repr_lr_scale: float = 0.0       # 0 = frozen (weights and BatchNorm statistics: m no longer moves), 0.1 = slowed
 
     # compression and invariance
@@ -222,6 +229,10 @@ class Trainer:
             raise ValueError(f"expert_oracle_link must be in [0, 1], got {cfg.expert_oracle_link}")
         if cfg.oracle_warm_memory < 0 or cfg.burn_in_epochs < 0 or not 0.0 < cfg.burn_in_fraction <= 1.0:
             raise ValueError("oracle_warm_memory, burn_in_epochs must be >= 0 and burn_in_fraction in (0, 1]")
+        if cfg.policy_teacher_iters < 0 or cfg.memory_discard_epochs < 0:
+            raise ValueError("policy_teacher_iters and memory_discard_epochs must be >= 0")
+        if not 0.0 <= cfg.free_debias_scale <= 1.0:
+            raise ValueError("free_debias_scale must be in [0, 1]")
         if cfg.recompute_every < 0 or cfg.freeze_repr_after < 0 or not 0.0 <= cfg.repr_lr_scale <= 1.0:
             raise ValueError("recompute_every, freeze_repr_after must be >= 0 and repr_lr_scale in [0, 1]")
         oracle_on = cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0
@@ -232,6 +243,7 @@ class Trainer:
         if cfg.oracle_warm_memory > 0 and int(self._oracle_labels.max()) + 1 > cfg.num_slots:
             raise ValueError("oracle_warm_memory needs one slot per class (num_slots >= number of classes)")
         self._warmed = False
+        self._acting_iters = 0   # iterations in which the learner placed images
         self._acting_epochs = 0
         self._diag = PlacementDiagnostics(eval_labels, cfg.num_slots) if eval_labels is not None else None
         self.cfg, self.device = cfg, torch.device(device)
@@ -294,7 +306,7 @@ class Trainer:
     # 2. Learner rollout
     # ---------------------------------------------------------------------------------------------
     @torch.no_grad()
-    def learner_rollout(self, idx: Tensor) -> Rollout:
+    def learner_rollout(self, idx: Tensor, teacher: bool = False) -> Rollout:
         """The policy places the images of `idx` one after the other. Each placement updates the
         persistent memory, so the next image sees a different state."""
         K, d = self.cfg.num_slots, self.cfg.m_dim
@@ -311,7 +323,13 @@ class Trainer:
         for t in range(T):
             summ, empty = self.memory.state()
             summ_snap[t], empty_snap[t] = summ, empty
-            a, lp = self.policy.act(z[t:t + 1], m[t:t + 1], summ.unsqueeze(0), empty.unsqueeze(0))
+            if teacher:      # act like the reward says (sampled), not like the untrained policy
+                lp_all = masked_log_softmax(self.reward(z[t:t + 1], m[t:t + 1], summ.unsqueeze(0), empty.unsqueeze(0)),
+                                            valid_slot_mask(empty).unsqueeze(0))
+                a = torch.distributions.Categorical(logits=lp_all).sample()
+                lp = lp_all.gather(-1, a.unsqueeze(-1)).squeeze(-1)
+            else:
+                a, lp = self.policy.act(z[t:t + 1], m[t:t + 1], summ.unsqueeze(0), empty.unsqueeze(0))
             actions[t], logps[t] = a[0], lp[0]
             item = int(idx[t])
             prev = int(self.memory.assign[item])
@@ -358,7 +376,7 @@ class Trainer:
             m_state = self.intent.mean(enc.z)
         summ, empty = expert_memory_states(m_state.view(E, T, -1), eb.slot, K)
         scores = self.reward(enc.z, m_state, summ.reshape(E * T, K, -1), empty.reshape(E * T, K)).view(E, T, K)
-        exp = L.expert_loss(scores, empty, eb.slot, eb.is_first, eb.neg_mask, self.tau, cfg.rho)
+        exp = L.expert_loss(scores, empty, eb.slot, eb.is_first, eb.neg_mask, self.tau, cfg.rho, cfg.free_debias_scale)
 
         kl = L.kl_standard_normal(enc.mu, enc.logvar)
         loss = l_psi + exp.loss + self._beta() * kl
@@ -375,6 +393,29 @@ class Trainer:
     # ---------------------------------------------------------------------------------------------
     # 4. Policy step (RL): omega, xi
     # ---------------------------------------------------------------------------------------------
+    def distill_step(self, roll: Rollout) -> dict:
+        """Teacher phase: the policy is brought to softmax(reward) on the learner's own states (KL(teacher || pi), same
+        number of gradient steps as PPO), and the critic is fitted to the returns of the rewards, as in policy_step."""
+        cfg = self.cfg
+        valid = valid_slot_mask(roll.empty)
+        with torch.no_grad():
+            scores = self.reward(roll.z, roll.m, roll.summaries, roll.empty)
+            teacher = masked_log_softmax(scores, valid)
+            if cfg.center_reward:
+                n_valid = valid.sum(-1, keepdim=True)
+                scores = scores - (scores * valid).sum(-1, keepdim=True) / n_valid
+            r = scores.gather(1, roll.actions.unsqueeze(1)).squeeze(1)
+            v_old = self.value(roll.z, roll.m, roll.summaries, roll.empty)
+            _, ret = L.compute_gae(r, v_old, cfg.gamma, cfg.gae_lambda)
+        for _ in range(cfg.ppo_epochs):
+            logp = self.policy.log_probs(roll.z, roll.m, roll.summaries, roll.empty)
+            kl = (teacher.exp() * (teacher.masked_fill(~valid, 0.0) - logp.masked_fill(~valid, 0.0))).sum(-1).mean()
+            v_new = self.value(roll.z, roll.m, roll.summaries, roll.empty)
+            value_loss = torch.nn.functional.mse_loss(v_new, ret)
+            self._clip_step(self.opt_policy, self.policy_params, kl + cfg.value_coef * value_loss)
+        return {"return": float(r.sum()), "r_mean": float(r.mean()), "distill_kl": float(kl.detach()),
+                "L_xi": float(value_loss.detach())}
+
     def policy_step(self, roll: Rollout) -> dict:
         cfg = self.cfg
         valid = valid_slot_mask(roll.empty)
@@ -412,9 +453,11 @@ class Trainer:
         else:
             if self.cfg.oracle_warm_memory > 0 and not self._warmed:
                 self._warm_memory()
-            roll = self.learner_rollout(idx)
+            teacher = self._acting_iters < self.cfg.policy_teacher_iters
+            roll = self.learner_rollout(idx, teacher=teacher)
             stats = self.reward_step(eb, roll)
-            stats.update(self.policy_step(roll))
+            stats.update(self.distill_step(roll) if teacher else self.policy_step(roll))
+            self._acting_iters += 1
         self.iteration += 1
         if self.cfg.recompute_every and self.iteration % self.cfg.recompute_every == 0 and bool((self.memory.assign >= 0).any()):
             self.memory.recompute(self.intents())
@@ -507,6 +550,10 @@ class Trainer:
                 self.memory.subsample(self.intents(), self.cfg.burn_in_fraction)
             if self.cfg.freeze_repr_after and self._acting_epochs == self.cfg.freeze_repr_after:
                 self._slow_representation()
+            if 0 < self._acting_epochs <= self.cfg.memory_discard_epochs:
+                self.memory.clear()                               # the policy keeps what it learned, the memory does not
+                if self._diag is not None:
+                    self._diag.sync(self.memory.assign)
         return history
 
     # ---------------------------------------------------------------------------------------------

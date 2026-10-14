@@ -131,6 +131,14 @@ class ClusterMemory:
         self.assign = torch.where(keep, self.assign, torch.full_like(self.assign, -1))
         self.recompute(m_all)
 
+    @torch.no_grad()
+    def clear(self) -> None:
+        """Forget everything: all images unplaced, all slots empty."""
+        self.counts.zero_()
+        self.summaries.zero_()
+        self.assign.fill_(-1)
+        self.member_m.zero_()
+
     def sizes(self) -> Tensor:
         return self.counts.clone()
 

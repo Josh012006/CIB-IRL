@@ -145,5 +145,72 @@ Même cadre que la référence (beta = 1e-4, 100 epochs ; les résultats de `ref
 **Lecture.** L'instabilité tardive de la graine 4 est bien un problème de péremption des intentions stockées : figer m (ou presque) la supprime sans effet sur une graine déjà stable. Mais elle ne concerne qu'une graine sur cinq. Le problème dominant reste la fusion à la formation (graines 0, 1, 3 ; 5, 7, 8 sur les 10 graines), que ni la mémoire, ni le recalcul, ni le gel, ni `rho`, ni des experts oracles n'ont réglée. Le gel est une règle de calendrier (4 epochs après les premiers placements), valable sur le jouet où la représentation est terminée à l'epoch 12 (précision du centroïde = 1,00) ; sur des données réelles, il faudrait un critère sans labels pour décider du moment (par exemple la stabilité de m entre epochs). Conséquence : `freeze_repr_after` reste désactivé par défaut.
 Prochaine étape proposée : traiter la formation, où le défaut se situe dans les premiers epochs d'actions (nombre de clusters ouverts et fusions initiales), avec l'hypothèse de l'absence de répulsion de `L_psi` entre classes comme piste (mesurer la distance médiane entre classes dès l'epoch 10 sur les graines qui fusionnent).
 
+### 5.7 Formation : géométrie de m aux epochs 0-14, puis rééchantillonnage de la politique depuis l'epoch 10
+Rejeu des 10 graines de `toy_rho/ref` (1 thread, identique aux suites) ; labels pour l'évaluation seulement. Scripts de mesure hors repo.
+
+**Géométrie de m à la formation.** L'hypothèse « `L_psi` n'a pas de répulsion entre classes, donc m est mal séparé quand l'apprenant commence à agir » est écartée pour les fusions de formation : les graines bloquées en ACC 0,5 à 0,7 (0, 5, 7) ont la MEILLEURE géométrie à l'epoch 10 (distance minimale entre moyennes de classes 1,0 à 1,3 ; séparation minimale / dispersion intra-classe 150 à 250), tandis que les graines pures (2, 9) ont 0,4 à 0,6 (60 à 130). L'effondrement de la distance médiane des graines 3 et 4 (1,45 et 1,18 à l'epoch 5, contre 4,5 à 7,1) est installé avant que l'apprenant ne place une image : il vient de la phase d'experts seuls (et il reste associé à l'instabilité tardive, voir 5.6).
+
+**Rééchantillonnage depuis l'epoch 10.** On entraîne jusqu'à la fin de l'epoch 9 (l'apprenant n'a encore rien placé), on copie tout l'état (réseaux, optimiseurs, experts, mémoire), puis on continue 8 epochs, 8 fois, en ne changeant que le générateur aléatoire de torch (tirage des placements, minibatchs PPO, épisodes experts, vues). Nombre de runs à ACC >= 0,9 à l'epoch 17 :
+
+| graine (devenir dans la référence) | pur à l'epoch 17 / 8 | ACC moyenne | ACC min-max |
+|---|---|---|---|
+| 0 (bloquée) | 1 | 0,69 | 0,5-1,0 |
+| 1 (bloquée) | 0 | 0,71 | 0,7-0,7 |
+| 5 (bloquée) | 3 | 0,84 | 0,7-1,0 |
+| 7 (bloquée) | 2 | 0,69 | 0,5-1,0 |
+| 2 (pure) | 3 | 0,80 | 0,5-1,0 |
+| 9 (pure) | 4 | 0,86 | 0,6-1,0 |
+| 4 (casse à l'epoch 25) | 5 | 0,90 | 0,7-1,0 |
+| 3 (instable) | 2 | 0,78 | 0,4-1,0 |
+| total | 20 / 64 | | |
+
+Lecture : à représentation identique, le devenir à la formation est en grande partie une loterie de la phase politique. Les graines « pures » ne le sont que dans 3 ou 4 reprises sur 8, et trois des quatre graines « bloquées » deviennent pures dans au moins une reprise. Les 5 slots sont toujours ouverts (5 clusters à l'epoch 17 dans 63 reprises sur 64, 4 dans une) : le défaut n'est pas un manque de clusters mais des slots mélangés. La représentation (m) et la reward sont donc prêtes à l'epoch 10 (voir 5.1 et 5.3, mémoire idéale à 100 %) ; ce qui décide est la façon dont une politique non entraînée remplit la mémoire pendant ses premiers epochs. Limites : l'état à l'epoch 17 n'est pas l'état final (une reprise pure peut casser plus tard, comme la graine 4) ; 8 reprises par graine ; une seule configuration du jouet.
+Piste, non testée : entraîner la politique avant qu'elle n'écrive dans la mémoire (par exemple, sans labels, la rapprocher de softmax(reward) sur des états d'épisodes experts, ou la faire jouer plusieurs epochs sans mémoire persistante), pour que les premiers placements ne remplissent pas la mémoire au hasard. À valider sur les mêmes reprises (8 par graine, epoch 10) avant tout run de 100 epochs.
+
+### 5.8 Formation : phase « professeur » de la politique et mémoire jetée (reprises depuis l'epoch 10)
+Même protocole que 5.7 : état copié à la fin de l'epoch 9, puis reprises qui ne diffèrent que par le hasard (6 reprises par graine et par variante, 8 graines ; référence : 8 reprises par graine de 5.7). Mesure : ACC >= 0,9 à la fin de 8 epochs de placements persistants (epoch 17 pour A et la référence ; B compte 3 epochs de plus, jetés). Labels pour l'évaluation seulement.
+
+Variantes (options désactivées par défaut, chemin par défaut inchangé bit à bit, 117 tests) :
+* **A, `policy_teacher_iters=30`** : pendant les 30 premières itérations de placement (2 epochs), l'apprenant échantillonne ses actions dans softmax(reward) sur sa propre mémoire, et la politique est distillée vers softmax(reward) sur ces états (KL, même nombre de pas que PPO ; le critique est ajusté aux retours) ; ensuite la politique agit seule, avec PPO. Choisie plutôt qu'une distillation sur des états d'épisodes experts pour que le regroupement de l'expert n'entre pas dans la politique (principe : l'expert ne paramètre pas l'apprenant ; ici la politique n'apprend que de la reward, comme avant).
+* **B, `memory_discard_epochs=3`** : la mémoire écrite pendant les 3 premiers epochs de placement est jetée à la fin de chacun ; la politique garde ce qu'elle a appris.
+
+| graine | référence (pur / 8) | A (pur / 6) | B (pur / 6) |
+|---|---|---|---|
+| 0 | 1 | 6 | 0 |
+| 1 | 0 | 4 | 2 |
+| 2 | 3 | 5 | 2 |
+| 3 | 2 | 0 | 1 |
+| 4 | 5 | 5 | 3 |
+| 5 | 3 | 5 | 0 |
+| 7 | 2 | 6 | 0 |
+| 9 | 4 | 4 | 0 |
+| total | 20 / 64 (31 %) | 35 / 48 (73 %) | 8 / 48 (17 %) |
+
+* **A divise par plus de deux le taux d'échec de formation** (de 69 % à 27 %) et rend pures, dès l'epoch 10, des graines qui ne l'étaient presque jamais (0 : 6/6, 7 : 6/6, 1 : 4/6). Cela soutient l'explication par les premiers placements d'une politique non entraînée : leur donner la reward comme guide suffit à améliorer fortement la formation, sans toucher à la représentation, à la reward ni à la structure de la mémoire.
+* **B n'aide pas** (17 %, moins que la référence) : jeter la mémoire laisse la politique apprendre sur des états contaminés.
+* **La graine 3 n'est pas réparée** (0/6) : c'est la graine à distance médiane effondrée (5.7), où la géométrie de m, et non la politique, limite le résultat.
+* Limites : état à l'epoch 17 seulement (une phase pure peut casser plus tard, comme la graine 4 en 5.5) ; 6 reprises par graine ; pas encore de run de 100 epochs ; 30 itérations est une valeur choisie sans réglage.
+Suite proposée : `configs/suites/toy_teacher.yml` (5 graines, 100 epochs : référence, `teacher30`, `teacher30_freeze4`), pour voir si les phases pures obtenues tiennent jusqu'à l'epoch 100 et si le gel de 5.6 supprime les casses tardives.
+
+### 5.9 Pourquoi la reward n'ouvre pas : analyse de `L_pos` et `L_neg`, puis test `free_debias_scale`
+**Analyse (formules, `cibirl/losses.py`).** Notations : $V$ = actions valides (slots occupés + un seul slot vide) ; $s_k$ = score de la reward pour $k$ ; $q(k)=e^{s_k}/\sum_{j\in V}e^{s_j}$ ; $k^+$ = slot du jumeau (autre vue de la même image) ; $\tau^+=1/K$.
+* `L_pos` (mouvements forcés) : $L_{pos}=-\log q(k^+)$, donc $\partial L_{pos}/\partial s_{\text{ouvrir}}=q(\text{ouvrir})\ge 0$ : à chaque mouvement forcé le score d'ouvrir est poussé vers le bas ; rien dans `L_pos` ne le remonte (pas de terme positif sur les mouvements libres). Mesure : $q(\text{ouvrir})\approx 0{,}04$ sur les mouvements forcés.
+* `L_neg` (mouvements libres) : $\ell(u,v)=-\log(1-q(k(v)))$, $L_{neg}(u)=\max\{(\bar\ell(u)-\tau^+\ell^+)/(1-\tau^+),0\}$ avec $\ell^+=\mathbb{E}_{\text{forcés}}[-\log(1-q(k^+))]$. Le gradient est nul dès que $\bar\ell\le\tau^+\ell^+$, soit (un seul mauvais slot) $q\le 1-e^{-\tau^+\ell^+}$ : une zone morte. $\ell^+$ est mesuré sur des jumeaux (cas faciles) alors que les faux négatifs cachés sont des images de même classe mais différentes (plus difficiles) : la correction retranche trop, et d'autant plus que le modèle est bon sur les jumeaux. Mesures (epoch 20, graines 0, 2, 4) : $\ell^+=3{,}0$ à $5{,}1$ ; répulsion nulle sur 72 à 82 % des mouvements libres ; à l'epoch 9, 55 à 72 % (moyenne 68 %).
+* Les autres pertes (`L_psi`, KL, `L_inv`, bonus d'entropie) ne poussent pas vers moins de clusters ; `L_psi` tasse les classes dans m (5.7) sans les fusionner ; `rho` est le seul terme anti-fusion et est désactivé (5.4).
+* Ce que dit la reward apprise (epoch 20, états reconstruits avec les vraies classes) : si une classe manque de la mémoire, $q(\text{ouvrir})$ moyen = 0,54 / 0,33 / 0,30 (graines 2 / 4 / 0), idéal 1 ; avec un slot mélangeant deux classes, la reward préfère le mélange à ouvrir dans 75 / 90 / 95 % des paires. Réserve : ces états ont 4 slots occupés, hors de la distribution des épisodes experts (au plus 2 slots occupés quand il faut ouvrir avec 3 orbites).
+
+**Test : option `free_debias_scale`** ($\tau^+\to s\,\tau^+$ sur les mouvements libres seulement ; 1 = inchangé, bit à bit ; 0 = plus de correction), appliquée dès l'epoch 0. Protocole de 5.7 : 10 epochs, sonde de la reward, copie, 6 reprises de 8 epochs par graine (8 graines), seul le hasard change. Référence : 20/64 reprises pures (31 %), ACC finale moyenne 0,78.
+
+| | référence ($s=1$) | $s=0{,}5$ | $s=0$ |
+|---|---|---|---|
+| mouvements libres sans gradient de répulsion (epoch 9) | 68 % | 54 à 68 % | 0 à 9 % |
+| $q(\text{ouvrir})$ quand une classe manque (epoch 9, moyenne des 8 graines) | 0,38 | 0,46 | 0,53 |
+| reprises pures à l'epoch 17 | 20/64 (31 %) | 16/48 (33 %) | 18/48 (38 %) |
+| ACC finale moyenne | 0,78 | 0,79 | 0,83 |
+
+* La zone morte disparaît avec $s=0$ et la reward ouvre mieux dans les 8 graines ($q(\text{ouvrir})$ monte de 0,38 à 0,53 en moyenne), donc le mécanisme décrit existe bien.
+* Mais le taux de formation pure ne change pas de façon distinguable (38 % contre 31 %, écart du même ordre que le bruit à ce nombre de reprises), et la reward n'ouvre toujours que dans environ la moitié des cas. La zone morte est donc un facteur réel mais pas la cause suffisante. Comparaison : la phase « professeur » de 5.8 donne 73 %.
+* Piste suivante, non testée : les épisodes experts n'exposent jamais plus de 2 slots occupés au moment d'ouvrir (3 orbites), alors que la politique doit ouvrir avec 4 slots occupés ; combiner `free_debias_scale=0` avec plus d'orbites par épisode (`orbits_per_episode`), ou ajouter un terme positif pour ouvrir.
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.
