@@ -1,0 +1,18 @@
+{
+  "name": "toy_seed1",
+  "seed": 1,
+  "data": "toy",
+  "n_classes": 5,
+  "n_per_class": 300,
+  "size": 16,
+  "spurious": 0.0,
+  "transform": "toy_oracle",
+  "epochs_run": 100,
+  "converged": false,
+  "stop_reason": "fixed_epochs",
+  "acc": 0.8,
+  "nmi_class": 0.9097963380727814,
+  "nmi_background": 0.001605483501800199,
+  "nmi_class_background_in_data": 0.0016107140001436913,
+  "clusters_used": 4
+}

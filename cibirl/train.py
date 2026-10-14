@@ -65,7 +65,7 @@ class TrainConfig:
     rho: float = 0.0               # anti-collapse entropy term, off by default
 
     # compression and invariance
-    beta: float = 1e-3
+    beta: float = 1e-4             # 1e-3 degraded the reward on the toy (docs/protocol-decisions.md, 3 and 5)
     beta_warmup_iters: int = 500
     lam: float = 1.0
 

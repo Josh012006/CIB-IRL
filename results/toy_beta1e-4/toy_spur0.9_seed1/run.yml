@@ -1,0 +1,19 @@
+data: toy
+data_params:
+  n_classes: 5
+  n_per_class: 300
+  size: 16
+  spurious: 0.9
+transform: toy_oracle
+stop:
+  max_epochs: 100
+  min_epochs: 40
+  window: 10
+  part_tol: 0.01
+  twin_tol: 0.01
+  loss_tol: 0.02
+  enabled: false
+device: cpu
+command: C:\Users\PC\Documents\Josue\Mes-documents\Professionnel\Projets-personnels\CIB-IRL\scripts\smoke_toy.py
+  --epochs 100 --set seed=1 --name toy_spur0.9_seed1 --out-root C:\Users\PC\Documents\Josue\Mes-documents\Professionnel\Projets-personnels\CIB-IRL\results\toy_beta1e-4
+  --overwrite --spurious 0.9

@@ -35,7 +35,7 @@ La règle d'arrêt (fenêtre 5 -> 10, mesure invariante au renommage) a été aj
 
 ## 5. Prochaines étapes (décidées le 2026-10-13 soir)
 - Ne pas lancer `toy_regimes` tel quel : il mesurerait une dynamique dégradée (beta = 1e-3).
-- Problème 1 : réduire beta (1e-4 testé) ou viser un KL cible ; signaler dans les runs une baisse de twin_acc (indicateur sans labels).
+- Problème 1 : DÉCIDÉ le 2026-10-13 : `beta = 1e-4` devient le défaut de `TrainConfig` (cibirl/train.py). Les runs `results/toy_*` faits avec beta = 1e-3 sont l'état précédent. À surveiller dans les runs : une baisse de twin_acc (indicateur sans labels).
 - Problème 2 : voir 5.1 (trois variantes testées, aucune ne le corrige). Prochain candidat : l'écart entre les résumés vus par la récompense pendant l'entraînement des experts et ceux de l'apprenant.
 
 ### 5.1 Suite `toy_dynamics` (beta = 1e-4, jouet sans raccourci, banque oracle, 100 epochs fixes, 5 graines)
