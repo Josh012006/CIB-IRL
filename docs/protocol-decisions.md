@@ -103,5 +103,21 @@ Même cadre que la référence (beta = 1e-4, 100 epochs). Résultats sur 10 grai
 
 Le gain de `rho` vu sur 3 à 5 graines (5.2) ne se confirme pas : +0,07 est à environ 1,2 erreur standard pour rho 0,1, et rho 0,3 ne change rien (moins d'epochs à >= 0,95). Conclusion : `rho` n'est pas un levier contre les fusions ; il reste désactivé par défaut. Avec 10 graines la référence vaut 0,70 +- 0,16 (0,74 sur les graines 0 à 4), ce qui donne l'ordre de grandeur du bruit entre jeux de graines.
 
+### 5.5 Autopsie de la graine 4 de la référence (pure aux epochs 13-24, casse à l'epoch 25)
+Rejeu déterministe (1 thread, identique à la suite), mesures sur les epochs 18-30. Les labels ne servent qu'à l'évaluation.
+
+* **Ce qui ne bascule pas** : la représentation (précision du plus proche centroïde de classe dans m = 1,00 à tous les epochs) ; la politique et la reward sous une mémoire idéale (moyennes vraies des classes) restent justes à 100 %, même après la casse.
+* **Ce qui bascule** : le contenu de la mémoire. À l'epoch 25 deux classes se retrouvent dans le même slot de la mémoire échantillonnée (slots dominants [3,1,4,2,0] -> [3,3,2,1,0]) ; les résumés deviennent des mélanges, la marge de la politique tombe de 4,3 à 0,3-0,9, et ensuite une classe entière de 300 images change de prédiction d'un epoch à l'autre.
+* **Mesure de péremption** (avant chaque `recompute`) : distance moyenne entre l'intention stockée à la pose et l'intention actuelle, rapportée à la plus petite distance entre moyennes de classes.
+
+| | graine 4 (casse) | graine 2 (stable) |
+|---|---|---|
+| dérive absolue des intentions stockées | 0,10-0,15 | 0,10-0,16 |
+| plus petite distance entre classes (dans m) | 0,33 (ep 16) -> 0,14 (ep 25) -> 0,06 (ep 27+) | 0,60 -> 1,2-1,3 (croît) |
+| dérive / distance | 0,2-2,1 (> 1 à partir de l'epoch 27) | 0,05-0,23 |
+
+Lecture : la dérive entre epochs est du même ordre dans les deux graines ; ce qui diffère est la distance minimale entre classes, qui s'effondre dans la graine 4 (médiane des distances de paires 0,80 -> 0,32, alors que la plus grande reste ~10 : une classe très éloignée écrase les autres dans un coin de l'espace standardisé). Quand la dérive dépasse la séparation, des résumés construits en cours d'epoch ne désignent plus la bonne classe. Limites : une seule graine instable et un seul contrôle ; la dérive dépasse déjà la séparation aux epochs 19-21 de la graine 4 sans casse, donc ce n'est pas une condition suffisante ; la cause de l'effondrement de la séparation n'est pas établie ; la géométrie de la graine 2 (max/médiane des paires) n'a pas été mesurée.
+Pistes à tester ensuite : (a) recalcul des résumés plus souvent qu'une fois par epoch ; (b) geler ou ralentir l'encodeur après la formation ; (c) comprendre pourquoi la séparation minimale décroît (rôle de la standardisation BN avec une classe très éloignée, et de `L_neg` seul sur les mouvements libres).
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.
