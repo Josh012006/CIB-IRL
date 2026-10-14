@@ -63,6 +63,8 @@ class TrainConfig:
     d_max: int = 2                 # longest chain of transformations in an orbit
     tau_plus: Optional[float] = None   # None -> 1/K
     rho: float = 0.0               # anti-collapse entropy term, off by default
+    expert_oracle_link: float = 0.0  # ORACLE DIAGNOSTIC, uses the true classes (needs oracle_labels): probability
+                                     # that the orbits of one class are linked in an expert episode. 0 = Phase 1.
 
     # compression and invariance
     beta: float = 1e-4             # 1e-3 degraded the reward on the toy (docs/protocol-decisions.md, 3 and 5)
@@ -195,10 +197,18 @@ def freeze(*modules: torch.nn.Module):
 # --------------------------------------------------------------------------------------------------
 class Trainer:
     def __init__(self, cfg: TrainConfig, images: Tensor, transform: Transform,
-                 expert_ids: Tensor | None = None, device: str | torch.device = "cpu"):
-        """images [N, C, H, W] float in [0, 1] (on any device); transform = the nuisance family T."""
+                 expert_ids: Tensor | None = None, device: str | torch.device = "cpu",
+                 oracle_labels: Tensor | None = None):
+        """images [N, C, H, W] float in [0, 1] (on any device); transform = the nuisance family T.
+
+        `oracle_labels` [N] is read ONLY when cfg.expert_oracle_link > 0 (a diagnostic that cheats on purpose)."""
         if cfg.phase != 1:
             raise NotImplementedError("Only Phase 1 is implemented (README Section 5.5)")
+        if not 0.0 <= cfg.expert_oracle_link <= 1.0:
+            raise ValueError(f"expert_oracle_link must be in [0, 1], got {cfg.expert_oracle_link}")
+        if cfg.expert_oracle_link > 0 and oracle_labels is None:
+            raise ValueError("expert_oracle_link > 0 is an oracle diagnostic: pass oracle_labels to the Trainer")
+        self._oracle_labels = oracle_labels.cpu().long() if cfg.expert_oracle_link > 0 else None
         self.cfg, self.device = cfg, torch.device(device)
         torch.manual_seed(cfg.seed)
 
@@ -364,7 +374,8 @@ class Trainer:
     # Loop
     # ---------------------------------------------------------------------------------------------
     def train_iteration(self, idx: Tensor) -> dict:
-        eb = self.experts.sample(self.cfg.episodes_per_batch)
+        eb = self.experts.sample(self.cfg.episodes_per_batch, link_labels=self._oracle_labels,
+                                 link_prob=self.cfg.expert_oracle_link)
         if self.iteration < self.cfg.reward_warmup_iters:
             # warm-up: the reward learns from the forced moves before the policy acts alone
             stats = self.reward_step(eb, None)

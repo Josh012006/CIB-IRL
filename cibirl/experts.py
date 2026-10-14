@@ -141,9 +141,29 @@ class ExpertEpisodes:
         slot, is_first = assign_expert_slots(group)
         return ExpertBatch(ids, orbit, group, slot, is_first, repulsion_mask(group))
 
-    def sample(self, batch_size: int, generator: torch.Generator | None = None) -> ExpertBatch:
+    def linked_groups(self, episode_idx: Tensor, labels: Tensor, link_prob: float,
+                      generator: torch.Generator | None = None) -> Tensor:
+        """ORACLE DIAGNOSTIC (uses the true classes): groups in which orbits of the same class are linked.
+
+        For every episode and every class present in it, with probability `link_prob` all the orbits of that
+        class form ONE group (same expert slot, a forced move for the later ones, no repulsion between them);
+        otherwise each orbit stays its own group, as in Phase 1. It plays the role that a perfect Phase 2
+        relinker would play (with link_prob = 1) and answers one question only: is the expert's lack of
+        cross-orbit attraction what keeps the learner from joining images of one class? Never a method.
+        """
+        ids, orbit = self.image_ids[episode_idx], self.orbit[episode_idx]
+        cls = labels[ids]                                                        # [E, T]
+        n_cls = int(labels.max()) + 1
+        linked = torch.rand(len(episode_idx), n_cls, generator=generator) < link_prob   # [E, C]
+        return torch.where(linked.gather(1, cls), cls, n_cls + orbit)            # ids: classes, then orbits
+
+    def sample(self, batch_size: int, generator: torch.Generator | None = None,
+               link_labels: Tensor | None = None, link_prob: float = 0.0) -> ExpertBatch:
         idx = torch.randint(0, self.num_episodes, (batch_size,), generator=generator)
-        return self.batch(idx)
+        group = None
+        if link_labels is not None and link_prob > 0:
+            group = self.linked_groups(idx, link_labels, link_prob, generator)
+        return self.batch(idx, group)
 
 
 # --------------------------------------------------------------------------------------------------

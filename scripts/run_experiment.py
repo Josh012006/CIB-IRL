@@ -129,10 +129,15 @@ def main(argv=None) -> None:
     (out / "transform.yml").write_text(yaml.safe_dump(bank.spec, sort_keys=False, allow_unicode=True), encoding="utf-8")
     (out / "run.yml").write_text(yaml.safe_dump(
         {"data": args.data, "data_params": data.info, "transform": bank.name, "stop": stop.to_dict(),
-         "device": args.device, "command": " ".join(sys.argv)}, sort_keys=False, allow_unicode=True), encoding="utf-8")
+         "device": args.device, "uses_labels_for_training": cfg.expert_oracle_link > 0,
+         "command": " ".join(sys.argv)}, sort_keys=False, allow_unicode=True), encoding="utf-8")
     print(f"run folder: {out}\n{bank!r}\nstop: {stop}", flush=True)
 
-    tr = Trainer(cfg, images, bank, device=args.device)
+    oracle = cfg.expert_oracle_link > 0
+    if oracle:
+        print("WARNING: expert_oracle_link > 0 uses the TRUE CLASSES to build the expert episodes. "
+              "Diagnostic only, not a result of the method.", flush=True)
+    tr = Trainer(cfg, images, bank, device=args.device, oracle_labels=data.labels if oracle else None)
     monitor = ConvergenceMonitor(stop)
     history: list[dict] = []
     metrics_file = open(out / "metrics.jsonl", "w", encoding="utf-8")
@@ -170,6 +175,8 @@ def main(argv=None) -> None:
     final = {"name": out.name, "seed": cfg.seed, "data": args.data, **data.info, "transform": bank.name,
              "epochs_run": len(history), "converged": monitor.converged, "stop_reason": monitor.reason,
              "acc": cluster_acc(pred, y, cfg.num_slots), "nmi_class": nmi(pred, y)}
+    if oracle:
+        final["oracle_labels_used"] = True                          # diagnostic run: not comparable to the method
     if bg is not None:
         final["nmi_background"] = nmi(pred, bg)
         final["nmi_class_background_in_data"] = nmi(y, bg)

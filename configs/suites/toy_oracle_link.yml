@@ -1,0 +1,25 @@
+# Why does the learner merge two classes? Two quick tests on the toy (docs/protocol-decisions.md, section 5.2).
+# Same setting as the `ref` runs of toy_dynamics (toy, oracle bank, 100 epochs, beta default = 1e-4), 3 seeds.
+#
+#   link1.0   ORACLE DIAGNOSTIC (uses the true classes, not a method): in the expert episodes, all orbits of one
+#             class share one slot (cross-orbit attraction and no repulsion inside a class) -- what a perfect
+#             Phase 2 relinker would produce. If the merges stay, the expert's missing cross-orbit signal is NOT
+#             what causes them.
+#   link0.5   same, but each class present in an episode is linked with probability 0.5 (a noisy relinker).
+#   rho0.1 / rho1.0   the anti-collapse term (-rho * entropy of the reward's marginal over slots on expert states).
+#
+#   python scripts/run_suite.py configs/suites/toy_oracle_link.yml --cpu-count 2
+name: toy_oracle_link
+description: toy data, 100 epochs, oracle cross-orbit links in the expert episodes (0.5, 1.0) and anti-collapse rho
+seeds: [0, 1, 2]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  fixed_epochs: 100
+experiments:
+  - {name: link1.0, set: {expert_oracle_link: 1.0}}
+  - {name: link0.5, set: {expert_oracle_link: 0.5}}
+  - {name: rho0.1,  set: {rho: 0.1}}
+  - {name: rho1.0,  set: {rho: 1.0}}

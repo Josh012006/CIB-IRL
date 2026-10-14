@@ -55,5 +55,28 @@ Lecture :
 - `orbits5` rend la tâche experte plus dure (twin_acc 0,65 au lieu de 0,81) sans gain final, avec à peine moins de chutes brutales d'ACC (8,0 contre 9,8 en moyenne, dans le bruit).
 - Constat de structure (3 orbites, 2 vues) : dans les états experts, aucun slot n'a plus de 2 membres, donc la récompense n'est entraînée que sur des résumés = moyenne de 1 ou 2 vues, alors que l'apprenant lui présente des centres de classes moyennés sur des centaines d'images. Non testé à ce stade.
 
+### 5.2 Suite `toy_oracle_link` (mêmes conditions que la référence ; beta = 1e-4, 100 epochs ; 3 graines, `rho` sur 5)
+Deux questions : (a) l'absence de signal d'attraction entre orbites d'une même classe chez l'expert explique-t-elle les fusions ? (b) le terme anti-effondrement `rho` (désactivé par défaut) aide-t-il ?
+- `expert_oracle_link` : DIAGNOSTIC ORACLE qui utilise les vraies classes (jamais une méthode ; `run.yml` porte `uses_labels_for_training: true`). Dans un épisode, avec probabilité p, les orbites d'une même classe partagent un slot (attraction entre orbites, pas de répulsion dans la classe). C'est ce que produirait un relinker de phase 2 parfait avec p = 1. Il mêle deux effets : l'attraction entre orbites et des résumés experts plus gros (jusqu'a 4 vues).
+- `rho` : -rho x entropie du marginal de la récompense sur les slots, mesuré sur les états experts.
+
+Graines 0 à 2 :
+
+| condition | ACC finale | ACC moy. 20 dernieres | epochs avec ACC >= 0,95 | clusters |
+|---|---|---|---|---|
+| ref | 0,80 +- 0,16 | 0,83 | 31 | 4,0 |
+| link 1,0 | 0,74 +- 0,04 | 0,68 | 0 | 4,7 |
+| link 0,5 | 0,70 +- 0,08 | 0,79 | 35 | 4,0 |
+| rho 0,1 | 0,93 +- 0,09 | 0,94 | 67 | 4,7 |
+| rho 1,0 | 0,84 +- 0,12 | 0,94 | 77 | 4,7 |
+
+`rho` sur les 5 graines (ref : 0,74 +- 0,17 / 0,77 / 24 epochs / 4,2 clusters) : rho 0,1 -> 0,84 +- 0,13 / 0,81 / 40 / 4,8 ; rho 1,0 -> 0,82 +- 0,10 / 0,85 / 57 / 4,8.
+
+Lecture :
+- Des experts parfaits (link 1,0) ne corrigent pas les fusions : ACC 0,71 a 0,80, jamais 0,95, alors que twin_acc = 1,0 (la récompense prédit parfaitement l'expert). Le signal inter-orbites manquant n'est donc pas la cause principale.
+- La représentation m n'est pas en cause : le centre de classe le plus proche donne 100 % de bonnes affectations dans toutes les conditions (graines 0 a 2).
+- Test de la mémoire idéale (slots = vrais centres de classe) : avec les 5 slots occupés, récompense et politique placent 100 % des images dans leur classe ; avec 1 a 4 slots occupés, 50 a 95 % seulement (décider d'ouvrir un slot ou de rejoindre un slot existant sous une mémoire partielle). link 1,0 améliore la récompense seule avec 1 slot occupé (0,92 contre 0,52 a 0,76), pas la politique.
+- `rho` est le seul levier qui bouge quelque chose, de façon modeste sur 5 graines (ACC finale +0,08 a +0,10, un peu plus d'epochs a >= 0,95, plus proche de 5 clusters), avec des écarts de l'ordre de l'écart-type : indice, pas preuve. Les graines 3 et 4 avec rho 1,0 atteignent 1,0 puis redescendent vers 0,6 vers l'epoch 100 : la dérive tardive reste.
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.

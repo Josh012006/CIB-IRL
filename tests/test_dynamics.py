@@ -114,3 +114,67 @@ def test_a_consolidating_epoch_runs_end_to_end():
     tr = make_trainer(consolidate=True, policy_temperature=0.5, alpha=0.0)
     hist = tr.fit(2, log_fn=lambda row: False)
     assert len(hist) == 2 and all(0.0 <= r["churn"] <= 1.0 for r in hist)
+
+
+# ---- oracle diagnostic: orbits of one class linked in the expert episodes ---------------------------------
+from cibirl.experts import ExpertEpisodes                # noqa: E402
+
+
+def _episodes():
+    ids = torch.arange(60)
+    labels = torch.arange(60) % 4                                      # class of image i
+    ep = ExpertEpisodes.build(ids, 40, num_orbits=3, views_per_orbit=2, num_slots=4, seed=0)
+    return ep, labels
+
+
+def test_link_prob_zero_is_phase1():
+    ep, labels = _episodes()
+    torch.manual_seed(0)
+    a = ep.sample(16)
+    torch.manual_seed(0)
+    b = ep.sample(16, link_labels=labels, link_prob=0.0)
+    assert torch.equal(a.slot, b.slot) and torch.equal(a.group, b.group) and torch.equal(a.neg_mask, b.neg_mask)
+
+
+def test_full_link_merges_orbits_of_the_same_class_only():
+    ep, labels = _episodes()
+    idx = torch.arange(40)
+    group = ep.linked_groups(idx, labels, 1.0)
+    cls = labels[ep.image_ids[idx]]
+    same_class = cls.unsqueeze(2) == cls.unsqueeze(1)
+    assert torch.equal(group.unsqueeze(2) == group.unsqueeze(1), same_class)     # group == class
+    b = ep.batch(idx, group)
+    # no repulsion between views of one class, slots shared inside a class
+    assert not (b.neg_mask & same_class).any()
+    assert torch.equal(b.slot.unsqueeze(2) == b.slot.unsqueeze(1), same_class)
+    assert (cls[..., None] != cls[:, None]).any()                                # some episodes do mix classes
+    assert (b.orbit.unsqueeze(2) != b.orbit.unsqueeze(1))[same_class].any()      # linked views come from other orbits
+
+
+def test_partial_link_gives_both_kinds_of_episodes():
+    ep, labels = _episodes()
+    torch.manual_seed(1)
+    group = ep.linked_groups(torch.arange(40), labels, 0.5)
+    orbit = ep.orbit[torch.arange(40)]
+    merged = (group != 4 + orbit).float().mean()                                  # views whose group is a class group
+    assert 0.2 < float(merged) < 0.8
+
+
+def test_oracle_link_needs_labels_and_valid_probability():
+    x, y, _ = make_toy(n_per_class=20, n_classes=4)
+    base = dict(num_slots=4, image_size=16, orbits_per_episode=3, num_expert_episodes=50, expert_fraction=0.5)
+    with pytest.raises(ValueError):
+        Trainer(TrainConfig(expert_oracle_link=1.0, **base), x, background_redraw)         # no labels given
+    with pytest.raises(ValueError):
+        Trainer(TrainConfig(expert_oracle_link=1.5, **base), x, background_redraw, oracle_labels=y)
+    tr = Trainer(TrainConfig(expert_oracle_link=1.0, **base), x, background_redraw, oracle_labels=y)
+    assert tr._oracle_labels is not None
+    assert Trainer(TrainConfig(**base), x, background_redraw, oracle_labels=y)._oracle_labels is None   # ignored when off
+
+
+def test_an_oracle_epoch_runs():
+    x, y, _ = make_toy(n_per_class=30, n_classes=4)
+    cfg = TrainConfig(num_slots=4, image_size=16, orbits_per_episode=3, num_expert_episodes=100, expert_fraction=0.5,
+                      learner_batch=32, episodes_per_batch=8, reward_warmup_iters=2, expert_oracle_link=0.5)
+    hist = Trainer(cfg, x, background_redraw, oracle_labels=y).fit(2, log_fn=lambda r: False)
+    assert len(hist) == 2
