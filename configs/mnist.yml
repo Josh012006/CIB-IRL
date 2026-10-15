@@ -1,0 +1,14 @@
+# MNIST digits 1 to 6 (scripts/datasets.py `mnist`, 300 images of each digit): 6 classes, grey 28 x 28.
+# Same setting as configs/toy.yml, with the sizes of the data. Only what differs from the defaults of TrainConfig is written here.
+num_slots: 6              # K, upper bound (6 digits)
+image_size: 28
+in_channels: 1
+
+orbits_per_episode: 5     # B <= K: the expert opens a new cluster with up to 4 occupied ones
+views_per_orbit: 2        # n >= 2
+num_expert_episodes: 2000
+expert_fraction: 0.3
+
+learner_batch: 100
+reward_warmup_iters: 150
+beta_warmup_iters: 300

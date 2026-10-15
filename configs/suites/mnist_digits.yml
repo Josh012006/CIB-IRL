@@ -1,0 +1,16 @@
+# MNIST digits 1 to 6, 300 images of each, 3 seeds, until convergence (label-free rule) or 200 epochs at most.
+# Transformations: the `digits` bank (configs/transforms/digits.yml), fixed before any result.
+# Question: does the clustering fail the way the toy does (classes merged into one cluster)?
+#
+#   python scripts/run_suite.py configs/suites/mnist_digits.yml --cpu-count 2
+name: mnist_digits
+description: MNIST digits 1-6, 3 seeds, convergence or 200 epochs
+seeds: [0, 1, 2]
+common:
+  data: mnist
+  data_params: {digits: [1, 2, 3, 4, 5, 6], n_per_class: 300}
+  transform: digits
+  configs: [configs/mnist.yml]
+  stop: {max_epochs: 200, min_epochs: 40}
+experiments:
+  - {name: digits}

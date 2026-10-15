@@ -125,6 +125,31 @@ def random_resized_crop(scale: Sequence[float] = (0.7, 1.0), ratio: Sequence[flo
     return op
 
 
+@register("random_rotation")
+def random_rotation(max_degrees: float = 15.0) -> Transform:
+    """Rotate each image by an angle drawn uniformly in [-max_degrees, +max_degrees] around its centre.
+
+    Square images only (the rotation is written in normalised coordinates). The corners that come from outside the
+    image repeat the border pixels. Small angles preserve the identity of digits and of most objects; a large one does
+    not (6 and 9, 'N' and 'Z'), so the strength belongs to the written bank, not to a search.
+    """
+    if not 0.0 <= max_degrees <= 90.0:
+        raise ValueError(f"max_degrees must be in [0, 90], got {max_degrees}")
+    max_rad = math.radians(max_degrees)
+
+    def op(x: Tensor) -> Tensor:
+        _check(x, "random_rotation")
+        if x.shape[2] != x.shape[3]:
+            raise ValueError(f"random_rotation: square images only, got {x.shape[2]}x{x.shape[3]}")
+        a = _uniform(x.shape[0], -max_rad, max_rad, x)
+        theta = torch.zeros(x.shape[0], 2, 3, device=x.device, dtype=x.dtype)
+        theta[:, 0, 0], theta[:, 0, 1], theta[:, 1, 0], theta[:, 1, 1] = a.cos(), -a.sin(), a.sin(), a.cos()
+        grid = F.affine_grid(theta, list(x.shape), align_corners=False)
+        return F.grid_sample(x, grid, mode="bilinear", padding_mode="border", align_corners=False)
+
+    return op
+
+
 @register("hflip")
 def hflip(p: float = 0.5) -> Transform:
     """Mirror left-right with probability p. Natural images only: it changes the identity of digits."""

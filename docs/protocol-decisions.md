@@ -229,5 +229,22 @@ Protocole de 5.9 : option appliquée dès l'epoch 0, 10 epochs, sonde de la rewa
 * Aucun run de 100 epochs n'a été lancé pour ces deux variantes (la formation, première condition de la stabilité, n'est pas meilleure) ; la suite `configs/suites/toy_open.yml` est prête si l'on veut tout de même mesurer la stabilité.
 * Bilan de 5.8 à 5.10 : la phase « professeur » de la politique (73 %) reste la seule intervention qui améliore nettement la formation ; les corrections de la reward ($s=0$, plancher, 5 orbites) améliorent la sonde de la reward (surtout 5 orbites) sans améliorer la formation.
 
+### 5.11 Changement de contexte : MNIST, chiffres 1 à 6 (2026-10-14)
+Pour savoir si l'échec du jouet (fusions de classes) se reproduit sur des classes bien distinguables, run unique, fixé avant résultat : `data=mnist`, chiffres 1 à 6, 300 images par chiffre tirées au hasard avec la graine (1800 images), banque `digits` (crop + rotation $\pm 15^\circ$ + luminosité / contraste, sans flip), $K=6$, $B=5$ orbites, $n=2$ vues, 2000 épisodes experts, réglages du jouet pour le reste (`configs/mnist.yml`, suite `configs/suites/mnist_digits.yml`). 3 graines, arrêt à la convergence (règle sans labels) ou à 200 epochs.
+
+| graine | epochs | convergé | ACC | NMI | clusters | kNN(10) pixels | kNN(10) $z$ | kNN(10) $m$ | k-means $m$ | retrouver le jumeau par $m$ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 200 | non | 0,43 | 0,33 | 5 | 0,93 | 0,78 | 0,68 | 0,33 | 8 % |
+| 1 | 200 | non | 0,41 | 0,31 | 6 | 0,94 | 0,86 | 0,69 | 0,33 | 3 % |
+| 2 | 200 | non | 0,42 | 0,32 | 5 | 0,94 | 0,80 | 0,65 | 0,33 | 3 % |
+
+(« kNN » : plus proches voisins sur 1800 images, labels utilisés pour l'évaluation seulement ; $z$ = code de l'encodeur, $m$ = intention ; k-means sur les pixels : ACC 0,67 à 0,76.)
+
+* **Aucune graine ne converge** : ACC entre 0,25 et 0,51 de l'epoch 15 à l'epoch 200 (autour de 0,4), et en moyenne 34 à 37 % des images changent de cluster d'une epoch à l'autre (de l'epoch 40 à 200).
+* **Le chiffre 1 est isolé** (≈ 290 sur 300 dans un cluster, dans les 3 graines) ; les chiffres 2 à 6 sont répartis dans 3 à 4 clusters, sans correspondance chiffre-cluster.
+* **Ce n'est pas le même tableau que le jouet** : sur le jouet la représentation $m$ était parfaite (plus proche moyenne de classe : 1,0) et l'échec venait de la partition. Ici $m$ est déjà mauvais avant la politique (kNN 0,65 à 0,69 contre 0,93 pour les pixels ; $z$ garde plus : 0,78 à 0,86 ; le jumeau d'une vue est retrouvé par $m$ dans 3 à 8 % des cas).
+* La précision « twin » de la reward est ≈ 0,7 au départ, puis baisse à 0,4–0,5 sur les graines 1 et 2 (reste ≈ 0,7 sur la graine 0) ; la KL passe d'environ 900 à 170–540.
+* Non testé (hypothèses) : compression trop forte ($\beta$), tâche de l'expert trop difficile avec $B=5$ (avec 6 classes, deux orbites d'un épisode sont de la même classe dans ≈ 91 % des cas mais comptées comme différentes), banque de transformations. Un seul réglage a été essayé, sans ajustement.
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.

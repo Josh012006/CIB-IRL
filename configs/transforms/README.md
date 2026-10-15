@@ -10,6 +10,7 @@ whatever it preserves is identity. A bank is therefore a written, versioned obje
 | `natural.yml` | `generic` + horizontal flip | natural images only (a flipped digit or toy shape is another identity) |
 | `informed_color.yml` | `generic` + full hue redraw | a DECLARED side information about the nuisance (colour): an experimental condition, not a tuning |
 | `toy_oracle.yml` | exact redraw of the toy background | toy data only: an oracle upper bound on the prior |
+| `digits.yml` | crop, rotation up to 15 degrees, brightness / contrast jitter (one channel) | grey handwritten digits (MNIST) |
 
 Reading the two regimes on a dataset with a colour shortcut (Colored MNIST, toy with `spurious: 0.9`):
 `generic` gives the model no prior about the nuisance, `informed_color` gives it one. The gap between the two
