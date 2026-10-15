@@ -23,6 +23,7 @@ Suite file (all keys optional except experiments):
         set: {gamma: 0}                # TrainConfig overrides
         stop: {max_epochs: 500}        # stopping rule (cibirl/convergence.py)
         fixed_epochs: 30               # run exactly N epochs instead
+        seeds: [2, 4]                  # seeds of this experiment only (default: the suite's `seeds`)
 """
 import argparse
 import json
@@ -38,7 +39,7 @@ from _parallel import Job, run_jobs, say          # noqa: E402
 from eval.aggregate import main as aggregate      # noqa: E402
 
 SUITE_KEYS = {"name", "description", "seeds", "out_root", "common", "experiments"}
-EXPERIMENT_KEYS = {"name", "data", "data_params", "transform", "configs", "set", "stop", "fixed_epochs"}
+EXPERIMENT_KEYS = {"name", "data", "data_params", "transform", "configs", "set", "stop", "fixed_epochs", "seeds"}
 DICT_KEYS = {"data_params", "set", "stop"}
 
 
@@ -57,6 +58,9 @@ def load_suite(path: Path) -> dict:
         if extra:
             raise SystemExit(f"{path}: experiment {exp.get('name')!r} has unknown key(s) {sorted(extra)} "
                              f"(allowed: {sorted(EXPERIMENT_KEYS)})")
+        seeds = exp.get("seeds")
+        if seeds is not None and not (isinstance(seeds, list) and seeds and all(isinstance(s, int) for s in seeds)):
+            raise SystemExit(f"{path}: experiment {exp.get('name')!r}: 'seeds' must be a non-empty list of integers")
         merged = {k: v for k, v in common.items() if k not in DICT_KEYS}
         for k in DICT_KEYS:
             merged[k] = {**(common.get(k) or {}), **(exp.get(k) or {})}
@@ -112,7 +116,7 @@ if __name__ == "__main__":
 
     suite_path = Path(args.suite) if Path(args.suite).exists() else ROOT / args.suite
     suite = load_suite(suite_path)
-    seeds = args.seeds or suite.get("seeds") or [0]
+    default_seeds = suite.get("seeds") or [0]
     experiments = suite["experiments"]
     if args.only:
         unknown = set(args.only) - {e["name"] for e in experiments}
@@ -122,9 +126,15 @@ if __name__ == "__main__":
     out_arg = args.out_root or suite.get("out_root") or f"results/{suite['name']}"
     out_root = Path(out_arg) if Path(out_arg).is_absolute() else ROOT / out_arg
 
+    def seeds_of(exp):
+        return args.seeds or exp.get("seeds") or default_seeds
+
+    seeds = list(dict.fromkeys(s for exp in experiments for s in seeds_of(exp)))    # order of first appearance
     jobs = []
     for seed in seeds:
         for exp in experiments:
+            if seed not in seeds_of(exp):
+                continue
             name = f"{exp['name']}_seed{seed}"
             if args.skip_existing and (out_root / name / "final_metrics.json").exists():
                 say(f"skip   {name} (already done)")

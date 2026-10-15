@@ -1,0 +1,18 @@
+{
+  "name": "lam1_seed5",
+  "seed": 5,
+  "data": "toy",
+  "n_classes": 5,
+  "n_per_class": 300,
+  "size": 16,
+  "spurious": 0.0,
+  "transform": "toy_oracle",
+  "epochs_run": 123,
+  "converged": true,
+  "stop_reason": "converged",
+  "acc": 0.8,
+  "nmi_class": 0.9097963380727814,
+  "nmi_background": 0.003157244447294066,
+  "nmi_class_background_in_data": 0.0030444485976165478,
+  "clusters_used": 4
+}

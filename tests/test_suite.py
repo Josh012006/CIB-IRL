@@ -60,7 +60,8 @@ def test_suite_merge_rules_and_errors(tmp_path):
     cmd = run_suite.command(exp, 3, "a_seed3", tmp_path, max_epochs=None)
     assert cmd[cmd.index("--set") + 1] == "seed=3" and "gamma=0.5" in cmd and "max_epochs=9" in cmd
     for text, msg in [("experiments: []\n", "non-empty"),
-                      ("experiments:\n  - {name: a, transform: generic, seeds: 3}\n", "unknown key"),
+                      ("experiments:\n  - {name: a, transform: generic, bogus: 3}\n", "unknown key"),
+                      ("experiments:\n  - {name: a, transform: generic, seeds: 3}\n", "list of integers"),
                       ("experiments:\n  - {name: a}\n", "transform"),
                       ("experiments:\n  - {name: a, transform: g}\n  - {name: a, transform: g}\n", "duplicate"),
                       ("oops: 1\nexperiments:\n  - {name: a, transform: g}\n", "unknown key")]:
@@ -70,6 +71,20 @@ def test_suite_merge_rules_and_errors(tmp_path):
 
 
 # ---- one run ---------------------------------------------------------------------------------------
+def test_experiment_seeds_override_the_suite_seeds(tmp_path):
+    p = tmp_path / "s.yml"
+    p.write_text("seeds: [0, 1]\ncommon: {data: toy, stop: {max_epochs: 9}}\n"
+                 "experiments:\n  - {name: a, transform: generic}\n  - {name: b, transform: generic, seeds: [5]}\n",
+                 encoding="utf-8")
+    res = run([ROOT / "scripts" / "run_suite.py", p, "--dry-run"], cwd=ROOT)
+    assert res.returncode == 0, res.stderr
+    assert "3 runs would be launched" in res.stdout                        # a: seeds 0 and 1, b: seed 5 only
+    assert "--name a_seed0" in res.stdout and "--name a_seed1" in res.stdout and "--name b_seed5" in res.stdout
+    assert "b_seed0" not in res.stdout
+    res = run([ROOT / "scripts" / "run_suite.py", p, "--seeds", "7", "--dry-run"], cwd=ROOT)
+    assert "2 runs would be launched" in res.stdout                        # --seeds overrides every experiment
+
+
 def test_run_until_convergence_stops_early_and_records_it(tmp_path):
     # tolerances so loose that the rule fires at its earliest possible epoch: 2 windows + 1 = 3 epochs
     res = run([ROOT / "scripts" / "run_experiment.py", "--data", "toy", "--transform", "generic", "--name", "c",
