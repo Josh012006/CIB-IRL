@@ -378,5 +378,29 @@ Trois vérifications demandées après 5.17, suite `configs/suites/toy_cov_check
 * **Graine 5.** Non monotone en $\lambda$ (échec à 1 et 10, succès à 3 et 30) ; ce n'est donc pas un effet de « pénalité trop forte » ni « trop faible » à $\lambda=10$, mais plutôt le piège de formation du point (b) tiré ou non selon la trajectoire. À $\lambda=1$ la règle d'arrêt sans labels déclare la convergence sur une partition fausse et stable (ACC 0,80, 4 clusters) : la règle ne protège pas contre une partition stable mais mauvaise.
 * Limites : 2 à 3 graines par valeur de $\lambda$, un seul run par cellule, une seule valeur de $\rho$ et de plancher ; la graine 5 est la seule où $\lambda=3$ et $\lambda=10$ diffèrent, ce qui ne suffit pas pour changer le défaut (10) ; une vérification de $\lambda=3$ sur les autres graines serait nécessaire pour le faire.
 
+### 5.19 Jouet avec plus de slots que de classes : $K=10$ pour 5 classes (2026-10-15)
+Décision de travail : $\lambda_{cov}=3$ devient le poids standard (`TrainConfig.intent_cov_weight` passe de 10 à 3 ; la pénalité reste activée par `intent_decorrelate=cov`), et $K$ doit être plus grand que le nombre réel de classes, pour que la convergence ne soit pas imposée par le nombre de slots (avec $K=5$ pour 5 classes, une partition en 5 clusters peut être forcée par la capacité). Suite `configs/suites/toy_cov_k10.yml` : jouet, $K=10$, $\lambda_{cov}=3$, `rho=0,1`, `neg_floor=0,1`, les 10 graines de `toy_rho` (0 à 9), arrêt à la convergence (règle sans labels, `min_epochs` 40) ou à 300 epochs.
+
+| graine | epochs | convergé | ACC finale | clusters finaux | part des 100 dernières epochs avec ACC $\ge$ 0,95 | clusters utilisés (min-max, 100 dernières epochs) | images qui changent de cluster par epoch |
+|---|---|---|---|---|---|---|---|
+| 0 | 300 | non | 1,00 | 5 | 0,22 | 4-10 | 0,086 |
+| 1 | 300 | non | 1,00 | 5 | 0,04 | 5-10 | 0,197 |
+| 2 | 300 | non | 0,81 | 8 | 0,19 | 4-10 | 0,115 |
+| 3 | 300 | non | 0,71 | 9 | 0,23 | 5-10 | 0,153 |
+| 4 | 298 | oui | 1,00 | 5 | 0,66 | 5-7 | 0,061 |
+| 5 | 300 | non | 0,70 | 10 | 0,04 | 5-10 | 0,268 |
+| 6 | 300 | non | 0,80 | 10 | 0,21 | 5-10 | 0,137 |
+| 7 | 300 | non | 0,89 | 9 | 0,15 | 3-10 | 0,135 |
+| 8 | 300 | non | 0,86 | 9 | 0,13 | 3-10 | 0,207 |
+| 9 | 300 | non | 0,83 | 9 | 0,42 | 5-10 | 0,105 |
+
+Moyenne : ACC 0,86 $\pm$ 0,11, clusters utilisés 7,9 $\pm$ 2,0, **1 graine sur 10 converge** (graine 4, à l'epoch 298). Rappel : à $K=5$, `fix` convergeait sur 9 graines sur 10 (5.17 et 5.18, avec $\lambda=10$ ; $\lambda=3$ n'a été testé qu'à $K=5$ sur les graines 3, 5 et 8, toutes à ACC 1,00).
+
+* **Les partitions finales sont pures, mais trop fines.** Les 10 partitions finales ont une pureté de 1,00 (aucune fusion de classes, y compris la graine 5 qui fusionnait à $K=5$) ; l'échec a changé de nature : les classes sont éclatées en plusieurs clusters (de 0 à 4 classes coupées en au moins deux clusters de plus de 10 % de la classe, selon la graine ; 0 pour les graines 0, 1 et 4 qui finissent à 5 clusters), avec quelques très petits clusters (4 à 30 images). Les graines 0 et 1 finissent à 5 clusters et ACC 1,00 mais seulement par passage à l'epoch 300 : la figure montre un nombre de clusters qui oscille entre 4 et 10 sur toute la durée.
+* **L'ACC sous-estime le défaut.** L'ACC est un appariement un-à-un, elle chute quand une classe est coupée ; la mesure pertinente ici est le nombre de clusters et sa stabilité.
+* **Sonde de la reward (graines 0, 3 et 5 ; labels pour l'évaluation seulement).** Avec les 5 classes présentes (summary = centre de classe) et 5 slots libres, la reward et la politique rattachent chaque image à son slot de classe avec une probabilité de 1,00 et n'ouvrent jamais (probabilité d'ouvrir 0,00). Ce n'est donc pas la reward finale qui pousse à ouvrir quand tout est en place. En revanche, avec une classe répartie sur deux slots (summaries = moyennes de deux moitiés de la classe), la reward donne exactement 0,50 / 0,50 : ces deux summaries sont identiques puisque $m$ est quasi constant dans une classe (compacité de 5.18), donc la reward ne peut pas préférer l'un des slots, et **rien dans l'objectif ne pousse à regrouper deux slots d'une même classe**. À $K=5$ c'est la capacité qui force le regroupement ; à $K=10$ plus rien ne le fait.
+* **Hypothèses non testées** pour l'origine des découpages pendant l'entraînement : (1) `rho` (terme anti-effondrement : entropie du marginal de la reward sur les slots, qui récompense la répartition sur plusieurs slots) et `neg_floor` (répulsion minimale) peuvent favoriser les découpages quand $K$ est grand ; (2) l'exploration par échantillonnage de la politique ouvre des slots dans les états transitoires et rien ne les referme. Un run avec `rho=0` et `neg_floor=0` à $K=10$ trancherait (1).
+* Limites : un run par graine, un seul $K$ (10), un seul $\lambda$ (3), pas de comparaison à $K=5$ sur les 10 graines avec $\lambda=3$ ; le critère de convergence (partition stable à 1 % près pendant 10 epochs) est strict, mais aucune graine hors la graine 4 ne s'en approche (changement de partition moyen entre 6 et 27 % par epoch).
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.

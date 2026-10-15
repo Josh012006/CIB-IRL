@@ -1,0 +1,18 @@
+{
+  "name": "k10_seed8",
+  "seed": 8,
+  "data": "toy",
+  "n_classes": 5,
+  "n_per_class": 300,
+  "size": 16,
+  "spurious": 0.0,
+  "transform": "toy_oracle",
+  "epochs_run": 300,
+  "converged": false,
+  "stop_reason": "max_epochs",
+  "acc": 0.8566666666666667,
+  "nmi_class": 0.920780767146031,
+  "nmi_background": 0.03489694947134832,
+  "nmi_class_background_in_data": 0.002463986287159207,
+  "clusters_used": 9
+}

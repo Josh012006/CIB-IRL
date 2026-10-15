@@ -89,7 +89,7 @@ class TrainConfig:
                                      # BatchNorm only gives each a variance of 1, they may all be copies): "none" = as in the
                                      # README; "whiten" = Cholesky whitening of the batch instead of the BatchNorm; "cov" = the
                                      # BatchNorm plus the off-diagonal covariance penalty, weighted by `intent_cov_weight`.
-    intent_cov_weight: float = 10.0  # weight of that penalty (only with intent_decorrelate = "cov")
+    intent_cov_weight: float = 3.0   # weight of that penalty (only with intent_decorrelate = "cov"); 3 is the standard (docs 5.18-5.19)
     psi_fixed_logvar: Optional[float] = None   # DIAGNOSTIC: if set, L_psi uses this constant log sigma^2 instead of the one the
                                      # intent predicts (so L_psi is a squared error, and nothing rewards a variance that goes
                                      # to its floor). None = as in the README (predicted variance).
