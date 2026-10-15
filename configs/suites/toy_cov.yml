@@ -1,0 +1,22 @@
+# Back to the toy, as if the MNIST detour had not happened (docs/protocol-decisions.md, 5.17).
+# The rank-1 intent (5.15) was an implementation decision (BatchNorm only fixes the variance of each dimension); it is now
+# corrected by the off-diagonal covariance penalty (intent_decorrelate = cov, weight 10). Together with the two other
+# choices judged justified, rho = 0.1 (anti-collapse entropy term, now part of the method) and neg_floor = 0.1 (L_neg keeps
+# at least 0.1 * the plain repulsion per view), we replay the 6 seeds of toy_rho/ref that ended in merged clusters
+# (0, 1, 3, 5, 7, 8 of the 10 seeds), until convergence (label-free rule) or 200 epochs.
+#   ref   the old default (no penalty, rho 0, no floor): replays the runs that degenerated
+#   fix   penalty + rho + floor
+#
+#   python scripts/run_suite.py configs/suites/toy_cov.yml --cpu-count 2
+name: toy_cov
+description: toy data, convergence or 200 epochs, covariance penalty on the intent + rho + repulsion floor, 6 seeds that had merged clusters
+seeds: [0, 1, 3, 5, 7, 8]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  stop: {max_epochs: 200, min_epochs: 40}
+experiments:
+  - {name: ref}
+  - {name: fix, set: {intent_decorrelate: cov, rho: 0.1, neg_floor: 0.1}}

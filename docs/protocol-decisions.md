@@ -334,5 +334,22 @@ Chacune seule et avec la variance fixe de 5.15 ; 3 graines, epochs 0 à 19, doss
 * **Le blanchiment de Cholesky échoue** (rang 1,4 à 5, précision « twin » instable de 0,21 à 0,77) : il ne remplace pas la pénalité (pas étudié plus loin : $\varepsilon=10^{-4}$ de régularisation, un seul réglage).
 * Limites : 20 epochs, 3 graines, une seule valeur de $\lambda_{\text{cov}}$, un seul jeu de données ; rien n'est encore dit de la convergence ni de la stabilité (run complet lancé, section suivante).
 
+### 5.17 Retour au jouet : pénalité de covariance + $\rho$ + plancher de répulsion (2026-10-15)
+Question posée après 5.15-5.16 : si l'on fait « comme s'il n'y avait jamais eu de souci » (intention $m$ corrigée), les trois choix jugés justifiés (pénalité de covariance sur $m$, poids 10 ; $\rho=0{,}1$ ; `neg_floor=0,1`) suppriment-ils les fusions du jouet ? Protocole fixé avant résultat : suite `configs/suites/toy_cov.yml`, jouet (`configs/toy.yml`, banque `toy_oracle`), les 6 graines de `toy_rho/ref` qui avaient fusionné (0, 1, 3, 5, 7, 8), arrêt à la convergence (règle sans labels de la section 2, `min_epochs` 40) ou à 200 epochs. Deux conditions : `ref` = ancien défaut (rejoue la dégénérescence), `fix` = `intent_decorrelate=cov` + `rho=0,1` + `neg_floor=0,1`.
+
+| | `ref` | `fix` |
+|---|---|---|
+| ACC finale par graine (0, 1, 3, 5, 7, 8) | 0,80 / 0,80 / 0,51 / 0,80 / 0,80 / 0,60 | 1,00 / 1,00 / 1,00 / 0,70 / 1,00 / 1,00 |
+| ACC moyenne $\pm$ écart-type | 0,72 $\pm$ 0,12 | 0,95 $\pm$ 0,11 |
+| clusters utilisés | 4, 4, 4, 4, 4, 3 | 5 dans les 6 graines |
+| convergées (règle sans labels) | 0/6 (200 epochs) | 5/6 (40, 61, 40, 48, 61 epochs) |
+| première epoch avec ACC $\ge$ 0,95 | 77 à 150 (3 graines sur 6 jamais) | 15 à 21 (5 graines) |
+| rang de $m$ final (participation, 1 = rang 1) | 1,0 dans les 6 graines (part de la 1re composante = 1,00) | 2,0 à 4,0 (part de la 1re composante 0,26 à 0,52) |
+
+* `ref` reproduit la dégénérescence (jamais convergé, ACC oscillante, 4 clusters : deux classes fusionnées ; graine 8 : 3 clusters). Dans le jouet aussi, $m$ final est exactement de rang 1 sous l'ancien défaut (5.15 l'avait noté), alors que la pénalité lui redonne plusieurs dimensions indépendantes.
+* `fix` règle 5 graines sur 6 : ACC 1,00, 5 clusters, convergence entre 40 et 61 epochs, sans rechute après convergence. La graine 5 ne converge pas : ACC 0,70 à 0,80 sur 200 epochs, 5 clusters mais deux classes fusionnées et une troisième coupée en deux (156 + 144 images), donc le même mode d'échec, plus rare, n'est pas supprimé.
+* Limites. (1) Les 6 graines ont été choisies parce qu'elles avaient échoué avec `ref` : cela mesure la correction sur des cas difficiles, pas un taux d'échec global ; les 4 autres graines de `toy_rho` ne sont pas rejouées. (2) `fix` regroupe trois changements ; ce run ne dit pas lequel agit (5.4 et 5.10 avaient montré que $\rho$ et le plancher seuls ne changeaient rien, ce qui désigne la pénalité, sans le prouver). (3) 6 graines, une seule valeur de $\lambda_{\text{cov}}$ (10, non ajustée). (4) `ref` est arrêté à 200 epochs ici ; les chiffres de 5.1 à 5.10 sont à 100 epochs.
+* Hors sujet jouet : le run MNIST complet de 5.16 (`mnist_digits_cov`) s'est interrompu vers l'epoch 30 (processus tué, pas d'erreur de code) ; il n'est donc pas terminé et n'a pas été relancé. Les logs partiels (epochs 28 à 32) donnaient une ACC de suivi 0,96 / 0,95 / 0,70 pour les graines 0, 1, 2 ; ce ne sont pas des résultats finaux.
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.
