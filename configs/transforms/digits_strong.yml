@@ -1,0 +1,11 @@
+# Sensitivity step of the `digits` bank (configs/transforms/README.md: the effect of the strengths is studied by a sweep,
+# never by keeping the best value). Same operations, stronger. Fixed BEFORE any result was seen.
+#   crop      area >= 0.5 (instead of 0.7): the digit, centred in the image, is mostly kept
+#   rotation  +-30 degrees (instead of 15): still far from the 6 <-> 9 confusion (180 degrees)
+#   jitter    brightness / contrast 0.3 (instead of 0.2)
+name: digits_strong
+description: digits bank with stronger crop, rotation and photometric jitter
+ops:
+  - random_resized_crop: {scale: [0.5, 1.0], ratio: [0.7, 1.4]}
+  - random_rotation: {max_degrees: 30}
+  - color_jitter: {brightness: 0.3, contrast: 0.3, p: 0.8}

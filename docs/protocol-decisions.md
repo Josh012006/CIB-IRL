@@ -272,5 +272,26 @@ Trois variantes, appliquées dès l'epoch 0, sondées par `scripts/probe_represe
 * Les hypothèses « compression trop forte » et « trop de faux négatifs de l'expert avec 5 orbites » ne sont donc pas soutenues par ces tests (pour ces valeurs, 20 epochs, 3 graines).
 * Restent non testées : la force de la banque de transformations (hypothèse 3 de l'utilisateur), l'architecture (l'intention $m$ n'est entraînée que par $L_\psi$), la taille de la partie expert (30 % de 1800 images).
 
+### 5.14 MNIST : la banque de transformations (hypothèse 3), en pixels et avec une banque plus forte (2026-10-15)
+**Géométrie de la banque en pixels** (`scripts/probe_bank.py`, graine 0, 1800 images ; deux vues par image, la banque appliquée 1 ou 2 fois comme dans une orbite ; distances euclidiennes médianes entre pixels ; résultats dans `results/mnist_digits/bank_geometry_seed0.json`) :
+
+| banque | applications | distance entre 2 vues d'une image | distance entre 2 images de même classe | distance entre 2 images de classes différentes | jumeau = plus proche vue | plus proche vue de même classe |
+|---|---|---|---|---|---|---|
+| `digits` | 1 | 6,84 | 9,02 | 9,87 | 19 % | 92 % |
+| `digits` | 2 | 7,86 | 9,23 | 9,89 | 8 % | 87 % |
+| `digits_strong` | 1 | 9,24 | 10,15 | 10,61 | 5 % | 80 % |
+| `digits_strong` | 2 | 10,14 | 10,74 | 11,04 | 2 % | 67 % |
+
+* Avec `digits`, deux vues d'une même image ne sont pas beaucoup plus proches (6,8) que deux images de même classe (9,0) : en pixels, l'instance n'est pas triviale à reconnaître (19 % ; 8 % avec 2 applications), alors que la classe l'est davantage (plus proche vue de même classe : 92 %). L'hypothèse « les orbites se résolvent trop facilement au niveau de l'instance » n'est pas soutenue **en pixels** (elle reste possible dans l'espace appris).
+* **Banque plus forte** (`configs/transforms/digits_strong.yml` : crop $\geq 0{,}5$, rotation $\pm 30^\circ$, jitter 0,3 ; fixée avant résultat, une étape de sensibilité de `digits`), sondée comme en 5.13 (3 graines, epoch 19, dossier `results/mnist_digits/probe_digits_strong/`) :
+
+| epoch 19 | kNN(10) sur $m$ | k-means sur $m$ | kNN(10) sur $z$ | KL | précision « twin » | retrouver le jumeau par $m$ | ACC de la politique |
+|---|---|---|---|---|---|---|---|
+| `digits` | 0,62 [0,60–0,65] | 0,29 | 0,76 | 936 | 0,72 | 4 % | 0,41 [0,37–0,44] |
+| `digits_strong` | 0,56 [0,51–0,61] | 0,30 | 0,66 | 585 | 0,58 | 1 % | 0,38 [0,36–0,40] |
+
+* **Une banque plus forte dégrade $m$ et $z$ au lieu de les améliorer** (kNN sur $m$ 0,56 contre 0,62 ; sur $z$ 0,66 contre 0,76) et rend la tâche de l'expert plus difficile (précision « twin » 0,58 contre 0,72). L'ACC de la politique ne change pas (0,38 contre 0,41, dans la dispersion).
+* Conclusion partielle : pour ce sens de variation (banque plus forte) l'hypothèse 3 n'est pas soutenue. Une banque **plus faible** n'a pas été testée.
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.
