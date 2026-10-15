@@ -1,0 +1,20 @@
+# Two ways to give the reward a real "open a new cluster" signal (docs/protocol-decisions.md, 5.9 and 5.10), 5 seeds, 100 epochs,
+# same setting as toy_dynamics `ref` (`ref` is the same run as in toy_formation / toy_stale / toy_teacher):
+#   floor_rho   rho = 0.1 (anti-collapse entropy term) + neg_floor = 0.1: L_neg keeps at least 0.1 * the plain repulsion per
+#               view, so its gradient never vanishes in the dead zone of the debiased term
+#   orbits5     5 orbits per expert episode instead of 3: the expert opens with up to 4 occupied slots
+#
+#   python scripts/run_suite.py configs/suites/toy_open.yml --cpu-count 2 --skip-existing
+name: toy_open
+description: toy data, 100 epochs, rho + repulsion floor, and 5 orbits per expert episode, 5 seeds
+seeds: [4, 3, 2, 1, 0]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  fixed_epochs: 100
+experiments:
+  - {name: ref}
+  - {name: floor_rho, set: {rho: 0.1, neg_floor: 0.1}}
+  - {name: orbits5, set: {orbits_per_episode: 5}}

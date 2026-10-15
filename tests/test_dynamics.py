@@ -407,3 +407,31 @@ def test_free_debias_scale_is_validated_and_runs():
         _tiny(free_debias_scale=1.5)
     tr, _ = _tiny(free_debias_scale=0.0)
     assert len(tr.fit(2, log_fn=lambda r: False)) == 2
+
+
+# ---- neg_floor: a minimal share of the plain repulsion is always kept -------------------------------------------
+def test_neg_floor_zero_is_the_old_loss_and_a_floor_restores_the_gradient_in_the_dead_zone():
+    from cibirl import losses as L
+    s, empty, slot, first, neg = _expert_inputs()
+    assert torch.equal(L.expert_loss(s, empty, slot, first, neg, 0.2).loss,
+                       L.expert_loss(s, empty, slot, first, neg, 0.2, neg_floor=0.0).loss)
+    sharp = s.clone()
+    for e in range(sharp.shape[0]):
+        for t in (1, 3, 5):
+            sharp[e, t, slot[e, t]] += 12.0                                    # confident twins: large l+
+    def free_grad(floor):
+        x = sharp.clone().requires_grad_(True)
+        L.expert_loss(x, empty, slot, first, neg, 0.2, neg_floor=floor).loss.backward()
+        return x.grad[:, [2, 4]].abs().sum()                                  # free moves with something to repel
+    assert free_grad(0.1) > free_grad(0.0)
+    # the floor never makes the loss smaller than the debiased one
+    a = L.expert_loss(s, empty, slot, first, neg, 0.2).l_neg
+    b = L.expert_loss(s, empty, slot, first, neg, 0.2, neg_floor=0.1).l_neg
+    assert b >= a - 1e-7
+
+
+def test_neg_floor_is_validated():
+    with pytest.raises(ValueError):
+        _tiny(neg_floor=-0.1)
+    tr, _ = _tiny(neg_floor=0.1, rho=0.1)
+    assert len(tr.fit(2, log_fn=lambda r: False)) == 2

@@ -83,6 +83,8 @@ class TrainConfig:
                                      # the end of each of them (the policy trains, the next epoch starts empty). 0 = never.
     free_debias_scale: float = 1.0   # multiplies tau+ in the debiased repulsion L_neg on FREE moves (the first view of an
                                      # orbit): 1 = as in the README, 0 = no correction there (losses.expert_loss).
+    neg_floor: float = 0.0           # eps: L_neg keeps at least eps * (plain repulsion) per view, so that its gradient never
+                                     # vanishes (the debiased term alone has a dead zone). 0 = as in the README.
     repr_lr_scale: float = 0.0       # 0 = frozen (weights and BatchNorm statistics: m no longer moves), 0.1 = slowed
 
     # compression and invariance
@@ -231,8 +233,8 @@ class Trainer:
             raise ValueError("oracle_warm_memory, burn_in_epochs must be >= 0 and burn_in_fraction in (0, 1]")
         if cfg.policy_teacher_iters < 0 or cfg.memory_discard_epochs < 0:
             raise ValueError("policy_teacher_iters and memory_discard_epochs must be >= 0")
-        if not 0.0 <= cfg.free_debias_scale <= 1.0:
-            raise ValueError("free_debias_scale must be in [0, 1]")
+        if not 0.0 <= cfg.free_debias_scale <= 1.0 or not 0.0 <= cfg.neg_floor <= 1.0:
+            raise ValueError("free_debias_scale and neg_floor must be in [0, 1]")
         if cfg.recompute_every < 0 or cfg.freeze_repr_after < 0 or not 0.0 <= cfg.repr_lr_scale <= 1.0:
             raise ValueError("recompute_every, freeze_repr_after must be >= 0 and repr_lr_scale in [0, 1]")
         oracle_on = cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0
@@ -376,7 +378,7 @@ class Trainer:
             m_state = self.intent.mean(enc.z)
         summ, empty = expert_memory_states(m_state.view(E, T, -1), eb.slot, K)
         scores = self.reward(enc.z, m_state, summ.reshape(E * T, K, -1), empty.reshape(E * T, K)).view(E, T, K)
-        exp = L.expert_loss(scores, empty, eb.slot, eb.is_first, eb.neg_mask, self.tau, cfg.rho, cfg.free_debias_scale)
+        exp = L.expert_loss(scores, empty, eb.slot, eb.is_first, eb.neg_mask, self.tau, cfg.rho, cfg.free_debias_scale, cfg.neg_floor)
 
         kl = L.kl_standard_normal(enc.mu, enc.logvar)
         loss = l_psi + exp.loss + self._beta() * kl

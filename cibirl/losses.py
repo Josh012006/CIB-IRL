@@ -76,7 +76,8 @@ class ExpertLossOut:
 
 
 def expert_loss(scores: Tensor, empty: Tensor, slot: Tensor, is_first: Tensor, neg_mask: Tensor,
-                tau_plus: float, rho: float = 0.0, free_debias: float = 1.0) -> ExpertLossOut:
+                tau_plus: float, rho: float = 0.0, free_debias: float = 1.0,
+                neg_floor: float = 0.0) -> ExpertLossOut:
     """Maximum-likelihood IRL of the expert's relational decisions under q_theta = softmax(R_theta).
 
     scores [E, T, K]  raw rewards R_theta(s^E_t, a)
@@ -90,6 +91,8 @@ def expert_loss(scores: Tensor, empty: Tensor, slot: Tensor, is_first: Tensor, n
     free_debias multiplies tau+ on the FREE moves only (1 = as above; 0 = plain repulsion -log(1-q) there, no
     correction): the correction cancels the repulsion as soon as q(wrong slot) < 1 - exp(-tau+ * l+), see
     docs/protocol-decisions.md 5.9.
+    neg_floor = eps > 0 replaces the corrected term by max{ corrected, eps * E_v l(u,v) }: a share eps of the plain
+    repulsion is always kept, so the gradient never vanishes (a constant added to the loss would give no gradient).
     """
     E, T, K = scores.shape
     valid = valid_slot_mask(empty)
@@ -118,6 +121,8 @@ def expert_loss(scores: Tensor, empty: Tensor, slot: Tensor, is_first: Tensor, n
     else:
         tau = torch.where(forced, torch.full_like(ell_plus, tau_plus), torch.full_like(ell_plus, tau_plus * free_debias))
         per_view = ((mean_ell - tau * ell_plus) / (1.0 - tau)).clamp(min=0.0)
+    if neg_floor > 0:
+        per_view = torch.maximum(per_view, neg_floor * mean_ell)
     l_neg = per_view[has_neg].mean() if has_neg.any() else scores.sum() * 0.0
 
     # --- optional anti-collapse safeguard (rho = 0 by default) -------------------------------------

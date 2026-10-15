@@ -212,5 +212,22 @@ Suite proposée : `configs/suites/toy_teacher.yml` (5 graines, 100 epochs : réf
 * Mais le taux de formation pure ne change pas de façon distinguable (38 % contre 31 %, écart du même ordre que le bruit à ce nombre de reprises), et la reward n'ouvre toujours que dans environ la moitié des cas. La zone morte est donc un facteur réel mais pas la cause suffisante. Comparaison : la phase « professeur » de 5.8 donne 73 %.
 * Piste suivante, non testée : les épisodes experts n'exposent jamais plus de 2 slots occupés au moment d'ouvrir (3 orbites), alors que la politique doit ouvrir avec 4 slots occupés ; combiner `free_debias_scale=0` avec plus d'orbites par épisode (`orbits_per_episode`), ou ajouter un terme positif pour ouvrir.
 
+### 5.10 Deux tests : plancher de répulsion avec $\rho$, et 5 orbites par épisode expert
+Protocole de 5.9 : option appliquée dès l'epoch 0, 10 epochs, sonde de la reward, copie, 6 reprises de 8 epochs par graine (8 graines), seul le hasard change. Références : 20/64 reprises pures à l'epoch 17 (31 %), ACC finale moyenne 0,78, $q(\text{ouvrir})$ quand une classe manque = 0,38.
+
+* **Test 1, `rho=0,1` + `neg_floor=0,1`.** Une constante ajoutée à $L_{neg}$ n'a pas de gradient ; le plancher est donc placé à l'intérieur du max : $L_{neg}(u)=\max\{\frac{\bar\ell(u)-\tau^+\ell^+}{1-\tau^+},\ \varepsilon\,\bar\ell(u)\}$ avec $\varepsilon=0{,}1$, où $\bar\ell(u)$ est la répulsion moyenne non corrigée ($\ell(u,v)=-\log(1-q(k(v)))$ moyenné sur les vues $v$ d'autres orbites). Ainsi une part $\varepsilon$ de la répulsion simple subsiste toujours, y compris dans la zone morte.
+* **Test 2, `orbits_per_episode=5`** (au lieu de 3) : l'expert ouvre avec jusqu'à 4 slots occupés.
+
+| | référence | test 1 | test 2 |
+|---|---|---|---|
+| reprises pures à l'epoch 17 | 20/64 (31 %) | 14/48 (29 %) | 4/48 (8 %) |
+| ACC finale moyenne | 0,78 | 0,80 | 0,73 |
+| $q(\text{ouvrir})$ si une classe manque (epoch 9) | 0,38 | 0,42 | 0,79 |
+
+* **Test 1 : aucun effet** sur la formation (29 % contre 31 %, ACC 0,80 contre 0,78) ni sur la sonde de la reward (0,42 contre 0,38). Le plancher et $\rho$ ne suffisent pas à changer le comportement.
+* **Test 2 : la reward apprend bien à ouvrir** (0,79 contre 0,38, en hausse dans les 8 graines, de 0,70 à 0,90), ce qui soutient l'hypothèse que le manque d'exemples d'ouverture avec plusieurs slots occupés (au plus 2 avec 3 orbites) contribue au défaut mesuré en 5.9 ; **mais la formation est moins bonne** (8 % de reprises pures, ACC 0,73). Les partitions obtenues sont toujours fausses des deux manières : graine 2, deux classes fusionnées dans un cluster alors qu'un cluster reste vide ; graine 7, une classe coupée en deux clusters (130 + 170) et deux autres fusionnées. Ouvrir plus souvent n'a donc pas supprimé les fusions et a ajouté des coupures ; avec 5 orbites sur 5 classes, la probabilité que deux orbites d'un épisode soient de la même classe est plus forte (plus de faux négatifs côté expert), ce qui peut expliquer une partie des coupures (non testé).
+* Aucun run de 100 epochs n'a été lancé pour ces deux variantes (la formation, première condition de la stabilité, n'est pas meilleure) ; la suite `configs/suites/toy_open.yml` est prête si l'on veut tout de même mesurer la stabilité.
+* Bilan de 5.8 à 5.10 : la phase « professeur » de la politique (73 %) reste la seule intervention qui améliore nettement la formation ; les corrections de la reward ($s=0$, plancher, 5 orbites) améliorent la sonde de la reward (surtout 5 orbites) sans améliorer la formation.
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.
