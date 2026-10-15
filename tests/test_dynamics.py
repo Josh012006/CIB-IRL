@@ -455,3 +455,66 @@ def test_psi_fixed_logvar_default_and_effect():
     lv = torch.full_like(mu, -2.0)
     expect = 0.5 * (3 * -2.0 + (tgt - mu).pow(2).sum(-1) / math.exp(-2.0)).mean()
     assert torch.allclose(L.intent_nll(mu, lv, tgt), expect)
+
+
+# ---- decorrelation of the intent (docs/protocol-decisions.md 5.15) --------------------------------------
+def test_batch_whiten_gives_identity_covariance_and_consistent_running_stats():
+    from cibirl.intent import BatchWhiten
+    g = torch.Generator().manual_seed(0)
+    mix = torch.randn(4, 4, generator=g)
+    x = torch.randn(3000, 4, generator=g) @ mix + 5.0                    # correlated, shifted, scaled
+    w = BatchWhiten(4, momentum=1.0)                                      # momentum 1: the running stats are the last batch's
+    y = w(x)
+    cov = y.T @ y / (len(y) - 1)
+    assert torch.allclose(cov, torch.eye(4), atol=2e-3) and y.mean(0).abs().max() < 1e-4
+    w.eval()
+    assert torch.allclose(w(x), y, atol=1e-4)                             # eval mode = running statistics = same transform
+
+
+def test_batch_whiten_survives_a_rank_one_input_and_keeps_gradients_finite():
+    from cibirl.intent import BatchWhiten
+    g = torch.Generator().manual_seed(1)
+    base = torch.randn(300, 1, generator=g)
+    x = (base @ torch.ones(1, 8) + 1e-3 * torch.randn(300, 8, generator=g)).requires_grad_()
+    y = BatchWhiten(8)(x)
+    y.pow(2).sum().backward()
+    assert torch.isfinite(y).all() and torch.isfinite(x.grad).all()
+
+
+def test_intent_mean_uses_the_running_whitening():
+    from cibirl.intent import IntentPredictor
+    torch.manual_seed(0)
+    ip = IntentPredictor(6, m_dim=4, hidden=16, whiten=True)
+    z = torch.randn(200, 6)
+    for _ in range(60):
+        ip(z)                                                             # train mode: running statistics converge
+    ip.eval()
+    mu_eval, _ = ip(z)
+    assert torch.allclose(ip.mean(z), mu_eval, atol=1e-5)
+
+
+def test_offdiag_covariance_penalty():
+    from cibirl import losses as L
+    base = torch.randn(500, 1)
+    copies = (base - base.mean()) / base.std() * torch.ones(1, 6)
+    assert abs(float(L.offdiag_covariance_penalty(copies)) - 5.0) < 1e-3      # all 6 dimensions copies: d - 1
+    g = torch.Generator().manual_seed(0)
+    raw = torch.randn(500, 6, generator=g)
+    q, _ = torch.linalg.qr(raw - raw.mean(0))                                  # centred columns, exactly orthogonal
+    assert float(L.offdiag_covariance_penalty(q * math.sqrt(499))) < 1e-8
+
+
+def test_intent_decorrelate_option_validation_and_logging():
+    assert TrainConfig().intent_decorrelate == "none"
+    with pytest.raises(ValueError, match="intent_decorrelate"):
+        _tiny(intent_decorrelate="pca")
+    with pytest.raises(ValueError, match="intent_cov_weight"):
+        _tiny(intent_decorrelate="cov", intent_cov_weight=-1.0)
+    from cibirl.intent import BatchWhiten
+    tr, _ = _tiny(intent_decorrelate="whiten")
+    assert isinstance(tr.intent.norm, BatchWhiten)
+    tr, _ = _tiny(intent_decorrelate="cov")
+    stats = tr.train_iteration(torch.arange(32))
+    assert stats["L_cov"] > 0
+    tr, _ = _tiny()
+    assert tr.train_iteration(torch.arange(32))["L_cov"] == 0.0

@@ -49,6 +49,17 @@ def intent_nll(mu: Tensor, logvar: Tensor, target: Tensor) -> Tensor:
     return 0.5 * (logvar + (target - mu).pow(2) / logvar.exp()).sum(-1).mean()
 
 
+def offdiag_covariance_penalty(m: Tensor) -> Tensor:
+    """Sum of the squared off-diagonal entries of the covariance of m over the batch, divided by the number of
+    dimensions (the covariance term of VICReg). 0 when the dimensions are decorrelated; (d - 1) when all d dimensions
+    are copies of one standardized variable. m [N, d]."""
+    d = m.shape[1]
+    mc = m - m.mean(0, keepdim=True)
+    cov = mc.T @ mc / max(m.shape[0] - 1, 1)
+    off = cov - torch.diag(torch.diag(cov))
+    return off.pow(2).sum() / d
+
+
 # --------------------------------------------------------------------------------------------------
 # Reward: expert likelihood  L_theta = L_pos + L_neg - rho * H(marginal)
 # --------------------------------------------------------------------------------------------------

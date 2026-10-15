@@ -85,6 +85,11 @@ class TrainConfig:
                                      # orbit): 1 = as in the README, 0 = no correction there (losses.expert_loss).
     neg_floor: float = 0.0           # eps: L_neg keeps at least eps * (plain repulsion) per view, so that its gradient never
                                      # vanishes (the debiased term alone has a dead zone). 0 = as in the README.
+    intent_decorrelate: str = "none"  # how the dimensions of the intent m are kept from collapsing onto one direction (the
+                                     # BatchNorm only gives each a variance of 1, they may all be copies): "none" = as in the
+                                     # README; "whiten" = Cholesky whitening of the batch instead of the BatchNorm; "cov" = the
+                                     # BatchNorm plus the off-diagonal covariance penalty, weighted by `intent_cov_weight`.
+    intent_cov_weight: float = 10.0  # weight of that penalty (only with intent_decorrelate = "cov")
     psi_fixed_logvar: Optional[float] = None   # DIAGNOSTIC: if set, L_psi uses this constant log sigma^2 instead of the one the
                                      # intent predicts (so L_psi is a squared error, and nothing rewards a variance that goes
                                      # to its floor). None = as in the README (predicted variance).
@@ -240,6 +245,8 @@ class Trainer:
             raise ValueError("free_debias_scale and neg_floor must be in [0, 1]")
         if cfg.recompute_every < 0 or cfg.freeze_repr_after < 0 or not 0.0 <= cfg.repr_lr_scale <= 1.0:
             raise ValueError("recompute_every, freeze_repr_after must be >= 0 and repr_lr_scale in [0, 1]")
+        if cfg.intent_decorrelate not in ("none", "whiten", "cov") or cfg.intent_cov_weight < 0:
+            raise ValueError("intent_decorrelate must be none, whiten or cov, and intent_cov_weight >= 0")
         oracle_on = cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0
         if oracle_on and oracle_labels is None:
             raise ValueError("expert_oracle_link / oracle_warm_memory are oracle diagnostics: pass oracle_labels "
@@ -263,7 +270,8 @@ class Trainer:
         # networks
         dev = self.device
         self.encoder = build_encoder("small_cnn", cfg.z_dim, cfg.in_channels, cfg.image_size).to(dev)
-        self.intent = IntentPredictor(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.intent_standardize).to(dev)
+        self.intent = IntentPredictor(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.intent_standardize,
+                                     whiten=cfg.intent_decorrelate == "whiten").to(dev)
         self.reward = RewardModel(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.rel_dim, cfg.use_z).to(dev)
         self.policy = PolicyNet(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.rel_dim, cfg.use_z,
                                 temperature=cfg.policy_temperature).to(dev)
@@ -387,6 +395,10 @@ class Trainer:
 
         kl = L.kl_standard_normal(enc.mu, enc.logvar)
         loss = l_psi + exp.loss + self._beta() * kl
+        l_cov = torch.zeros((), device=self.device)
+        if cfg.intent_decorrelate == "cov":
+            l_cov = L.offdiag_covariance_penalty(mu_psi)
+            loss = loss + cfg.intent_cov_weight * l_cov
         l_inv = torch.zeros((), device=self.device)
         if roll is not None and cfg.lam > 0:
             l_inv = self._invariance(roll)
@@ -395,6 +407,7 @@ class Trainer:
         self._clip_step(self.opt_reward, self.reward_params, loss)
         return {"L_psi": float(l_psi.detach()), "L_pos": float(exp.l_pos), "L_neg": float(exp.l_neg),
                 "twin_acc": float(exp.twin_acc), "KL": float(kl.detach()), "L_inv": float(l_inv.detach()),
+                "L_cov": float(l_cov.detach()),
                 "m_std": float(m_state.std(0).mean())}
 
     # ---------------------------------------------------------------------------------------------

@@ -310,5 +310,29 @@ Trois variantes, appliquées dès l'epoch 0, sondées par `scripts/probe_represe
 * La variance fixe **améliore $z$ et $m$** (kNN sur $z$ 0,85 contre 0,76 ; sur $m$ 0,71 contre 0,62, soit le niveau de l'encodeur aléatoire à l'epoch 0) et divise la KL par dix : la variance apprise poussait l'encodeur à porter beaucoup de bits pour rendre les vues cohérentes. **Elle ne change ni le rang 1 de $m$ ni l'ACC de la politique** (0,42 contre 0,41).
 * Conclusion partielle : la variance apprise de $L_\psi$ dégrade la représentation, mais le goulot qui borne la clusterisation est le rang 1 de $m$ ; avec une seule direction, la distinction la plus simple et la plus invariante (le 1 contre le reste) l'emporte. Piste non testée : imposer des dimensions décorrélées (blanchiment ou pénalité de covariance à la place de la seule standardisation par dimension).
 
+### 5.16 MNIST : décorréler les dimensions de $m$ (2026-10-15)
+Cause visée : en 5.15, $m$ est de rang 1 (la standardisation par BatchNorm donne à chaque dimension une variance 1, mais elles peuvent toutes être des copies d'une même variable). Deux options (`intent_decorrelate`, défaut `none` = comme le README ; toutes deux des choix d'implémentation hors README, comme le BatchNorm lui-même) :
+
+* `cov` : BatchNorm conservé, plus la pénalité $\lambda_{\text{cov}}\,\frac{1}{d}\sum_{i\neq j} C_{ij}^2$ sur $m$, où $C$ est la covariance de $m$ sur le batch, $d=16$ le nombre de dimensions et $\lambda_{\text{cov}}=10$ (`intent_cov_weight`, une seule valeur, non ajustée). Elle vaut $d-1$ si toutes les dimensions sont des copies, 0 si elles sont décorrélées.
+* `whiten` : blanchiment de Cholesky du batch à la place du BatchNorm (statistiques courantes à l'inférence).
+
+Chacune seule et avec la variance fixe de 5.15 ; 3 graines, epochs 0 à 19, dossiers `results/mnist_digits/probe_dec_*/` ; moyenne [min–max].
+
+| epoch 19 | kNN(10) sur $m$ | k-means sur $m$ | kNN(10) sur $z$ | rapport de participation de $m$ | jumeau retrouvé par $m$ | précision « twin » | ACC de la politique |
+|---|---|---|---|---|---|---|---|
+| référence | 0,62 [0,60–0,65] | 0,29 | 0,76 | 1,0 | 4 % | 0,72 | 0,41 [0,37–0,44] |
+| variance fixe (5.15) | 0,71 | 0,37 | 0,85 | 1,0 | 5 % | 0,70 | 0,42 |
+| **`cov`** | **0,98 [0,98–0,98]** | **0,95 [0,93–0,97]** | **0,98** | **13,6 [12,9–14,4]** | **51 %** | **0,98** | **0,80 [0,71–0,92]** |
+| `cov` + variance fixe | 0,95 [0,95–0,96] | 0,70 [0,60–0,79] | 0,96 | 14,8 | 22 % | 0,91 | 0,61 [0,45–0,83] |
+| `whiten` | 0,41 [0,39–0,42] | 0,41 | 0,71 | 1,4 [1,0–2,3] | 1 % | 0,58 [0,21–0,77] | 0,38 [0,33–0,42] |
+| `whiten` + variance fixe | 0,55 [0,50–0,59] | 0,36 | 0,72 | 5,1 [4,1–6,4] | 3 % | 0,28 | 0,30 [0,25–0,39] |
+
+(Pixels : kNN 0,93, k-means 0,67–0,76. À l'epoch 9, `cov` : kNN sur $m$ 0,96, ACC 0,61 [0,58–0,64].)
+
+* **La pénalité de covariance seule lève le goulot** : le rang de $m$ passe de 1 à environ 14 sur 16, $m$ et $z$ séparent presque parfaitement les chiffres (kNN 0,98, au-dessus des pixels à 0,93) et l'ACC de la politique à l'epoch 19 passe de 0,41 à 0,80 (une graine à 0,92, une à 0,71). La cause du rang 1 de 5.15 est donc soutenue de façon causale par ce test.
+* **Avec la variance fixe en plus, c'est moins bon** que la pénalité seule (ACC 0,61, jumeau retrouvé 22 % contre 51 %) : sans le terme de variance appris, la cohérence des vues est moins fortement imposée.
+* **Le blanchiment de Cholesky échoue** (rang 1,4 à 5, précision « twin » instable de 0,21 à 0,77) : il ne remplace pas la pénalité (pas étudié plus loin : $\varepsilon=10^{-4}$ de régularisation, un seul réglage).
+* Limites : 20 epochs, 3 graines, une seule valeur de $\lambda_{\text{cov}}$, un seul jeu de données ; rien n'est encore dit de la convergence ni de la stabilité (run complet lancé, section suivante).
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.

@@ -1,0 +1,16 @@
+# MNIST digits 1 to 6 with the intent kept from collapsing onto one direction (docs/protocol-decisions.md 5.15 and 5.16):
+# intent_decorrelate = cov, i.e. the off-diagonal covariance penalty on m (weight 10, not tuned). Same data, bank, seeds and
+# stopping rule as mnist_digits.yml (convergence by the label-free rule, 200 epochs at most), so that the two are comparable.
+#
+#   python scripts/run_suite.py configs/suites/mnist_digits_cov.yml --cpu-count 3
+name: mnist_digits_cov
+description: MNIST digits 1-6, 3 seeds, convergence or 200 epochs, with the covariance penalty on the intent
+seeds: [0, 1, 2]
+common:
+  data: mnist
+  data_params: {digits: [1, 2, 3, 4, 5, 6], n_per_class: 300}
+  transform: digits
+  configs: [configs/mnist.yml]
+  stop: {max_epochs: 200, min_epochs: 40}
+experiments:
+  - {name: digits_cov, set: {intent_decorrelate: cov}}
