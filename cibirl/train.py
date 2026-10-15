@@ -85,6 +85,9 @@ class TrainConfig:
                                      # orbit): 1 = as in the README, 0 = no correction there (losses.expert_loss).
     neg_floor: float = 0.0           # eps: L_neg keeps at least eps * (plain repulsion) per view, so that its gradient never
                                      # vanishes (the debiased term alone has a dead zone). 0 = as in the README.
+    psi_fixed_logvar: Optional[float] = None   # DIAGNOSTIC: if set, L_psi uses this constant log sigma^2 instead of the one the
+                                     # intent predicts (so L_psi is a squared error, and nothing rewards a variance that goes
+                                     # to its floor). None = as in the README (predicted variance).
     repr_lr_scale: float = 0.0       # 0 = frozen (weights and BatchNorm statistics: m no longer moves), 0.1 = slowed
 
     # compression and invariance
@@ -370,6 +373,8 @@ class Trainer:
         # intent: L_psi  (psi's own forward, batch statistics)
         mu_psi, lv_psi = self.intent(enc.z)
         m_star = L.orbit_intent_target(mu_psi.view(E, T, -1), eb.orbit)
+        if cfg.psi_fixed_logvar is not None:
+            lv_psi = torch.full_like(lv_psi, cfg.psi_fixed_logvar)
         l_psi = L.intent_nll(mu_psi, lv_psi, m_star.reshape(E * T, -1))
 
         # the reward reads the intent as a CONSTANT: psi gets nothing from L_theta, and the expert's

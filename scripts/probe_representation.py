@@ -8,6 +8,12 @@ epochs, measures:
     kmeans_m              ACC of k-means (k = number of classes) on m
     twin_retrieval_m      share of images whose view A has the view B of the SAME image as nearest neighbour in m
     nn_view_same_class    share of images whose view A has a view B of the same CLASS as nearest neighbour in m
+    intent_logvar_mean, intent_logvar_floor   mean predicted log sigma^2 of the intent over the images, and the share of
+                          (image, dimension) pairs stuck at the floor of the clamp (-6)
+    *_expert, *_other     twin_retrieval_m and knn_m restricted to the images of the expert portion D_E (those the experts
+                          are made of) and to as many images drawn from the others: a gap means memorisation of D_E
+    m_top1_share, m_participation   share of the variance of m carried by its first principal component, and the participation
+                          ratio of the spectrum (1 = m is a single direction, 16 = all directions equally used)
     acc_policy            ACC of the clusters the policy forms (argmax, memory frozen); meaningless before the learner acts
     twin_acc_reward, KL, L_psi   the training statistics of the epoch
 
@@ -29,6 +35,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import datasets                                                     # noqa: E402
 from cibirl import transforms                                       # noqa: E402
+from cibirl.intent import LOGVAR_MIN                                # noqa: E402
 from cibirl.train import TrainConfig, Trainer                       # noqa: E402
 from eval.metrics import cluster_acc                                # noqa: E402
 
@@ -63,6 +70,8 @@ def main(argv=None) -> None:
     y = data.labels.numpy()
     yt, n_cls, n = data.labels, int(data.labels.max()) + 1, len(y)
     tr = Trainer(cfg, data.images, bank, device="cpu", eval_labels=data.labels)
+    from cibirl.experts import split_expert_portion
+    expert_ids = split_expert_portion(len(y), cfg.expert_fraction, cfg.seed)
     print(f"kNN(10) accuracy of the pixels: {knn_accuracy(data.images.flatten(1), y, n_cls):.3f}", flush=True)
     out_dir = Path(args.out_root) if Path(args.out_root).is_absolute() else ROOT / args.out_root
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -80,12 +89,27 @@ def main(argv=None) -> None:
                 m = tr.intent.mean(z)
                 ma, mb = tr.intent.mean(enc(bank(data.images))), tr.intent.mean(enc(bank(data.images)))
                 top = torch.cdist(ma, mb).argmin(1)
+                ev = torch.linalg.svdvals(m - m.mean(0)).pow(2)
+                ev = ev / ev.sum()
+                lv = tr.intent.head_logvar(tr.intent.trunk(z)).clamp(LOGVAR_MIN, 2.0)
+                exp_ids = tr.experts.image_ids.unique() if hasattr(tr.experts, "image_ids") else expert_ids
+                oth = torch.tensor(sorted(set(range(n)) - set(exp_ids.tolist())))
+                oth = oth[torch.randperm(len(oth))[:len(exp_ids)]]
+
+                def sub(ids):
+                    t = torch.cdist(ma[ids], mb[ids]).argmin(1)
+                    return (float((t == torch.arange(len(ids))).float().mean()), knn_accuracy(m[ids], y[ids.numpy()], n_cls))
+
+                (tw_e, kn_e), (tw_o, kn_o) = sub(exp_ids), sub(oth)
                 res = {"epoch": e, "twin_acc_reward": row["twin_acc"], "KL": row["KL"], "L_psi": row.get("L_psi"),
                        "acc_policy": cluster_acc(tr.predict().numpy(), y, cfg.num_slots),
                        "knn_z": knn_accuracy(z, y, n_cls), "knn_m": knn_accuracy(m, y, n_cls),
                        "kmeans_m": cluster_acc(KMeans(n_cls, n_init=5, random_state=0).fit_predict(m.numpy()), y, n_cls),
                        "twin_retrieval_m": float((top == torch.arange(n)).float().mean()),
-                       "nn_view_same_class": float((yt[top] == yt).float().mean())}
+                       "nn_view_same_class": float((yt[top] == yt).float().mean()),
+                       "m_top1_share": float(ev[0]), "m_participation": float(1 / ev.pow(2).sum()),
+                       "intent_logvar_mean": float(lv.mean()), "intent_logvar_floor": float((lv <= LOGVAR_MIN + 1e-3).float().mean()),
+                       "twin_retrieval_m_expert": tw_e, "twin_retrieval_m_other": tw_o, "knn_m_expert": kn_e, "knn_m_other": kn_o}
             out.write(json.dumps(res) + "\n")
             out.flush()
             print(json.dumps({k: round(v, 3) if isinstance(v, float) else v for k, v in res.items()}), flush=True)

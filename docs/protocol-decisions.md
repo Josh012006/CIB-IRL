@@ -293,5 +293,22 @@ Trois variantes, appliquées dès l'epoch 0, sondées par `scripts/probe_represe
 * **Une banque plus forte dégrade $m$ et $z$ au lieu de les améliorer** (kNN sur $m$ 0,56 contre 0,62 ; sur $z$ 0,66 contre 0,76) et rend la tâche de l'expert plus difficile (précision « twin » 0,58 contre 0,72). L'ACC de la politique ne change pas (0,38 contre 0,41, dans la dispersion).
 * Conclusion partielle : pour ce sens de variation (banque plus forte) l'hypothèse 3 n'est pas soutenue. Une banque **plus faible** n'a pas été testée.
 
+### 5.15 MNIST : l'intention $m$ est de rang 1, variance fixe de $L_\psi$ (2026-10-15)
+**Sonde étendue** (`scripts/probe_representation.py`, 3 graines, epochs 0 à 29, `results/mnist_digits/probe_intent/`) :
+
+* **$m$ est de rang 1 dès l'epoch 2** : le premier axe principal de $m$ porte 99,4 à 99,5 % de la variance à l'epoch 2 et 99,9 à 100 % à partir de l'epoch 9 (rapport de participation 1,00 ; déjà 93 à 96 % à l'epoch 0, avec un encodeur presque aléatoire). Les 16 dimensions sont des copies d'une même variable : la contrainte « variance 1 par dimension » du BatchNorm est satisfaite sans rien porter de plus. À l'epoch 200, $m$ est quasi binaire : ≈ 290 images (le chiffre 1) d'un côté, ≈ 1500 de l'autre, ce qui explique pourquoi seul le 1 est isolé dans 5.11. **Les runs du jouet ont aussi un $m$ de rang 1** (`ref_seed0` à `4`, rapport de participation 1,00) : un axe unique suffit à porter 5 classes qui valent chacune une valeur ; ce n'est donc pas une différence jouet / MNIST, mais une limite qui devient bloquante dès que les classes ont une variabilité interne.
+* **La variance prédite par l'intention atteint son plancher** ($\log\sigma^2=-6$) : part des paires (image, dimension) au plancher 0 % à l'epoch 2, 0 à 67 % à l'epoch 9, 66 à 84 % à l'epoch 19, 83 à 95 % à l'epoch 29 (selon la graine). $L_\psi$ vaut alors ≈ $-40$ à $-45$ (minimum $-48$) : le terme $\log\sigma^2$ domine. La cohérence des vues est réelle (erreur RMS par dimension entre deux vues 0,002 à 0,023 à l'epoch 200, pour un écart-type 1,0 entre images) ; en entraînement comme en inférence, la statistique de batch ou la statistique courante du BatchNorm donne les mêmes chiffres.
+* **Pas de mémorisation des images d'expert** : $m$ vaut autant sur les 30 % d'images qui fabriquent les experts que sur autant d'images tirées parmi les autres (écart moyen sur les epochs ≥ 4 : kNN $-0{,}001$, jumeau retrouvé $0{,}000$, écart-type 0,02).
+
+**Test « variance fixe »** (`psi_fixed_logvar=0.0` : $L_\psi=\tfrac12\sum_j (m^*_j-\mu_j)^2$ au lieu du terme avec variance prédite ; option de diagnostic, `None` par défaut ; 3 graines, `results/mnist_digits/probe_psi_fixed/`), moyenne [min–max] :
+
+| epoch 19 | kNN(10) sur $m$ | k-means sur $m$ | kNN(10) sur $z$ | premier axe de $m$ | KL | ACC de la politique |
+|---|---|---|---|---|---|---|
+| référence | 0,62 [0,60–0,65] | 0,29 | 0,76 | 100 % | 936 | 0,41 [0,37–0,44] |
+| variance fixe | 0,71 [0,69–0,73] | 0,37 | 0,85 | 100 % | 94 | 0,42 [0,41–0,43] |
+
+* La variance fixe **améliore $z$ et $m$** (kNN sur $z$ 0,85 contre 0,76 ; sur $m$ 0,71 contre 0,62, soit le niveau de l'encodeur aléatoire à l'epoch 0) et divise la KL par dix : la variance apprise poussait l'encodeur à porter beaucoup de bits pour rendre les vues cohérentes. **Elle ne change ni le rang 1 de $m$ ni l'ACC de la politique** (0,42 contre 0,41).
+* Conclusion partielle : la variance apprise de $L_\psi$ dégrade la représentation, mais le goulot qui borne la clusterisation est le rang 1 de $m$ ; avec une seule direction, la distinction la plus simple et la plus invariante (le 1 contre le reste) l'emporte. Piste non testée : imposer des dimensions décorrélées (blanchiment ou pénalité de covariance à la place de la seule standardisation par dimension).
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.

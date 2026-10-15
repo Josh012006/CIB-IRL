@@ -1,4 +1,5 @@
 """Knobs on the assignment dynamics: policy_temperature and consolidate. Run: python -m pytest tests/test_dynamics.py"""
+import math
 import sys
 from pathlib import Path
 
@@ -435,3 +436,22 @@ def test_neg_floor_is_validated():
         _tiny(neg_floor=-0.1)
     tr, _ = _tiny(neg_floor=0.1, rho=0.1)
     assert len(tr.fit(2, log_fn=lambda r: False)) == 2
+
+
+def test_psi_fixed_logvar_default_and_effect():
+    assert TrainConfig().psi_fixed_logvar is None
+    for fixed, moves in ((None, True), (-2.0, False)):
+        torch.manual_seed(0)
+        tr, _ = _tiny(psi_fixed_logvar=fixed)
+        before = tr.intent.head_logvar.weight.detach().clone()
+        for _ in range(2):
+            stats = tr.train_iteration(torch.arange(32))
+        changed = not torch.equal(before, tr.intent.head_logvar.weight.detach())
+        assert changed == moves, (fixed, changed)          # with a fixed variance the intent's variance head gets no gradient
+        assert stats["L_psi"] == stats["L_psi"]            # finite
+    # L_psi with a constant variance is the constant term plus the squared error divided by the variance
+    from cibirl import losses as L
+    mu, tgt = torch.randn(5, 3), torch.randn(5, 3)
+    lv = torch.full_like(mu, -2.0)
+    expect = 0.5 * (3 * -2.0 + (tgt - mu).pow(2).sum(-1) / math.exp(-2.0)).mean()
+    assert torch.allclose(L.intent_nll(mu, lv, tgt), expect)
