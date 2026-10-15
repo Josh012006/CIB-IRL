@@ -246,5 +246,15 @@ Pour savoir si l'échec du jouet (fusions de classes) se reproduit sur des class
 * La précision « twin » de la reward est ≈ 0,7 au départ, puis baisse à 0,4–0,5 sur les graines 1 et 2 (reste ≈ 0,7 sur la graine 0) ; la KL passe d'environ 900 à 170–540.
 * Non testé (hypothèses) : compression trop forte ($\beta$), tâche de l'expert trop difficile avec $B=5$ (avec 6 classes, deux orbites d'un épisode sont de la même classe dans ≈ 91 % des cas mais comptées comme différentes), banque de transformations. Un seul réglage a été essayé, sans ajustement.
 
+### 5.12 MNIST : où se perd l'information (sonde de $z$ et de $m$ au cours de l'entraînement, 2026-10-15)
+Même run que 5.11 (mêmes graines, même config), sonde `scripts/probe_representation.py` aux epochs 0, 2, 4, 6, 7, 8, 9, 11, 14, 19, 24, 29, 39, 49 (la sonde ne perturbe pas l'entraînement : à l'epoch 2 de la graine 0 les chiffres sont identiques au run complet). Résultats dans `results/mnist_digits/probe/seed{0,1,2}.jsonl`, figure `results/mnist_digits/probe/representation.png`. L'apprenant commence à placer à l'epoch 8 : avant, seule la phase expert agit.
+
+* **Dès la phase expert, $m$ est mauvais et ne s'améliore pas.** kNN(10) sur $m$ : 0,71 à 0,78 à l'epoch 0 (encodeur aléatoire), puis 0,53 à 0,71 à l'epoch 9, et 0,65 à 0,68 à l'epoch 49 ; les pixels bruts donnent 0,93. L'entraînement sur les experts ne l'a pas amélioré par rapport à l'initialisation. Le k-means sur $m$ reste entre 0,24 et 0,44 sur toute la période (k-means sur les pixels : 0,67 à 0,76).
+* $z$ garde plus de classe que $m$ (kNN 0,71 à 0,88, environ 0,75 à l'epoch 49) : une partie de la perte est entre $z$ et $m$ (l'intention, entraînée par $L_\psi$ seul).
+* La KL de l'encodeur passe de ≈ 70 (epoch 0) à 700–960 dès l'epoch 2 puis monte jusqu'à 1300 (graine 1) : le code porte beaucoup de bits. $L_\psi$ descend à $-32$ à $-41$ à l'epoch 8 puis à $-43$ à $-45$ à l'epoch 29, ce qui correspond (hypothèse non vérifiée) à une variance de $q_\psi$ collée à son plancher plutôt qu'à une vraie cohérence d'orbite.
+* Retrouver le jumeau d'une vue par plus proche voisin dans $m$ : 3 à 7 % seulement (hasard : 0,06 %).
+* La précision « twin » de la reward est ≈ 0,7 dès l'epoch 4 et n'évolue guère pendant la phase expert (0,65 à 0,77 de l'epoch 2 à 9) ; sa baisse sur les graines 1 et 2 apparaît plus tard, pendant la phase apprenant.
+* **Lecture.** Le problème de MNIST se situe en amont de la politique et de la mémoire : à l'epoch 9, avant tout placement, $m$ ne sépare déjà pas les chiffres. Le signal « distinguer des images différentes » semble être appris au niveau de l'instance (la KL est élevée) plutôt qu'au niveau de la classe ; le test de cette lecture (par exemple, $\beta$ plus grand, ou 3 orbites) n'est pas fait.
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.
