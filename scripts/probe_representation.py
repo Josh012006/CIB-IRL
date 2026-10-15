@@ -8,10 +8,11 @@ epochs, measures:
     kmeans_m              ACC of k-means (k = number of classes) on m
     twin_retrieval_m      share of images whose view A has the view B of the SAME image as nearest neighbour in m
     nn_view_same_class    share of images whose view A has a view B of the same CLASS as nearest neighbour in m
+    acc_policy            ACC of the clusters the policy forms (argmax, memory frozen); meaningless before the learner acts
     twin_acc_reward, KL, L_psi   the training statistics of the epoch
 
     python scripts/probe_representation.py --seed 0 --last 49
-    python scripts/probe_representation.py --seed 0 --last 49 --at 0 9 19 --transform digits --config configs/mnist.yml
+    python scripts/probe_representation.py --seed 0 --last 19 --at 0 9 19 --set beta=1e-3 --out-root results/mnist_digits/probe_beta1e-3
 
 Writes <out-root>/seed<k>.jsonl, one line per probed epoch. The pixels' own kNN accuracy is printed as a reference.
 """
@@ -46,6 +47,7 @@ def main(argv=None) -> None:
     ap.add_argument("--data-set", nargs="*", default=["n_per_class=300"], metavar="KEY=VALUE")
     ap.add_argument("--transform", default="digits")
     ap.add_argument("--config", default="configs/mnist.yml")
+    ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE", help="TrainConfig overrides, e.g. beta=1e-3")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--last", type=int, default=49, help="last epoch (included)")
     ap.add_argument("--at", type=int, nargs="*", default=[0, 2, 4, 6, 7, 8, 9, 11, 14, 19, 24, 29, 39, 49, 79, 99],
@@ -55,7 +57,7 @@ def main(argv=None) -> None:
     from sklearn.cluster import KMeans
     from run_experiment import parse_kv, resolve_bank, resolve_file
 
-    cfg = TrainConfig.from_yaml(resolve_file(args.config), seed=args.seed)
+    cfg = TrainConfig.from_yaml(resolve_file(args.config), **{"seed": args.seed, **parse_kv(args.set)})
     bank = transforms.build(resolve_bank(args.transform))
     data = datasets.build(args.data, args.seed, **parse_kv(args.data_set))
     y = data.labels.numpy()
@@ -79,6 +81,7 @@ def main(argv=None) -> None:
                 ma, mb = tr.intent.mean(enc(bank(data.images))), tr.intent.mean(enc(bank(data.images)))
                 top = torch.cdist(ma, mb).argmin(1)
                 res = {"epoch": e, "twin_acc_reward": row["twin_acc"], "KL": row["KL"], "L_psi": row.get("L_psi"),
+                       "acc_policy": cluster_acc(tr.predict().numpy(), y, cfg.num_slots),
                        "knn_z": knn_accuracy(z, y, n_cls), "knn_m": knn_accuracy(m, y, n_cls),
                        "kmeans_m": cluster_acc(KMeans(n_cls, n_init=5, random_state=0).fit_predict(m.numpy()), y, n_cls),
                        "twin_retrieval_m": float((top == torch.arange(n)).float().mean()),

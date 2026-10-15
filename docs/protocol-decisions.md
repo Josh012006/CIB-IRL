@@ -256,5 +256,21 @@ Même run que 5.11 (mêmes graines, même config), sonde `scripts/probe_represen
 * La précision « twin » de la reward est ≈ 0,7 dès l'epoch 4 et n'évolue guère pendant la phase expert (0,65 à 0,77 de l'epoch 2 à 9) ; sa baisse sur les graines 1 et 2 apparaît plus tard, pendant la phase apprenant.
 * **Lecture.** Le problème de MNIST se situe en amont de la politique et de la mémoire : à l'epoch 9, avant tout placement, $m$ ne sépare déjà pas les chiffres. Le signal « distinguer des images différentes » semble être appris au niveau de l'instance (la KL est élevée) plutôt qu'au niveau de la classe ; le test de cette lecture (par exemple, $\beta$ plus grand, ou 3 orbites) n'est pas fait.
 
+### 5.13 MNIST : ni la compression ni le nombre d'orbites n'expliquent la mauvaise représentation (2026-10-15)
+Trois variantes, appliquées dès l'epoch 0, sondées par `scripts/probe_representation.py` (3 graines, jusqu'à l'epoch 19) : `beta=0,001` (au lieu de $10^{-4}$) avec une montée de $\beta$ raccourcie à 60 itérations (`beta_warmup_iters=60`, sinon $\beta$ n'atteint sa valeur qu'à l'epoch ≈ 16), `orbits_per_episode=3` (au lieu de 5), et les deux ensemble. Résultats dans `results/mnist_digits/probe_beta1e-3/`, `probe_orbits3/`, `probe_beta1e-3_orbits3/` ; moyenne sur les 3 graines [min–max].
+
+| epoch 19 | kNN(10) sur $m$ | k-means sur $m$ | kNN(10) sur $z$ | KL | précision « twin » | ACC de la politique |
+|---|---|---|---|---|---|---|
+| référence ($\beta=10^{-4}$, 5 orbites) | 0,62 [0,60–0,65] | 0,29 [0,24–0,35] | 0,76 | 936 | 0,72 | 0,41 [0,37–0,44] |
+| $\beta=10^{-3}$ | 0,63 [0,59–0,65] | 0,33 [0,29–0,37] | 0,74 | 552 | 0,72 | 0,38 [0,36–0,40] |
+| 3 orbites | 0,64 [0,63–0,64] | 0,33 [0,30–0,37] | 0,76 | 761 | 0,81 | 0,35 [0,30–0,42] |
+| $\beta=10^{-3}$ + 3 orbites | 0,65 [0,53–0,75] | 0,29 [0,24–0,38] | 0,78 | 539 | 0,81 | 0,40 [0,39–0,41] |
+
+(Pixels : kNN 0,93, k-means 0,67–0,76 ; encodeur aléatoire : kNN sur $m$ 0,71–0,78.) À l'epoch 9 les écarts sont du même ordre (kNN sur $m$ : 0,62 à 0,67 pour les quatre).
+
+* **Aucune des variantes n'améliore $m$** : les écarts entre variantes sont dans la dispersion des graines. Réduire la KL de 936 à environ 540 ne change pas la structure de classe de $m$ ; réduire le nombre d'orbites augmente la précision « twin » (0,72 → 0,81, ce qui est attendu : moins de slots à départager) sans effet sur $m$ ni sur l'ACC.
+* Les hypothèses « compression trop forte » et « trop de faux négatifs de l'expert avec 5 orbites » ne sont donc pas soutenues par ces tests (pour ces valeurs, 20 epochs, 3 graines).
+* Restent non testées : la force de la banque de transformations (hypothèse 3 de l'utilisateur), l'architecture (l'intention $m$ n'est entraînée que par $L_\psi$), la taille de la partie expert (30 % de 1800 images).
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.
