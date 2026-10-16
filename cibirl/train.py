@@ -33,7 +33,8 @@ from .diagnostics import PlacementDiagnostics
 from .encoder import build_encoder
 from .experts import ExpertBatch, ExpertEpisodes, OrbitSampler, Transform, split_expert_portion
 from .intent import IntentPredictor
-from .memory import ClusterMemory, crp_log_prior, expert_memory_states, masked_log_softmax, valid_slot_mask
+from .memory import (ClusterMemory, crp_log_prior, expert_memory_states, gated_prior_offset, masked_log_softmax,
+                     valid_slot_mask)
 from .policy import PolicyNet, ValueNet
 from .reward import RewardModel
 
@@ -114,6 +115,8 @@ class TrainConfig:
     crp_alpha: float = 1.0         # concentration of the CRP: the mass of "open a new cluster" against n_k for a slot of size n_k
     crp_power: float = 1.0         # nu: exponent on the whole prior (pi0^nu). 1 = the CRP (neutral drift at a tie); > 1 = positive
                                    # feedback towards the bigger of two slots the reward cannot tell apart (docs 5.25)
+    crp_gate: float = -1.0         # delta >= 0: the prior only acts among the slots whose score is within delta nats of the best one
+                                   # (the slots the scores cannot tell apart; docs 5.26). < 0: the prior acts everywhere (5.24)
     ppo_clip: float = 0.2
     ppo_epochs: int = 4
     value_coef: float = 0.5
@@ -283,8 +286,9 @@ class Trainer:
         self.intent = IntentPredictor(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.intent_standardize,
                                      whiten=cfg.intent_decorrelate == "whiten").to(dev)
         self.reward = RewardModel(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.rel_dim, cfg.use_z).to(dev)
+        self._prior_gate = cfg.crp_gate if cfg.crp_gate >= 0 else None      # None: the prior acts everywhere
         self.policy = PolicyNet(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.rel_dim, cfg.use_z,
-                                temperature=cfg.policy_temperature).to(dev)
+                                temperature=cfg.policy_temperature, prior_gate=self._prior_gate).to(dev)
         self.value = ValueNet(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.rel_dim, cfg.use_z).to(dev)
 
         # memory and experts
@@ -358,7 +362,8 @@ class Trainer:
             if teacher:      # act like the reward says (sampled), not like the untrained policy
                 tscores = self.reward(z[t:t + 1], m[t:t + 1], summ.unsqueeze(0), empty.unsqueeze(0))
                 if use_prior:
-                    tscores = tscores + prior_snap[t].unsqueeze(0)
+                    tscores = tscores + gated_prior_offset(tscores, valid_slot_mask(empty).unsqueeze(0),
+                                                           prior_snap[t].unsqueeze(0), self._prior_gate)
                 lp_all = masked_log_softmax(tscores, valid_slot_mask(empty).unsqueeze(0))
                 a = torch.distributions.Categorical(logits=lp_all).sample()
                 lp = lp_all.gather(-1, a.unsqueeze(-1)).squeeze(-1)
@@ -439,7 +444,8 @@ class Trainer:
         valid = valid_slot_mask(roll.empty)
         with torch.no_grad():
             scores = self.reward(roll.z, roll.m, roll.summaries, roll.empty)
-            teacher = masked_log_softmax(scores if roll.log_prior is None else scores + roll.log_prior, valid)
+            teacher = masked_log_softmax(scores if roll.log_prior is None else
+                                         scores + gated_prior_offset(scores, valid, roll.log_prior, self._prior_gate), valid)
             if cfg.center_reward:
                 n_valid = valid.sum(-1, keepdim=True)
                 scores = scores - (scores * valid).sum(-1, keepdim=True) / n_valid

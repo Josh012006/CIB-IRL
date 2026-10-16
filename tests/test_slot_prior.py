@@ -8,7 +8,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from cibirl.memory import crp_log_prior, valid_slot_mask   # noqa: E402
+from cibirl.memory import crp_log_prior, gated_prior_offset, valid_slot_mask   # noqa: E402
 from cibirl.policy import PolicyNet                          # noqa: E402
 from cibirl.train import TrainConfig, Trainer                # noqa: E402
 from toy_data import background_redraw, make_toy             # noqa: E402
@@ -223,3 +223,60 @@ def test_nu_above_one_drifts_to_the_bigger_twin_where_nu_one_stays_put():
 def test_a_few_iterations_run_with_the_exponent():
     rows = make_trainer(slot_prior="crp", crp_alpha=1.0, crp_power=2.0).fit(2)
     assert len(rows) == 2 and all(math.isfinite(v) for v in rows[-1].values() if isinstance(v, float))
+
+
+# -- the gate: the prior only among slots the scores cannot tell apart (docs 5.26) -------------------
+def _gate_state():
+    counts = torch.tensor([300.0, 100.0, 40.0, 0.0, 0.0])
+    empty = counts == 0
+    valid = valid_slot_mask(empty)
+    lp = crp_log_prior(counts, empty, 1.0)
+    return valid, lp
+
+
+def test_no_gate_is_the_prior_everywhere_and_the_default_policy_has_no_gate():
+    valid, lp = _gate_state()
+    scores = torch.tensor([0.0, 0.0, -30.0, -5.0, 0.0])
+    assert torch.equal(gated_prior_offset(scores, valid, lp, None), lp.masked_fill(~valid, 0.0))
+    assert PolicyNet(5, 4).prior_gate is None and TrainConfig().crp_gate < 0
+    assert make_trainer(slot_prior="crp").policy.prior_gate is None
+    assert make_trainer(slot_prior="crp", crp_gate=1.0).policy.prior_gate == 1.0
+
+
+def test_the_gate_redistributes_the_mass_of_the_tied_set_and_leaves_the_rest_alone():
+    valid, lp = _gate_state()
+    scores = torch.tensor([0.0, 0.3, -30.0, -5.0, 7.0])           # slots 0 and 1 tied (gap 0.3 <= 1); slot 4 is invalid
+    off = gated_prior_offset(scores, valid, lp, gate=1.0)
+    assert off[2] == 0.0 and off[3] == 0.0 and off[4] == 0.0       # outside the set (or invalid): untouched
+    base = scores.masked_fill(~valid, float("-inf")).softmax(-1)
+    new = (scores + off).masked_fill(~valid, float("-inf")).softmax(-1)
+    assert new[:2].sum() == pytest.approx(base[:2].sum().item())     # the total mass of the set is unchanged
+    assert new[2] == pytest.approx(base[2].item()) and new[3] == pytest.approx(base[3].item())
+    assert (new[0] / new[1]).item() == pytest.approx((base[0] / base[1]).item() * 3.0, rel=1e-5)   # sizes 300 vs 100 inside the set
+
+
+def test_exact_ties_are_broken_as_before_and_a_clearly_lower_open_slot_is_not_taxed_by_size():
+    counts = torch.tensor([150.0, 50.0, 0.0, 0.0])
+    empty = counts == 0
+    valid = valid_slot_mask(empty)
+    lp = crp_log_prior(counts, empty, 1.0)
+    tie = torch.zeros(4)
+    ungated = (tie + gated_prior_offset(tie, valid, lp, None)).masked_fill(~valid, float("-inf")).softmax(-1)
+    gated = (tie + gated_prior_offset(tie, valid, lp, 0.5)).masked_fill(~valid, float("-inf")).softmax(-1)
+    assert torch.allclose(ungated, gated)                            # everything is tied: the gate changes nothing
+    # open slot (index 2) scores 1 nat below the two occupied ones: with the gate its odds are exp(-1), not exp(-1) * alpha / n
+    scores = torch.tensor([0.0, 0.0, -1.0, 0.0])
+    p = (scores + gated_prior_offset(scores, valid, lp, 0.5)).masked_fill(~valid, float("-inf")).softmax(-1)
+    assert (p[2] / p[0]).item() == pytest.approx(math.exp(-1.0) / 1.5, rel=1e-5)   # slot 0 carries 3/4 of the tied set's mass 2 (sizes 150 vs 50)
+    p_un = (scores + gated_prior_offset(scores, valid, lp, None)).masked_fill(~valid, float("-inf")).softmax(-1)
+    assert p[2] > 20 * p_un[2]                                       # without the gate the size bias crushes the open slot
+
+
+def test_the_gate_has_no_gradient_and_the_policy_trains_with_it():
+    valid, lp = _gate_state()
+    scores = torch.tensor([0.0, 0.3, -30.0, -5.0, 7.0], requires_grad=True)
+    off = gated_prior_offset(scores, valid, lp, gate=1.0)
+    assert not off.requires_grad
+    for extra in ({}, {"policy_teacher_iters": 3}):
+        rows = make_trainer(slot_prior="crp", crp_alpha=1.0, crp_gate=1.0, **extra).fit(2)
+        assert len(rows) == 2 and all(math.isfinite(v) for v in rows[-1].values() if isinstance(v, float))

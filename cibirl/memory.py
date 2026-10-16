@@ -74,6 +74,25 @@ def crp_log_prior(counts: Tensor, empty: Tensor, alpha: float, prev: Tensor | in
     return out[0] if squeeze else out
 
 
+def gated_prior_offset(scores: Tensor, valid: Tensor, log_prior: Tensor, gate: float | None = None) -> Tensor:
+    """The additive logit offset the prior contributes: [..., K], 0 on invalid slots.
+
+    gate None: the prior everywhere, offset = log_prior (5.24).
+    gate delta >= 0 (docs 5.26): the prior only decides among the slots the scores cannot tell apart, the valid slots whose
+    score is within `delta` nats of the best one. Inside that set the offset is log pi0 minus a constant chosen so that the
+    prior only REDISTRIBUTES the mass of the set (its total probability is exactly unchanged); outside the set the offset is 0, so a slot the
+    scores clearly rank lower is neither favoured nor penalized by its size. The gate reads the scores without gradient.
+    """
+    lp = log_prior.masked_fill(~valid, 0.0)
+    if gate is None:
+        return lp
+    s = scores.detach().masked_fill(~valid, NEG_INF)
+    in_set = valid & (s >= s.max(-1, keepdim=True).values - gate)
+    s_set = s.masked_fill(~in_set, NEG_INF)
+    shift = torch.logsumexp(s_set + lp, dim=-1, keepdim=True) - torch.logsumexp(s_set, dim=-1, keepdim=True)
+    return torch.where(in_set, lp - shift, torch.zeros_like(lp))      # sum over the set of e^(score + offset) = sum of e^score
+
+
 def masked_log_softmax(scores: Tensor, valid: Tensor) -> Tensor:
     """log softmax over the valid slots only. Invalid slots get -inf."""
     return scores.masked_fill(~valid, NEG_INF).log_softmax(-1)

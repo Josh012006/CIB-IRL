@@ -9,18 +9,19 @@ from __future__ import annotations
 import torch
 from torch import Tensor, nn
 
-from .memory import masked_entropy, masked_log_softmax, valid_slot_mask
+from .memory import gated_prior_offset, masked_entropy, masked_log_softmax, valid_slot_mask
 from .reward import RelationEncoder, SlotScorer, mlp
 
 
 class PolicyNet(nn.Module):
     def __init__(self, z_dim: int, m_dim: int, hidden: int = 128, rel_dim: int = 64, use_z: bool = True,
-                 temperature: float = 1.0):
+                 temperature: float = 1.0, prior_gate: float | None = None):
         super().__init__()
         if temperature <= 0:
             raise ValueError(f"temperature must be > 0, got {temperature}")
         self.scorer = SlotScorer(z_dim, m_dim, hidden, rel_dim, use_z)
         self.temperature = float(temperature)
+        self.prior_gate = None if prior_gate is None else float(prior_gate)   # docs 5.26: prior only among tied slots
 
     def log_probs(self, z: Tensor, m: Tensor, summaries: Tensor, empty: Tensor,
                   log_prior: Tensor | None = None) -> Tensor:
@@ -29,14 +30,15 @@ class PolicyNet(nn.Module):
         pi = softmax(scores / T + log_prior). T is part of the DEFINITION of the policy, so sampling, the PPO ratio and
         the entropy all use the same distribution. T < 1 sharpens it (less exploration); it never changes the argmax.
         `log_prior` [B, K] (memory.crp_log_prior) is a fixed additive offset, outside of T: the prior over partitions
-        (docs 5.24). None = no prior, exactly the policy of before.
+        (docs 5.24). None = no prior, exactly the policy of before. With `prior_gate` (docs 5.26) the offset only acts among the
+        slots whose score is within prior_gate nats of the best one (memory.gated_prior_offset).
         """
         scores = self.scorer(z, m, summaries, empty)
         if self.temperature != 1.0:
             scores = scores / self.temperature
         valid = valid_slot_mask(empty)
         if log_prior is not None:
-            scores = scores + log_prior.masked_fill(~valid, 0.0)
+            scores = scores + gated_prior_offset(scores, valid, log_prior, self.prior_gate)
         return masked_log_softmax(scores, valid)
 
     @torch.no_grad()

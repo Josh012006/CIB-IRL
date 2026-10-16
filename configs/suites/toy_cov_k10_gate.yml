@@ -1,0 +1,23 @@
+# The CRP prior only among the slots the policy cannot tell apart (docs/protocol-decisions.md, 5.26).
+# pi(a | s) is proportional to exp(score_omega(s, a)) * pi0'(a | s): pi0' is the CRP prior (alpha = 1, nu = 1) inside the set of
+# slots whose score is within `crp_gate` nats of the best one (its total mass unchanged), and 1 outside the set. So the size
+# bias breaks the ties between duplicate slots but no longer weighs against a slot the scores clearly rank lower (for instance
+# "open a cluster" for an image that does not belong to the slot it would join). Reference: mem_a1 of toy_cov_k10_mem (same
+# seeds, same base, no gate = the prior everywhere). Two gates, to see a dose; the limit crp_gate = infinity is mem_a1.
+# Stop rule with the memory criterion, 300 epochs at most. No label is used anywhere.
+#
+#   python scripts/run_suite.py configs/suites/toy_cov_k10_gate.yml --cpu-count 2 --skip-existing
+name: toy_cov_k10_gate
+description: toy data, K = 10 slots, CRP prior (alpha 1, nu 1) gated to the slots within delta nats of the best score (delta 1 and 5), seeds 0-4, stop with memory = output
+seeds: [0, 1, 2, 3, 4]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  stop: {max_epochs: 300, min_epochs: 40, memory: true}
+experiments:
+  - name: gate_d1
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 1.0, crp_gate: 1.0}
+  - name: gate_d5
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 1.0, crp_gate: 5.0}
