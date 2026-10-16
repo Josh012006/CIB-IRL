@@ -424,5 +424,52 @@ Moyenne : ACC 0,75 $\pm$ 0,17, clusters utilisés 7,5 $\pm$ 2,9, **1 graine sur 
 * **Retirer `rho` et le plancher n'améliore rien et dégrade légèrement.** L'ACC moyenne baisse (0,75 contre 0,86), surtout parce que les graines 4 et 6 terminent sur 2 et 3 clusters avec des classes fusionnées (pureté 0,40 et 0,60) ; avec les deux termes, aucune partition finale n'était impure. Ce n'est qu'un instantané à l'epoch 300 : ces deux graines passent aussi par 10 clusters pendant la même période (min-max 2-10), donc la différence est surtout la dispersion du nombre de clusters. Écart sur 10 graines, un run chacune : indice, pas preuve.
 * Reste donc l'hypothèse (2) de 5.19 : rien dans l'objectif ne referme deux slots d'une même classe (la reward ne les distingue pas, 5.19), et la politique échantillonne. Non testé.
 
+### 5.21 Pourquoi la graine 4 converge-t-elle à $K=10$ ? Formes, couleurs, formation (2026-10-15)
+Question : qu'est-ce qui distingue la seule graine convergée de `toy_cov_k10` (graine 4) des graines qui ne convergent pas (3 et 5) ? Analyse sur les runs existants (20 runs de 5.19 et 5.20), sans nouveau run ; labels utilisés pour l'évaluation seulement. Figures : `results/toy_cov_k10/clusters_seed{3,4,5}.png` (galeries d'images par cluster) et `results/toy_cov_k10/shapes_by_seed.png` (formes des 5 classes par graine).
+
+* **Les clusters de la graine 4 sont 5 clusters purs de 300 images, un par classe, avec tous les fonds mélangés dans chaque cluster.** Dans les graines 3 et 5, les classes sont coupées en sous-clusters qui suivent la couleur ou la luminosité du fond (le nuisance), pas la forme.
+* **Couleurs : pas de différence.** Le fond est tiré uniformément dans $[0\,;0{,}6]^3$ pour toutes les graines. Dans une classe, la couleur moyenne du fond se prédit linéairement avec $R^2$ de 0,84 à 0,97 depuis $m$ et environ 1,00 depuis $z$, sur les 20 runs, convergés ou non (graine 4 avec `rho` : 0,94). La fuite du fond est générale et ne sépare pas les graines.
+* **Formes : pas de propriété qui sépare.** La graine 4 a les formes les plus blanches (part de blanc 0,50 à 0,62, contre 0,25 à 0,69 ailleurs), donc le moins de fond ; sur 10 graines, plus de blanc va avec moins de clusters (corrélation de rang $-0{,}3$ à $-0{,}7$ selon la condition), non significatif et non causal. La graine qui converge sans `rho` (graine 7) a des formes ordinaires, et les graines 4 et 7 échouent chacune dans l'autre condition.
+* **Ce qui diffère : la formation.** Dans 19 runs sur 20, le nombre de clusters dépasse 5 dès les epochs 10 à 18 et reste au-dessus de 5 pendant 72 à 100 % des epochs (après l'epoch 40). La seule exception est la graine 7 sans `rho` : 5 clusters dès l'epoch 12, jamais plus, convergence à l'epoch 70. La graine 4 avec `rho` passe par 8-9 clusters, ne revient à 5 que tout à la fin (5 à 7 clusters et ACC $\ge$ 0,95 pendant 66 % des 100 dernières epochs) et converge à l'epoch 298.
+* **Comparaison des 20 runs.**
+
+| condition | graines convergées | clusters (moyenne des 100 dernières epochs, moyenne sur graines) | part des epochs à plus de 5 clusters |
+|---|---|---|---|
+| avec `rho` et plancher (5.19) | 1/10 (graine 4) | 7,4 | 89 % |
+| sans (5.20) | 1/10 (graine 7) | 7,5 | 86 % |
+
+Sans `rho`, deux graines (4 et 6) finissent à 2 et 3 clusters avec des classes fusionnées ; avec `rho`, aucune partition finale n'est impure.
+* **Lecture.** Aucune propriété des données ne sépare les graines qui convergent ; la convergence ressemble à un accident de formation (le placement initial donne directement la bonne partition, ou y revient de justesse). Un mécanisme qui referme les doublons, ou qui évite d'en créer pendant la formation, manque. Hypothèse (non testée) pour le bruit tardif du nombre de clusters : l'argmax bascule entre des slots doublons indiscernables.
+
+### 5.22 $K=10$ avec orbites expertes idéales (oracle, 2026-10-15)
+Question : l'imperfection de l'expert (deux images d'une même classe dans deux orbites différentes, sans signal d'attraction entre elles) est-elle ce qui empêche la convergence à $K=10$ ? Suite `configs/suites/toy_cov_k10_link.yml` : identique à `toy_cov_k10` ($K=10$, $\lambda_{cov}=3$, `rho=0,1`, `neg_floor=0,1`, 10 graines, arrêt à la convergence ou à 300 epochs) avec `expert_oracle_link=1,0`.
+* **DIAGNOSTIC ORACLE, jamais une méthode** : il utilise les vraies classes pour construire les trajectoires expertes (`run.yml` : `uses_labels_for_training: true`). Dans chaque épisode, toutes les orbites d'une même classe forment un seul groupe : même slot, mouvement forcé (rejoindre le slot du jumeau) pour les orbites suivantes, pas de répulsion à l'intérieur d'une classe. La cible de $L_\psi$ reste l'orbite (seuls le slot, le type de mouvement et la répulsion passent à la classe). La règle d'arrêt reste sans labels.
+
+| graine | epochs | convergé | ACC finale | clusters finaux | pureté finale | part des 100 dernières epochs avec ACC $\ge$ 0,95 | clusters utilisés (min-max) | images qui changent de cluster par epoch |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 300 | non | 0,92 | 6 | 0,96 | 0,63 | 5-10 | 0,055 |
+| 1 | 300 | non | 0,75 | 9 | 1,00 | 0,05 | 5-10 | 0,211 |
+| 2 | 300 | non | 0,90 | 8 | 1,00 | 0,00 | 7-10 | 0,235 |
+| 3 | 300 | non | 0,79 | 9 | 1,00 | 0,05 | 6-10 | 0,185 |
+| 4 | 300 | non | 0,91 | 8 | 1,00 | 0,08 | 5-10 | 0,171 |
+| 5 | 300 | non | 0,75 | 9 | 1,00 | 0,06 | 5-10 | 0,247 |
+| 6 | 300 | non | 0,89 | 10 | 1,00 | 0,17 | 5-10 | 0,103 |
+| 7 | 300 | non | 0,92 | 6 | 1,00 | 0,30 | 5-10 | 0,134 |
+| 8 | 300 | non | 0,63 | 10 | 1,00 | 0,08 | 5-10 | 0,239 |
+| 9 | 300 | non | 0,90 | 7 | 1,00 | 0,03 | 5-10 | 0,231 |
+
+Moyenne : ACC 0,84 $\pm$ 0,10, clusters utilisés 8,2 $\pm$ 1,4, **0 graine sur 10 converge**. Figure : `results/toy_cov_k10_link/summary.png`.
+
+| condition (10 graines) | convergées | ACC finale | clusters (100 dernières epochs) | epochs à plus de 5 clusters | $L_{pos}$ final | twin_acc final |
+|---|---|---|---|---|---|---|
+| `toy_cov_k10` (avec `rho`, plancher) | 1 | 0,86 | 7,4 | 89 % | 0,274 | 0,83 |
+| `toy_cov_k10_norho` | 1 | 0,75 | 7,5 | 86 % | 0,276 | 0,83 |
+| `toy_cov_k10_link` (oracle) | 0 | 0,84 | 8,0 | 94 % | 0,000 | 1,00 |
+
+* **Les orbites idéales n'améliorent pas la convergence** : aucune graine ne converge, le nombre de clusters reste à 8,0 en moyenne (7,4 sans oracle), et 94 % des epochs ont plus de 5 clusters. La tâche experte est résolue parfaitement ($L_{pos}$ = 0,000, twin_acc = 1,00 contre 0,83), sans effet sur l'apprenant : l'imperfection de l'expert n'est donc pas la cause de l'absence de convergence à $K=10$.
+* **Sonde de la reward** (mémoire propre : les 5 classes présentes dans les slots 0 à 4 avec comme summary la moyenne de $m$ sur toute la classe, sur 20 images ou sur 5 images, slots 5 à 9 vides ; 10 graines de `toy_cov_k10` et de `toy_cov_k10_link`) : la probabilité de rejoindre le slot de sa classe est de 1,00 et celle d'ouvrir de 0,00, dans les 3 variantes et dans les deux suites. La reward finale ne pousse pas à ouvrir quand les slots sont propres et c'est vrai avec ou sans orbites idéales (complète la sonde de 5.19, qui n'avait que des summaries de classe entière).
+* **Erreurs de placement (évaluation).** « Ouvre à tort » est rare dans les trois conditions (3,6 à 9,5 par run et par phase). « Rejoint à tort » (rejoindre un slot dont la classe dominante est autre) par run, epochs $<30$ puis $\ge 30$ : `k10` 4 536 puis 9 748 ; `k10_norho` 4 174 puis 3 850 ; `k10_link` 6 210 puis 2 022. Attention à la définition (`cibirl/diagnostics.py`) : ouvrir un slot est jugé « à tort » seulement si un slot de dominante identique existe déjà ; pendant la formation, quand les slots sont encore mélangés, ouvrir un nouveau slot est donc jugé correct même s'il crée un doublon. Cohérent avec l'hypothèse que les doublons naissent dans cette phase mélangée et que rien ne les referme ; non testé directement.
+* **Reste donc côté apprenant** : la formation (5.21) et l'absence de mécanisme qui regroupe deux slots d'une même classe (5.19). Limites : un run par graine ; l'oracle mêle attraction entre orbites et résumés experts plus gros (comme en 5.2) ; $L_\psi$ reste au niveau de l'orbite ; le test ne dit pas ce qu'un relinker de phase 2 réel (non parfait) donnerait.
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.

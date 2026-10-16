@@ -1,0 +1,19 @@
+{
+  "name": "k10_link_seed7",
+  "seed": 7,
+  "data": "toy",
+  "n_classes": 5,
+  "n_per_class": 300,
+  "size": 16,
+  "spurious": 0.0,
+  "transform": "toy_oracle",
+  "epochs_run": 300,
+  "converged": false,
+  "stop_reason": "max_epochs",
+  "acc": 0.9246666666666666,
+  "nmi_class": 0.9612205664836757,
+  "oracle_labels_used": true,
+  "nmi_background": 0.023674084979772757,
+  "nmi_class_background_in_data": 0.0045271131141806685,
+  "clusters_used": 6
+}
