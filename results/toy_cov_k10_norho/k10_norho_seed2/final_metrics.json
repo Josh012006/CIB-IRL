@@ -1,0 +1,18 @@
+{
+  "name": "k10_norho_seed2",
+  "seed": 2,
+  "data": "toy",
+  "n_classes": 5,
+  "n_per_class": 300,
+  "size": 16,
+  "spurious": 0.0,
+  "transform": "toy_oracle",
+  "epochs_run": 300,
+  "converged": false,
+  "stop_reason": "max_epochs",
+  "acc": 0.6286666666666667,
+  "nmi_class": 0.850247452480782,
+  "nmi_background": 0.12600424191614665,
+  "nmi_class_background_in_data": 0.0033541060172937415,
+  "clusters_used": 10
+}

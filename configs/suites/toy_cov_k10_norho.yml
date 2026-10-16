@@ -1,0 +1,17 @@
+# Same as toy_cov_k10 (docs/protocol-decisions.md, 5.19) but WITHOUT the two terms suspected of favouring splits when K is
+# larger than the number of classes: rho = 0 (anti-collapse entropy term) and neg_floor = 0 (minimum repulsion).
+# K = 10 slots for 5 classes, lambda_cov = 3, covariance penalty on the intent, 10 seeds, convergence or 300 epochs.
+#
+#   python scripts/run_suite.py configs/suites/toy_cov_k10_norho.yml --cpu-count 2 --skip-existing
+name: toy_cov_k10_norho
+description: toy data, K = 10 slots for 5 classes, lambda_cov = 3 only (rho = 0, neg_floor = 0), 10 seeds, convergence or 300 epochs
+seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  stop: {max_epochs: 300, min_epochs: 40}
+experiments:
+  - name: k10_norho
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.0, neg_floor: 0.0}

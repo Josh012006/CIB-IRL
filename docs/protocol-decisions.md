@@ -402,5 +402,27 @@ Moyenne : ACC 0,86 $\pm$ 0,11, clusters utilisés 7,9 $\pm$ 2,0, **1 graine sur 
 * **Hypothèses non testées** pour l'origine des découpages pendant l'entraînement : (1) `rho` (terme anti-effondrement : entropie du marginal de la reward sur les slots, qui récompense la répartition sur plusieurs slots) et `neg_floor` (répulsion minimale) peuvent favoriser les découpages quand $K$ est grand ; (2) l'exploration par échantillonnage de la politique ouvre des slots dans les états transitoires et rien ne les referme. Un run avec `rho=0` et `neg_floor=0` à $K=10$ trancherait (1).
 * Limites : un run par graine, un seul $K$ (10), un seul $\lambda$ (3), pas de comparaison à $K=5$ sur les 10 graines avec $\lambda=3$ ; le critère de convergence (partition stable à 1 % près pendant 10 epochs) est strict, mais aucune graine hors la graine 4 ne s'en approche (changement de partition moyen entre 6 et 27 % par epoch).
 
+### 5.20 $K=10$ sans `rho` ni plancher de répulsion (2026-10-15)
+Test de l'hypothèse (1) de 5.19 : `rho` et `neg_floor` favorisent-ils les découpages quand $K$ dépasse le nombre de classes ? Suite `configs/suites/toy_cov_k10_norho.yml` : identique à `toy_cov_k10` (jouet, $K=10$, $\lambda_{cov}=3$, mêmes 10 graines, arrêt à la convergence ou à 300 epochs) avec `rho=0` et `neg_floor=0`.
+
+| graine | epochs | convergé | ACC finale | clusters finaux | pureté finale | part des 100 dernières epochs avec ACC $\ge$ 0,95 | clusters utilisés (min-max) | images qui changent de cluster par epoch |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 300 | non | 0,85 | 8 | 1,00 | 0,03 | 4-10 | 0,206 |
+| 1 | 300 | non | 0,91 | 9 | 1,00 | 0,14 | 4-10 | 0,126 |
+| 2 | 300 | non | 0,63 | 10 | 1,00 | 0,20 | 5-10 | 0,173 |
+| 3 | 300 | non | 0,75 | 9 | 1,00 | 0,07 | 5-10 | 0,215 |
+| 4 | 300 | non | 0,40 | 2 | 0,40 | 0,37 | 2-10 | 0,114 |
+| 5 | 300 | non | 0,83 | 10 | 1,00 | 0,10 | 5-10 | 0,169 |
+| 6 | 300 | non | 0,60 | 3 | 0,60 | 0,03 | 2-10 | 0,219 |
+| 7 | 70 | oui | 1,00 | 5 | 1,00 | 0,86 | 1-5 | 0,026 |
+| 8 | 300 | non | 0,71 | 10 | 1,00 | 0,10 | 1-10 | 0,219 |
+| 9 | 300 | non | 0,84 | 9 | 1,00 | 0,09 | 5-10 | 0,217 |
+
+Moyenne : ACC 0,75 $\pm$ 0,17, clusters utilisés 7,5 $\pm$ 2,9, **1 graine sur 10 converge** (la graine 7, en 70 epochs). Référence avec `rho` et plancher (5.19) : ACC 0,86 $\pm$ 0,11, clusters 7,9 $\pm$ 2,0, 1 graine sur 10 (la graine 4, à l'epoch 298).
+
+* **`rho` et le plancher ne sont pas la cause des découpages.** Sans eux, le comportement est le même : 9 graines sur 10 ne convergent pas, le nombre de clusters monte jusqu'à 10 sur les 100 dernières epochs, et les 7 partitions finales à plus de 5 clusters sont pures et éclatées (aucune fusion de classes, 2 à 4 classes coupées chacune). La graine qui converge n'est pas la même (7 au lieu de 4) ; avec un run par graine, ce changement de graine n'est pas interprétable.
+* **Retirer `rho` et le plancher n'améliore rien et dégrade légèrement.** L'ACC moyenne baisse (0,75 contre 0,86), surtout parce que les graines 4 et 6 terminent sur 2 et 3 clusters avec des classes fusionnées (pureté 0,40 et 0,60) ; avec les deux termes, aucune partition finale n'était impure. Ce n'est qu'un instantané à l'epoch 300 : ces deux graines passent aussi par 10 clusters pendant la même période (min-max 2-10), donc la différence est surtout la dispersion du nombre de clusters. Écart sur 10 graines, un run chacune : indice, pas preuve.
+* Reste donc l'hypothèse (2) de 5.19 : rien dans l'objectif ne referme deux slots d'une même classe (la reward ne les distingue pas, 5.19), et la politique échantillonne. Non testé.
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.
