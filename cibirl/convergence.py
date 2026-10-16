@@ -14,6 +14,12 @@ epochs, ALL of these hold:
 3. objective plateau     the mean twin accuracy and the mean expert loss (L_pos + L_neg) have moved by
                          less than `twin_tol` (absolute) and `loss_tol` (relative) compared with the
                          window before.
+4. memory = output       (only with `memory: true`) the memory the learner holds (the sampled placements, at the
+                         end of the epoch) is the same partition as the output, up to a renaming of the clusters:
+                         `mem_gap` = share of the images that do not keep their cluster from the memory partition
+                         to the argmax partition is at most `mem_tol` over the window. Equivalently: consolidating
+                         the memory (rebuilding it from the argmax partition) would change nothing. Two slots of
+                         one class that the output merges but the memory keeps apart make `mem_gap` large.
 
 The run is otherwise stopped at `max_epochs` and flagged `converged = false`.
 
@@ -42,6 +48,8 @@ class StopConfig:
     twin_tol: float = 0.01
     loss_tol: float = 0.02
     enabled: bool = True          # False: run exactly max_epochs
+    memory: bool = False          # also require memory = output (criterion 4); mem_gap and mem_excess are logged either way
+    mem_tol: float = 0.01
 
     @classmethod
     def from_dict(cls, d: dict[str, Any] | None) -> "StopConfig":
@@ -81,9 +89,13 @@ class ConvergenceMonitor:
         self._prev: np.ndarray | None = None
         self.converged = False
         self.reason = "running"
+        self.output_converged_epoch: int | None = None   # first epoch (>= min_epochs) at which criteria 1-3 held
+        self.memory_converged_epoch: int | None = None   # first epoch (>= min_epochs) at which criteria 1-4 held
 
-    def observe(self, row: dict, pred) -> bool:
+    def observe(self, row: dict, pred, memory=None) -> bool:
         """Adds `part_change`, `slot_change` and `n_clusters` to `row` (in place, so that they reach metrics.jsonl).
+        With `memory` (the slot of every image in the learner's memory, -1 = not placed) it also adds `mem_gap`
+        (partition_change from the memory partition to `pred`) and `mem_excess` (memory clusters - output clusters).
 
         `slot_change` is the same share WITHOUT the renaming (diagnostic: a large slot_change with a small
         part_change means that clusters are swapping slot ids)."""
@@ -91,21 +103,31 @@ class ConvergenceMonitor:
         row["part_change"] = 1.0 if self._prev is None else partition_change(self._prev, pred)
         row["slot_change"] = 1.0 if self._prev is None else float(np.mean(pred != self._prev))
         row["n_clusters"] = int(len(np.unique(pred)))
+        if memory is not None:
+            memory = np.asarray(memory)
+            row["mem_gap"] = partition_change(memory, pred)
+            row["mem_excess"] = int(len(np.unique(memory[memory >= 0])) - row["n_clusters"])
         self._prev = pred
         self.rows.append(row)
         epochs_done = len(self.rows)
+        if self.cfg.enabled and epochs_done >= self.cfg.min_epochs:
+            if self.output_converged_epoch is None and self._converged_now(memory=False):
+                self.output_converged_epoch = epochs_done
+            if self.memory_converged_epoch is None and self._converged_now(memory=True):
+                self.memory_converged_epoch = epochs_done
         if epochs_done >= self.cfg.max_epochs:
-            if self.cfg.enabled and self._converged_now():
+            if self.cfg.enabled and self._converged_now(self.cfg.memory):
                 self.converged, self.reason = True, "converged"
             else:
                 self.reason = "max_epochs" if self.cfg.enabled else "fixed_epochs"
             return True
-        if self.cfg.enabled and epochs_done >= self.cfg.min_epochs and self._converged_now():
+        if self.cfg.enabled and epochs_done >= self.cfg.min_epochs and self._converged_now(self.cfg.memory):
             self.converged, self.reason = True, "converged"
             return True
         return False
 
-    def _converged_now(self) -> bool:
+    def _converged_now(self, memory: bool = False) -> bool:
+        """Criteria 1-3, plus criterion 4 when `memory`."""
         w = self.cfg.window
         if len(self.rows) < 2 * w + 1:           # two windows, and the first epoch has no predecessor
             return False
@@ -114,6 +136,8 @@ class ConvergenceMonitor:
             return False
         if len({r["n_clusters"] for r in last}) != 1:
             return False
+        if memory and not max(r.get("mem_gap", math.inf) for r in last) <= self.cfg.mem_tol:
+            return False                                  # no memory given counts as not converged
 
         def mean(rows, key):
             return float(np.mean([r.get(key, math.nan) for r in rows]))

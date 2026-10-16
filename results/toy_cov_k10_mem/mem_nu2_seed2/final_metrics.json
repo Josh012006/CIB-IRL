@@ -1,0 +1,22 @@
+{
+  "name": "mem_nu2_seed2",
+  "seed": 2,
+  "data": "toy",
+  "n_classes": 5,
+  "n_per_class": 300,
+  "size": 16,
+  "spurious": 0.0,
+  "transform": "toy_oracle",
+  "epochs_run": 42,
+  "converged": true,
+  "stop_reason": "converged",
+  "output_converged_epoch": 40,
+  "memory_converged_epoch": 42,
+  "mem_gap": 0.0,
+  "memory_clusters": 5,
+  "acc": 1.0,
+  "nmi_class": 1.0,
+  "nmi_background": 0.003354106017293723,
+  "nmi_class_background_in_data": 0.0033541060172937415,
+  "clusters_used": 5
+}

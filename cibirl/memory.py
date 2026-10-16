@@ -37,7 +37,8 @@ def valid_slot_mask(empty: Tensor) -> Tensor:
     return (~empty) | first_empty
 
 
-def crp_log_prior(counts: Tensor, empty: Tensor, alpha: float, prev: Tensor | int | None = None) -> Tensor:
+def crp_log_prior(counts: Tensor, empty: Tensor, alpha: float, prev: Tensor | int | None = None,
+                  power: float = 1.0) -> Tensor:
     """log pi0(k | s): the Chinese-restaurant-process prior on where the next image goes (docs 5.24).
 
         pi0(k)    = n_k / (n - 1 + alpha)     for an occupied slot k   (n_k = its size WITHOUT the image being placed)
@@ -51,9 +52,13 @@ def crp_log_prior(counts: Tensor, empty: Tensor, alpha: float, prev: Tensor | in
     The prior is a CONSTANT of the state (no gradient): it is an additive offset in the logits of the policy, so that
     pi(a | s) is proportional to exp(score_omega(s, a)) * pi0(a | s). Where the reward is indifferent between two slots
     (identical summaries) the scores tie and the prior alone decides: in proportion to the sizes.
+
+    `power` (nu, docs 5.25) is an exponent on the whole prior: pi0^nu, renormalized. nu = 1 is the CRP (at a tie the
+    sizes are a martingale: neutral drift). nu > 1 weights the compression of the partition more (log P ~ -nu n H(C)):
+    at a tie the share of a slot moves in proportion to (n_a / n_b)^nu, a positive feedback towards the bigger slot.
     """
-    if alpha <= 0:
-        raise ValueError(f"alpha must be > 0, got {alpha}")
+    if alpha <= 0 or power <= 0:
+        raise ValueError(f"alpha and power must be > 0, got alpha={alpha}, power={power}")
     squeeze = empty.dim() == 1
     empty2 = empty.unsqueeze(0) if squeeze else empty
     n = counts.to(torch.float32).unsqueeze(0).expand(empty2.shape).clone()
@@ -64,7 +69,7 @@ def crp_log_prior(counts: Tensor, empty: Tensor, alpha: float, prev: Tensor | in
             n[rows, prev[rows]] -= 1.0
     valid = valid_slot_mask(empty2)
     mass = torch.where(n > 0, n, torch.full_like(n, float(alpha)))
-    log_mass = mass.log().masked_fill(~valid, NEG_INF)
+    log_mass = (float(power) * mass.log()).masked_fill(~valid, NEG_INF)
     out = log_mass - torch.logsumexp(log_mass, dim=-1, keepdim=True)
     return out[0] if squeeze else out
 

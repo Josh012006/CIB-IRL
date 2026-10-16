@@ -146,3 +146,47 @@ def test_the_stop_decision_never_depends_on_evaluation_keys():
     plain = run(cfg, lambda e: stable)[1]
     noisy = run(cfg, lambda e: stable, lambda e: dict(row(e), eval_acc=rng.random(), eval_nmi_class=rng.random()))[1]
     assert plain == noisy
+
+
+# -- memory = output (docs 5.25) -------------------------------------------------------------------
+def test_memory_keys_are_strict_and_off_by_default():
+    assert StopConfig().memory is False and StopConfig().mem_tol == 0.01
+    assert StopConfig.from_dict({"memory": True, "mem_tol": "0.02"}).mem_tol == 0.02
+
+
+def test_mem_gap_and_excess_are_logged_and_a_twin_slot_is_a_gap():
+    out = np.arange(N) % 4                                   # the output: 4 clusters
+    mem = out.copy()
+    mem[(out == 0) & (np.arange(N) % 8 < 4)] = 7             # the memory splits cluster 0 in two slots (a twin)
+    mon = ConvergenceMonitor(StopConfig(max_epochs=30, min_epochs=5, window=3))
+    r = row(0)
+    mon.observe(r, out, mem)
+    assert r["mem_excess"] == 1 and r["mem_gap"] == pytest.approx((out == 0).sum() / 2 / N)
+    r = row(1)
+    mon.observe(r, out, out)                                 # memory = output, up to a renaming
+    assert r["mem_gap"] == 0.0 and r["mem_excess"] == 0
+    r = row(2)
+    mon.observe(r, out, (out + 1) % 4)                       # renamed slots are not a gap
+    assert r["mem_gap"] == 0.0
+
+
+def test_the_memory_criterion_blocks_the_stop_while_a_twin_survives_and_only_then():
+    out = np.arange(N) % 4
+    twin = out.copy()
+    twin[(out == 0) & (np.arange(N) % 8 < 4)] = 7
+    cfg_out = StopConfig(max_epochs=60, min_epochs=10, window=5)
+    cfg_mem = StopConfig(max_epochs=60, min_epochs=10, window=5, memory=True)
+
+    def go(cfg, mem_fn):
+        mon = ConvergenceMonitor(cfg)
+        for e in range(60):
+            if mon.observe(row(e), out, mem_fn(e)):
+                return mon, e + 1
+    mon, at = go(cfg_out, lambda e: twin)                    # old rule: the output is stable, stop
+    assert mon.converged and at == 11 and mon.output_converged_epoch == 11 and mon.memory_converged_epoch is None
+    mon, at = go(cfg_mem, lambda e: twin)                    # new rule: the twin is there until the end
+    assert not mon.converged and mon.reason == "max_epochs" and at == 60 and mon.output_converged_epoch == 11
+    mon, at = go(cfg_mem, lambda e: twin if e < 25 else out)  # the twin closes at epoch 25: stop one window later
+    assert mon.converged and at == 30 and mon.output_converged_epoch == 11 and mon.memory_converged_epoch == 30
+    mon, at = go(cfg_mem, lambda e: None)                    # no memory given: counts as not converged
+    assert not mon.converged

@@ -180,3 +180,46 @@ def test_predict_uses_the_prior_and_the_uniform_default_does_not():
         tr.memory.recompute(tr.intents())
     assert (crp.predict() == 1).all()                      # the bigger slot wins every image
     assert (uni.predict() == 0).all()                      # exact tie: argmax picks the first index, as before
+
+
+# -- the exponent nu (docs 5.25) -------------------------------------------------------------------
+def test_power_one_is_the_crp_and_power_two_squares_the_ratio_at_a_tie():
+    counts = torch.tensor([150.0, 50.0, 0.0, 0.0])
+    empty = counts == 0
+    assert torch.equal(crp_log_prior(counts, empty, 1.0), crp_log_prior(counts, empty, 1.0, None, 1.0))
+    for nu in (2.0, 3.0):
+        p = crp_log_prior(counts, empty, 1.0, None, nu).exp()
+        assert p.sum() == pytest.approx(1.0)
+        assert (p[0] / p[1]).item() == pytest.approx(3.0 ** nu)
+        assert p[3] == 0.0                                        # still one empty slot only
+
+
+def test_power_must_be_positive_and_the_config_validates_it():
+    with pytest.raises(ValueError):
+        crp_log_prior(torch.tensor([1.0, 0.0]), torch.tensor([False, True]), 1.0, None, 0.0)
+    assert TrainConfig().crp_power == 1.0 and TrainConfig.from_dict({"crp_power": 2}).crp_power == 2.0
+    with pytest.raises(ValueError):
+        make_trainer(slot_prior="crp", crp_power=0.0)
+
+
+def test_nu_above_one_drifts_to_the_bigger_twin_where_nu_one_stays_put():
+    """Resampling sweeps over two tied duplicates: nu = 1 keeps the share (martingale), nu = 2 pushes it to 1."""
+    def sweep(nu: float, seed: int, n_a=70, n_b=50, sweeps=6) -> float:
+        g = torch.Generator().manual_seed(seed)
+        slot = torch.tensor([0] * n_a + [1] * n_b)
+        for _ in range(sweeps):
+            for i in torch.randperm(len(slot), generator=g).tolist():
+                counts = torch.bincount(slot, minlength=3).float()
+                probs = crp_log_prior(counts, counts == 0, 1.0, int(slot[i]), nu).exp()
+                probs[2:] = 0.0
+                slot[i] = torch.multinomial(probs / probs.sum(), 1, generator=g).item()
+        return (slot == 0).float().mean().item()
+    one = sum(sweep(1.0, s) for s in range(30)) / 30
+    two = sum(sweep(2.0, s) for s in range(30)) / 30
+    assert one == pytest.approx(70 / 120, abs=0.08)
+    assert two > 0.8
+
+
+def test_a_few_iterations_run_with_the_exponent():
+    rows = make_trainer(slot_prior="crp", crp_alpha=1.0, crp_power=2.0).fit(2)
+    assert len(rows) == 2 and all(math.isfinite(v) for v in rows[-1].values() if isinstance(v, float))

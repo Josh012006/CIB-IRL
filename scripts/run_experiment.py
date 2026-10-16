@@ -147,7 +147,7 @@ def main(argv=None) -> None:
 
     def log(row: dict) -> bool:
         pred = tr.predict().cpu().numpy()
-        stop_now = monitor.observe(row, pred)                       # adds part_change and n_clusters to the row
+        stop_now = monitor.observe(row, pred, tr.memory.assign.cpu().numpy())   # adds part_change, n_clusters, mem_gap to the row
         # EVALUATION ONLY: the labels are used to follow the dynamics, never to train nor to stop (the monitor
         # does not read these keys)
         row["eval_acc"], row["eval_nmi_class"] = cluster_acc(pred, y, cfg.num_slots), nmi(pred, y)
@@ -159,7 +159,7 @@ def main(argv=None) -> None:
         print(f"ep {row['epoch']:3d} it {row['iter']:5d} | L_pos {row.get('L_pos', 0):5.3f} L_neg {row.get('L_neg', 0):5.3f} "
               f"twin {row.get('twin_acc', 0):.2f} KL {row.get('KL', 0):6.1f} L_inv {row.get('L_inv', 0):.3f} "
               f"m_std {row.get('m_std', 0):.2f} | ent {row.get('pi_entropy', 0):.2f} | clusters {row['n_clusters']} "
-              f"K_eff {row['K_eff']:.2f} churn {row['churn']:.2f} dpart {row['part_change']:.3f} "
+              f"K_eff {row['K_eff']:.2f} churn {row['churn']:.2f} dpart {row['part_change']:.3f} gap {row['mem_gap']:.3f} "
               f"| acc* {row['eval_acc']:.2f} | {time.time() - t0:5.0f}s", flush=True)
         e = args.snapshot_every
         if e and not stop_now and row["epoch"] % e == e - 1:
@@ -176,6 +176,8 @@ def main(argv=None) -> None:
     m = tr.intents().cpu().numpy()
     final = {"name": out.name, "seed": cfg.seed, "data": args.data, **data.info, "transform": bank.name,
              "epochs_run": len(history), "converged": monitor.converged, "stop_reason": monitor.reason,
+             "output_converged_epoch": monitor.output_converged_epoch, "memory_converged_epoch": monitor.memory_converged_epoch,
+             "mem_gap": history[-1].get("mem_gap"), "memory_clusters": history[-1].get("n_clusters", 0) + history[-1].get("mem_excess", 0),
              "acc": cluster_acc(pred, y, cfg.num_slots), "nmi_class": nmi(pred, y)}
     if oracle:
         final["oracle_labels_used"] = True                          # diagnostic run: not comparable to the method

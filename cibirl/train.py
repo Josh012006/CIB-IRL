@@ -112,6 +112,8 @@ class TrainConfig:
                                    # the size n_k of slot k (the image itself withdrawn), pi0(open) proportional to `crp_alpha`.
                                    # Breaks the ties between two slots the reward cannot tell apart (docs 5.24).
     crp_alpha: float = 1.0         # concentration of the CRP: the mass of "open a new cluster" against n_k for a slot of size n_k
+    crp_power: float = 1.0         # nu: exponent on the whole prior (pi0^nu). 1 = the CRP (neutral drift at a tie); > 1 = positive
+                                   # feedback towards the bigger of two slots the reward cannot tell apart (docs 5.25)
     ppo_clip: float = 0.2
     ppo_epochs: int = 4
     value_coef: float = 0.5
@@ -253,8 +255,8 @@ class Trainer:
             raise ValueError("recompute_every, freeze_repr_after must be >= 0 and repr_lr_scale in [0, 1]")
         if cfg.intent_decorrelate not in ("none", "whiten", "cov") or cfg.intent_cov_weight < 0:
             raise ValueError("intent_decorrelate must be none, whiten or cov, and intent_cov_weight >= 0")
-        if cfg.slot_prior not in ("uniform", "crp") or cfg.crp_alpha <= 0:
-            raise ValueError("slot_prior must be uniform or crp, and crp_alpha > 0")
+        if cfg.slot_prior not in ("uniform", "crp") or cfg.crp_alpha <= 0 or cfg.crp_power <= 0:
+            raise ValueError("slot_prior must be uniform or crp, and crp_alpha > 0, crp_power > 0")
         oracle_on = cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0
         if oracle_on and oracle_labels is None:
             raise ValueError("expert_oracle_link / oracle_warm_memory are oracle diagnostics: pass oracle_labels "
@@ -350,7 +352,7 @@ class Trainer:
             prev = int(self.memory.assign[item])
             lp0 = None
             if use_prior:      # pi0 of this state: slot sizes with the image itself withdrawn
-                lp0 = crp_log_prior(self.memory.counts, empty, self.cfg.crp_alpha, prev)
+                lp0 = crp_log_prior(self.memory.counts, empty, self.cfg.crp_alpha, prev, self.cfg.crp_power)
                 prior_snap[t] = lp0.masked_fill(~valid_slot_mask(empty), 0.0)
                 lp0 = lp0.unsqueeze(0)
             if teacher:      # act like the reward says (sampled), not like the untrained policy
@@ -614,7 +616,8 @@ class Trainer:
             lp0 = None
             if self.cfg.slot_prior == "crp":     # the same prior as in the placements, each image withdrawn from its own slot
                 prev = self.memory.assign[s:s + B] if images is self.images else None
-                lp0 = crp_log_prior(self.memory.counts, empty.unsqueeze(0).expand(B, -1), self.cfg.crp_alpha, prev)
+                lp0 = crp_log_prior(self.memory.counts, empty.unsqueeze(0).expand(B, -1), self.cfg.crp_alpha, prev,
+                                    self.cfg.crp_power)
             logp = self.policy.log_probs(z, m, summ.unsqueeze(0).expand(B, -1, -1), empty.unsqueeze(0).expand(B, -1), lp0)
             out.append(logp.argmax(-1))
         return torch.cat(out)

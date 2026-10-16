@@ -1,0 +1,27 @@
+# Does the memory close its duplicate slots, and how fast? (docs/protocol-decisions.md, 5.25)
+# Stop rule with the memory criterion (stop.memory: true): the run ends when the partition the learner HOLDS (the sampled
+# placements) is the output partition up to a renaming (mem_gap <= 1 % over 10 epochs), else at 300 epochs. Same base as
+# toy_cov_k10_crp (K = 10 slots for 5 classes, lambda_cov = 3, rho = 0.1, neg_floor = 0.1), seeds 0-4. Three conditions,
+# each changing ONE thing from the first:
+#   mem_a1     CRP alpha = 1, nu = 1: time alone (neutral drift at a tie)
+#   mem_nu2    nu = 2: positive feedback towards the bigger of two tied slots
+#   mem_a01    alpha = 0.1: fewer clusters opened
+# No label is used anywhere (mem_gap compares two partitions the method produces).
+#
+#   python scripts/run_suite.py configs/suites/toy_cov_k10_mem.yml --cpu-count 2 --skip-existing
+name: toy_cov_k10_mem
+description: toy data, K = 10 slots, CRP prior, stop rule with memory = output; alpha 1 / nu 2 / alpha 0.1, seeds 0-4, up to 300 epochs
+seeds: [0, 1, 2, 3, 4]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  stop: {max_epochs: 300, min_epochs: 40, memory: true}
+experiments:
+  - name: mem_a1
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 1.0}
+  - name: mem_nu2
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 1.0, crp_power: 2.0}
+  - name: mem_a01
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 0.1}
