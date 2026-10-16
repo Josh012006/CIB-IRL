@@ -96,6 +96,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--name", default=None, help="run folder name (default built from the options)")
     ap.add_argument("--overwrite", action="store_true", help="replace an existing run folder")
     ap.add_argument("--snapshot-every", type=int, default=10, help="save a cluster grid every N epochs (0 = never)")
+    ap.add_argument("--save-epochs", default=None, metavar="A-B",
+                    help="also save the networks and the memory at the end of epochs A..B (1-based, e.g. 195-212) in ckpts/epNNN.pt, "
+                         "to study what happens around an event. Does not touch the training (no random number is drawn).")
     return ap
 
 
@@ -141,6 +144,11 @@ def main(argv=None) -> None:
     tr = Trainer(cfg, images, bank, device=args.device, oracle_labels=data.labels if oracle else None,
                  eval_labels=data.labels)
     monitor = ConvergenceMonitor(stop)
+    save_lo, save_hi = (None, None)
+    if args.save_epochs:
+        lo, _, hi = args.save_epochs.partition("-")
+        save_lo, save_hi = int(lo), int(hi or lo)
+        (out / "ckpts").mkdir(exist_ok=True)
     history: list[dict] = []
     metrics_file = open(out / "metrics.jsonl", "w", encoding="utf-8")
     t0 = time.time()
@@ -154,6 +162,8 @@ def main(argv=None) -> None:
         if bg is not None:
             row["eval_nmi_background"] = nmi(pred, bg)
         history.append(row)
+        if save_lo is not None and save_lo <= row["epoch"] + 1 <= save_hi:
+            tr.save(str(out / "ckpts" / f"ep{row['epoch'] + 1:03d}.pt"))
         metrics_file.write(json.dumps(row) + "\n")
         metrics_file.flush()
         print(f"ep {row['epoch']:3d} it {row['iter']:5d} | L_pos {row.get('L_pos', 0):5.3f} L_neg {row.get('L_neg', 0):5.3f} "

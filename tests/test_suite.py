@@ -120,6 +120,19 @@ def test_fixed_epochs_disables_the_convergence_test(tmp_path):
     assert final["epochs_run"] == 2 and final["converged"] is False and final["stop_reason"] == "fixed_epochs"
 
 
+def test_save_epochs_saves_the_requested_checkpoints_and_does_not_touch_the_training(tmp_path):
+    base = [ROOT / "scripts" / "run_experiment.py", "--data", "toy", "--transform", "generic", "--out-root", tmp_path,
+            "--fixed-epochs", "3", *TINY]
+    assert run([*base, "--name", "plain"]).returncode == 0
+    res = run([*base, "--name", "saved", "--save-epochs", "2-3"])
+    assert res.returncode == 0, res.stderr[-2000:]
+    ck = tmp_path / "saved" / "ckpts"
+    assert sorted(p.name for p in ck.iterdir()) == ["ep002.pt", "ep003.pt"]
+    assert not (tmp_path / "plain" / "ckpts").exists()
+    rows = lambda n: [json.loads(l) for l in (tmp_path / n / "metrics.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r["L_pos"] for r in rows("plain")] == [r["L_pos"] for r in rows("saved")]      # same numbers, bit for bit
+
+
 def test_run_errors_are_explicit(tmp_path):
     base = [ROOT / "scripts" / "run_experiment.py", "--out-root", tmp_path]
     assert "unknown transform bank" in (run([*base, "--transform", "nope"]).stderr)
