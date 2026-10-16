@@ -33,7 +33,7 @@ from .diagnostics import PlacementDiagnostics
 from .encoder import build_encoder
 from .experts import ExpertBatch, ExpertEpisodes, OrbitSampler, Transform, split_expert_portion
 from .intent import IntentPredictor
-from .memory import ClusterMemory, expert_memory_states, masked_log_softmax, valid_slot_mask
+from .memory import ClusterMemory, crp_log_prior, expert_memory_states, masked_log_softmax, valid_slot_mask
 from .policy import PolicyNet, ValueNet
 from .reward import RewardModel
 
@@ -107,6 +107,11 @@ class TrainConfig:
     policy_temperature: float = 1.0  # pi = softmax(scores / T); T < 1: sharper policy, less exploration
     consolidate: bool = False      # end of epoch: rebuild the memory from the greedy partition (argmax of pi,
                                    # memory frozen) instead of the sampled placements of the epoch
+    slot_prior: str = "uniform"    # prior over where an image goes, an additive offset in the logits of the policy:
+                                   # "uniform" = none (as before); "crp" = Chinese restaurant process, pi0(k) proportional to
+                                   # the size n_k of slot k (the image itself withdrawn), pi0(open) proportional to `crp_alpha`.
+                                   # Breaks the ties between two slots the reward cannot tell apart (docs 5.24).
+    crp_alpha: float = 1.0         # concentration of the CRP: the mass of "open a new cluster" against n_k for a slot of size n_k
     ppo_clip: float = 0.2
     ppo_epochs: int = 4
     value_coef: float = 0.5
@@ -206,6 +211,7 @@ class Rollout:
     empty: Tensor        # [T, K]
     actions: Tensor      # [T]
     logp_old: Tensor     # [T]
+    log_prior: Tensor | None = None   # [T, K] log pi0 of the state of every placement (cfg.slot_prior = "crp"), else None
 
 
 @contextmanager
@@ -247,6 +253,8 @@ class Trainer:
             raise ValueError("recompute_every, freeze_repr_after must be >= 0 and repr_lr_scale in [0, 1]")
         if cfg.intent_decorrelate not in ("none", "whiten", "cov") or cfg.intent_cov_weight < 0:
             raise ValueError("intent_decorrelate must be none, whiten or cov, and intent_cov_weight >= 0")
+        if cfg.slot_prior not in ("uniform", "crp") or cfg.crp_alpha <= 0:
+            raise ValueError("slot_prior must be uniform or crp, and crp_alpha > 0")
         oracle_on = cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0
         if oracle_on and oracle_labels is None:
             raise ValueError("expert_oracle_link / oracle_warm_memory are oracle diagnostics: pass oracle_labels "
@@ -333,26 +341,35 @@ class Trainer:
         empty_snap = torch.empty(T, K, dtype=torch.bool, device=self.device)
         actions = torch.empty(T, dtype=torch.long, device=self.device)
         logps = torch.empty(T, device=self.device)
+        use_prior = self.cfg.slot_prior == "crp"
+        prior_snap = torch.zeros(T, K, device=self.device) if use_prior else None
         for t in range(T):
             summ, empty = self.memory.state()
             summ_snap[t], empty_snap[t] = summ, empty
+            item = int(idx[t])
+            prev = int(self.memory.assign[item])
+            lp0 = None
+            if use_prior:      # pi0 of this state: slot sizes with the image itself withdrawn
+                lp0 = crp_log_prior(self.memory.counts, empty, self.cfg.crp_alpha, prev)
+                prior_snap[t] = lp0.masked_fill(~valid_slot_mask(empty), 0.0)
+                lp0 = lp0.unsqueeze(0)
             if teacher:      # act like the reward says (sampled), not like the untrained policy
-                lp_all = masked_log_softmax(self.reward(z[t:t + 1], m[t:t + 1], summ.unsqueeze(0), empty.unsqueeze(0)),
-                                            valid_slot_mask(empty).unsqueeze(0))
+                tscores = self.reward(z[t:t + 1], m[t:t + 1], summ.unsqueeze(0), empty.unsqueeze(0))
+                if use_prior:
+                    tscores = tscores + prior_snap[t].unsqueeze(0)
+                lp_all = masked_log_softmax(tscores, valid_slot_mask(empty).unsqueeze(0))
                 a = torch.distributions.Categorical(logits=lp_all).sample()
                 lp = lp_all.gather(-1, a.unsqueeze(-1)).squeeze(-1)
             else:
-                a, lp = self.policy.act(z[t:t + 1], m[t:t + 1], summ.unsqueeze(0), empty.unsqueeze(0))
+                a, lp = self.policy.act(z[t:t + 1], m[t:t + 1], summ.unsqueeze(0), empty.unsqueeze(0), log_prior=lp0)
             actions[t], logps[t] = a[0], lp[0]
-            item = int(idx[t])
-            prev = int(self.memory.assign[item])
             had_slot = prev >= 0
             if self._diag is not None:                       # evaluation only: reads the state before the update
                 self._diag.record(item, int(a[0]), prev)
             changed = self.memory.place(item, m[t], int(a[0]))
             self._revisits += int(had_slot)
             self._changes += int(changed)
-        return Rollout(idx, x_view, x_pert, z, m, summ_snap, empty_snap, actions, logps)
+        return Rollout(idx, x_view, x_pert, z, m, summ_snap, empty_snap, actions, logps, prior_snap)
 
     # ---------------------------------------------------------------------------------------------
     # 3. Reward step (IRL): phi, psi, theta
@@ -365,8 +382,8 @@ class Trainer:
             out_p = self.encoder(roll.x_pert, sample=True)
             with torch.no_grad():
                 m_bar = self.intent.mean(out_c.z)          # intent of the CLEAN view, given to both
-            logp_c = self.policy.log_probs(out_c.z, m_bar, roll.summaries, roll.empty)
-            logp_p = self.policy.log_probs(out_p.z, m_bar, roll.summaries, roll.empty)
+            logp_c = self.policy.log_probs(out_c.z, m_bar, roll.summaries, roll.empty, roll.log_prior)
+            logp_p = self.policy.log_probs(out_p.z, m_bar, roll.summaries, roll.empty, roll.log_prior)
         return L.invariance_kl(logp_c, logp_p, valid_slot_mask(roll.empty))
 
     def reward_step(self, eb: ExpertBatch, roll: Rollout | None) -> dict:
@@ -420,7 +437,7 @@ class Trainer:
         valid = valid_slot_mask(roll.empty)
         with torch.no_grad():
             scores = self.reward(roll.z, roll.m, roll.summaries, roll.empty)
-            teacher = masked_log_softmax(scores, valid)
+            teacher = masked_log_softmax(scores if roll.log_prior is None else scores + roll.log_prior, valid)
             if cfg.center_reward:
                 n_valid = valid.sum(-1, keepdim=True)
                 scores = scores - (scores * valid).sum(-1, keepdim=True) / n_valid
@@ -428,7 +445,7 @@ class Trainer:
             v_old = self.value(roll.z, roll.m, roll.summaries, roll.empty)
             _, ret = L.compute_gae(r, v_old, cfg.gamma, cfg.gae_lambda)
         for _ in range(cfg.ppo_epochs):
-            logp = self.policy.log_probs(roll.z, roll.m, roll.summaries, roll.empty)
+            logp = self.policy.log_probs(roll.z, roll.m, roll.summaries, roll.empty, roll.log_prior)
             kl = (teacher.exp() * (teacher.masked_fill(~valid, 0.0) - logp.masked_fill(~valid, 0.0))).sum(-1).mean()
             v_new = self.value(roll.z, roll.m, roll.summaries, roll.empty)
             value_loss = torch.nn.functional.mse_loss(v_new, ret)
@@ -452,7 +469,7 @@ class Trainer:
             adv = (adv - adv.mean()) / (adv.std() + 1e-8)
 
         for _ in range(cfg.ppo_epochs):
-            logp_all = self.policy.log_probs(roll.z, roll.m, roll.summaries, roll.empty)
+            logp_all = self.policy.log_probs(roll.z, roll.m, roll.summaries, roll.empty, roll.log_prior)
             logp_new = logp_all.gather(1, roll.actions.unsqueeze(1)).squeeze(1)
             ent = PolicyNet.entropy(logp_all, roll.empty)
             v_new = self.value(roll.z, roll.m, roll.summaries, roll.empty)
@@ -594,7 +611,11 @@ class Trainer:
             z = self.encoder(x, sample=False).z
             m = self.intent.mean(z)
             B = x.shape[0]
-            logp = self.policy.log_probs(z, m, summ.unsqueeze(0).expand(B, -1, -1), empty.unsqueeze(0).expand(B, -1))
+            lp0 = None
+            if self.cfg.slot_prior == "crp":     # the same prior as in the placements, each image withdrawn from its own slot
+                prev = self.memory.assign[s:s + B] if images is self.images else None
+                lp0 = crp_log_prior(self.memory.counts, empty.unsqueeze(0).expand(B, -1), self.cfg.crp_alpha, prev)
+            logp = self.policy.log_probs(z, m, summ.unsqueeze(0).expand(B, -1, -1), empty.unsqueeze(0).expand(B, -1), lp0)
             out.append(logp.argmax(-1))
         return torch.cat(out)
 

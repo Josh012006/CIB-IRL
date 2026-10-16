@@ -1,0 +1,115 @@
+run folder: /home/claude/cib-irl/results/toy_cov_k10_crp/crp_a10_seed6
+Compose(toy_oracle: toy_background_redraw)
+stop: StopConfig(max_epochs=300, min_epochs=40, window=10, part_tol=0.01, twin_tol=0.01, loss_tol=0.02, enabled=True)
+ep   0 it    15 | L_pos 1.275 L_neg 0.422 twin 0.38 KL   49.2 L_inv 0.000 m_std 0.02 | ent 0.00 | clusters 1 K_eff 1.00 churn 0.00 dpart 1.000 | acc* 0.20 |     2s
+ep   1 it    30 | L_pos 1.266 L_neg 0.419 twin 0.43 KL   49.8 L_inv 0.000 m_std 0.04 | ent 0.00 | clusters 1 K_eff 1.00 churn 0.00 dpart 0.000 | acc* 0.20 |     5s
+ep   2 it    45 | L_pos 1.258 L_neg 0.402 twin 0.54 KL   50.6 L_inv 0.000 m_std 0.08 | ent 0.00 | clusters 1 K_eff 1.00 churn 0.00 dpart 0.000 | acc* 0.20 |     7s
+ep   3 it    60 | L_pos 1.169 L_neg 0.340 twin 0.65 KL   52.0 L_inv 0.000 m_std 0.17 | ent 0.00 | clusters 1 K_eff 1.00 churn 0.00 dpart 0.000 | acc* 0.20 |     9s
+ep   4 it    75 | L_pos 0.687 L_neg 0.261 twin 0.72 KL   54.4 L_inv 0.000 m_std 0.34 | ent 0.00 | clusters 1 K_eff 1.00 churn 0.00 dpart 0.000 | acc* 0.20 |    12s
+ep   5 it    90 | L_pos 0.381 L_neg 0.335 twin 0.82 KL   58.6 L_inv 0.000 m_std 0.54 | ent 0.00 | clusters 1 K_eff 1.00 churn 0.00 dpart 0.000 | acc* 0.20 |    14s
+ep   6 it   105 | L_pos 0.371 L_neg 0.297 twin 0.82 KL   67.3 L_inv 0.000 m_std 0.66 | ent 0.00 | clusters 1 K_eff 1.00 churn 0.00 dpart 0.000 | acc* 0.20 |    16s
+ep   7 it   120 | L_pos 0.409 L_neg 0.254 twin 0.82 KL   88.2 L_inv 0.000 m_std 0.64 | ent 0.00 | clusters 1 K_eff 1.00 churn 0.00 dpart 0.000 | acc* 0.20 |    18s
+ep   8 it   135 | L_pos 0.490 L_neg 0.352 twin 0.78 KL  146.3 L_inv 0.000 m_std 0.51 | ent 0.00 | clusters 1 K_eff 1.00 churn 0.00 dpart 0.000 | acc* 0.20 |    20s
+ep   9 it   150 | L_pos 0.767 L_neg 0.455 twin 0.70 KL  240.1 L_inv 0.000 m_std 0.56 | ent 0.00 | clusters 1 K_eff 1.00 churn 0.00 dpart 0.000 | acc* 0.20 |    23s
+ep  10 it   165 | L_pos 4.010 L_neg 0.376 twin 0.59 KL  280.8 L_inv 0.000 m_std 0.86 | ent 1.12 | clusters 1 K_eff 4.04 churn 0.00 dpart 0.000 | acc* 0.20 |    29s
+ep  11 it   180 | L_pos 0.693 L_neg 0.461 twin 0.77 KL  311.2 L_inv 0.000 m_std 0.85 | ent 1.23 | clusters 2 K_eff 4.05 churn 0.69 dpart 0.200 | acc* 0.40 |    36s
+ep  12 it   195 | L_pos 0.599 L_neg 0.246 twin 0.78 KL  331.1 L_inv 0.000 m_std 0.77 | ent 0.24 | clusters 1 K_eff 1.76 churn 0.95 dpart 0.200 | acc* 0.20 |    44s
+ep  13 it   210 | L_pos 0.349 L_neg 0.260 twin 0.79 KL  328.7 L_inv 0.000 m_std 0.72 | ent 0.51 | clusters 5 K_eff 5.03 churn 0.62 dpart 0.800 | acc* 1.00 |    51s
+ep  14 it   225 | L_pos 0.302 L_neg 0.271 twin 0.80 KL  322.6 L_inv 0.000 m_std 0.70 | ent 0.34 | clusters 5 K_eff 7.12 churn 0.71 dpart 0.000 | acc* 1.00 |    58s
+ep  15 it   240 | L_pos 0.287 L_neg 0.235 twin 0.81 KL  320.1 L_inv 0.000 m_std 0.68 | ent 0.16 | clusters 5 K_eff 5.87 churn 0.23 dpart 0.000 | acc* 1.00 |    65s
+ep  16 it   255 | L_pos 0.300 L_neg 0.245 twin 0.81 KL  319.4 L_inv 0.000 m_std 0.67 | ent 0.14 | clusters 5 K_eff 5.96 churn 0.10 dpart 0.000 | acc* 1.00 |    72s
+ep  17 it   270 | L_pos 0.318 L_neg 0.238 twin 0.80 KL  317.0 L_inv 0.000 m_std 0.64 | ent 0.19 | clusters 5 K_eff 7.58 churn 0.29 dpart 0.000 | acc* 1.00 |    79s
+ep  18 it   285 | L_pos 0.289 L_neg 0.252 twin 0.83 KL  315.3 L_inv 0.000 m_std 0.58 | ent 0.40 | clusters 5 K_eff 7.36 churn 0.28 dpart 0.000 | acc* 1.00 |    86s
+ep  19 it   300 | L_pos 0.302 L_neg 0.226 twin 0.82 KL  314.4 L_inv 0.000 m_std 0.55 | ent 0.38 | clusters 5 K_eff 7.21 churn 0.25 dpart 0.000 | acc* 1.00 |    93s
+ep  20 it   315 | L_pos 0.359 L_neg 0.235 twin 0.81 KL  313.5 L_inv 0.000 m_std 0.53 | ent 0.32 | clusters 5 K_eff 8.05 churn 0.30 dpart 0.000 | acc* 1.00 |   101s
+ep  21 it   330 | L_pos 0.298 L_neg 0.234 twin 0.82 KL  313.1 L_inv 0.000 m_std 0.51 | ent 0.34 | clusters 5 K_eff 8.59 churn 0.39 dpart 0.000 | acc* 1.00 |   109s
+ep  22 it   345 | L_pos 0.302 L_neg 0.269 twin 0.80 KL  309.9 L_inv -0.000 m_std 0.50 | ent 0.37 | clusters 5 K_eff 7.95 churn 0.41 dpart 0.000 | acc* 1.00 |   116s
+ep  23 it   360 | L_pos 0.306 L_neg 0.274 twin 0.81 KL  310.2 L_inv -0.000 m_std 0.51 | ent 0.40 | clusters 5 K_eff 7.95 churn 0.31 dpart 0.000 | acc* 1.00 |   123s
+ep  24 it   375 | L_pos 0.309 L_neg 0.250 twin 0.82 KL  307.4 L_inv -0.000 m_std 0.51 | ent 0.46 | clusters 5 K_eff 7.96 churn 0.31 dpart 0.000 | acc* 1.00 |   130s
+ep  25 it   390 | L_pos 0.316 L_neg 0.244 twin 0.82 KL  307.0 L_inv 0.000 m_std 0.51 | ent 0.46 | clusters 5 K_eff 8.04 churn 0.32 dpart 0.000 | acc* 1.00 |   137s
+ep  26 it   405 | L_pos 0.325 L_neg 0.250 twin 0.81 KL  305.3 L_inv 0.000 m_std 0.52 | ent 0.44 | clusters 5 K_eff 7.98 churn 0.31 dpart 0.000 | acc* 1.00 |   144s
+ep  27 it   420 | L_pos 0.307 L_neg 0.229 twin 0.82 KL  303.6 L_inv 0.000 m_std 0.50 | ent 0.51 | clusters 5 K_eff 8.95 churn 0.36 dpart 0.000 | acc* 1.00 |   151s
+ep  28 it   435 | L_pos 0.267 L_neg 0.209 twin 0.85 KL  301.7 L_inv 0.000 m_std 0.50 | ent 0.53 | clusters 5 K_eff 9.28 churn 0.42 dpart 0.000 | acc* 1.00 |   158s
+ep  29 it   450 | L_pos 0.312 L_neg 0.248 twin 0.81 KL  300.9 L_inv 0.000 m_std 0.49 | ent 0.57 | clusters 6 K_eff 9.35 churn 0.44 dpart 0.100 | acc* 0.90 |   165s
+ep  30 it   465 | L_pos 0.286 L_neg 0.222 twin 0.83 KL  301.7 L_inv 0.000 m_std 0.49 | ent 0.51 | clusters 5 K_eff 9.01 churn 0.43 dpart 0.100 | acc* 1.00 |   174s
+ep  31 it   480 | L_pos 0.309 L_neg 0.244 twin 0.81 KL  300.2 L_inv 0.000 m_std 0.49 | ent 0.48 | clusters 5 K_eff 9.04 churn 0.42 dpart 0.000 | acc* 1.00 |   181s
+ep  32 it   495 | L_pos 0.301 L_neg 0.230 twin 0.82 KL  299.6 L_inv 0.000 m_std 0.50 | ent 0.29 | clusters 5 K_eff 7.50 churn 0.41 dpart 0.000 | acc* 1.00 |   188s
+ep  33 it   510 | L_pos 0.302 L_neg 0.218 twin 0.82 KL  299.3 L_inv 0.000 m_std 0.49 | ent 0.22 | clusters 5 K_eff 7.63 churn 0.43 dpart 0.000 | acc* 1.00 |   195s
+ep  34 it   525 | L_pos 0.303 L_neg 0.248 twin 0.82 KL  299.5 L_inv -0.000 m_std 0.48 | ent 0.35 | clusters 5 K_eff 8.14 churn 0.33 dpart 0.000 | acc* 1.00 |   202s
+ep  35 it   540 | L_pos 0.310 L_neg 0.218 twin 0.82 KL  296.8 L_inv 0.000 m_std 0.50 | ent 0.19 | clusters 5 K_eff 6.88 churn 0.43 dpart 0.000 | acc* 1.00 |   209s
+ep  36 it   555 | L_pos 0.323 L_neg 0.196 twin 0.82 KL  298.1 L_inv 0.000 m_std 0.51 | ent 0.25 | clusters 5 K_eff 8.00 churn 0.26 dpart 0.000 | acc* 1.00 |   216s
+ep  37 it   570 | L_pos 0.284 L_neg 0.211 twin 0.83 KL  302.4 L_inv 0.000 m_std 0.49 | ent 0.45 | clusters 5 K_eff 8.91 churn 0.37 dpart 0.000 | acc* 1.00 |   224s
+ep  38 it   585 | L_pos 0.292 L_neg 0.226 twin 0.83 KL  305.5 L_inv 0.000 m_std 0.48 | ent 0.59 | clusters 5 K_eff 8.94 churn 0.38 dpart 0.000 | acc* 1.00 |   231s
+ep  39 it   600 | L_pos 0.319 L_neg 0.215 twin 0.81 KL  306.8 L_inv 0.000 m_std 0.49 | ent 0.27 | clusters 5 K_eff 7.32 churn 0.43 dpart 0.000 | acc* 1.00 |   238s
+ep  40 it   615 | L_pos 0.313 L_neg 0.222 twin 0.81 KL  307.1 L_inv -0.000 m_std 0.49 | ent 0.36 | clusters 5 K_eff 7.17 churn 0.24 dpart 0.000 | acc* 1.00 |   247s
+ep  41 it   630 | L_pos 0.297 L_neg 0.215 twin 0.83 KL  302.3 L_inv 0.000 m_std 0.50 | ent 0.36 | clusters 5 K_eff 7.11 churn 0.23 dpart 0.000 | acc* 1.00 |   254s
+ep  42 it   645 | L_pos 0.281 L_neg 0.196 twin 0.83 KL  299.4 L_inv 0.000 m_std 0.50 | ent 0.35 | clusters 5 K_eff 7.16 churn 0.24 dpart 0.000 | acc* 1.00 |   261s
+ep  43 it   660 | L_pos 0.296 L_neg 0.210 twin 0.81 KL  296.5 L_inv 0.000 m_std 0.50 | ent 0.35 | clusters 5 K_eff 7.58 churn 0.26 dpart 0.000 | acc* 1.00 |   268s
+ep  44 it   675 | L_pos 0.283 L_neg 0.202 twin 0.84 KL  293.7 L_inv 0.000 m_std 0.49 | ent 0.43 | clusters 5 K_eff 7.54 churn 0.29 dpart 0.000 | acc* 1.00 |   275s
+ep  45 it   690 | L_pos 0.308 L_neg 0.211 twin 0.81 KL  293.4 L_inv 0.000 m_std 0.50 | ent 0.41 | clusters 5 K_eff 7.47 churn 0.28 dpart 0.000 | acc* 1.00 |   284s
+ep  46 it   705 | L_pos 0.317 L_neg 0.206 twin 0.81 KL  291.7 L_inv -0.000 m_std 0.49 | ent 0.39 | clusters 5 K_eff 7.58 churn 0.27 dpart 0.000 | acc* 1.00 |   291s
+ep  47 it   720 | L_pos 0.299 L_neg 0.196 twin 0.81 KL  292.8 L_inv -0.000 m_std 0.50 | ent 0.38 | clusters 5 K_eff 7.30 churn 0.26 dpart 0.000 | acc* 1.00 |   298s
+ep  48 it   735 | L_pos 0.302 L_neg 0.195 twin 0.82 KL  292.7 L_inv 0.000 m_std 0.49 | ent 0.36 | clusters 5 K_eff 7.08 churn 0.23 dpart 0.000 | acc* 1.00 |   305s
+ep  49 it   750 | L_pos 0.286 L_neg 0.182 twin 0.83 KL  290.0 L_inv 0.000 m_std 0.50 | ent 0.35 | clusters 5 K_eff 7.24 churn 0.22 dpart 0.000 | acc* 1.00 |   312s
+ep  50 it   765 | L_pos 0.265 L_neg 0.188 twin 0.84 KL  288.4 L_inv -0.000 m_std 0.49 | ent 0.37 | clusters 5 K_eff 7.21 churn 0.23 dpart 0.000 | acc* 1.00 |   320s
+ep  51 it   780 | L_pos 0.281 L_neg 0.181 twin 0.83 KL  288.6 L_inv 0.000 m_std 0.49 | ent 0.38 | clusters 5 K_eff 7.30 churn 0.24 dpart 0.000 | acc* 1.00 |   327s
+ep  52 it   795 | L_pos 0.287 L_neg 0.192 twin 0.83 KL  291.1 L_inv 0.000 m_std 0.48 | ent 0.40 | clusters 5 K_eff 7.32 churn 0.23 dpart 0.000 | acc* 1.00 |   335s
+ep  53 it   810 | L_pos 0.298 L_neg 0.186 twin 0.82 KL  296.1 L_inv 0.000 m_std 0.48 | ent 0.35 | clusters 5 K_eff 7.15 churn 0.24 dpart 0.000 | acc* 1.00 |   343s
+ep  54 it   825 | L_pos 0.302 L_neg 0.187 twin 0.82 KL  301.3 L_inv -0.000 m_std 0.49 | ent 0.36 | clusters 5 K_eff 7.14 churn 0.23 dpart 0.000 | acc* 1.00 |   350s
+ep  55 it   840 | L_pos 0.305 L_neg 0.190 twin 0.80 KL  305.6 L_inv -0.000 m_std 0.48 | ent 0.35 | clusters 5 K_eff 7.08 churn 0.23 dpart 0.000 | acc* 1.00 |   357s
+ep  56 it   855 | L_pos 0.304 L_neg 0.187 twin 0.82 KL  301.8 L_inv 0.000 m_std 0.49 | ent 0.33 | clusters 5 K_eff 6.92 churn 0.22 dpart 0.000 | acc* 1.00 |   364s
+ep  57 it   870 | L_pos 0.275 L_neg 0.163 twin 0.83 KL  296.9 L_inv 0.000 m_std 0.49 | ent 0.31 | clusters 5 K_eff 6.82 churn 0.20 dpart 0.000 | acc* 1.00 |   371s
+ep  58 it   885 | L_pos 0.284 L_neg 0.173 twin 0.81 KL  301.7 L_inv -0.000 m_std 0.48 | ent 0.29 | clusters 5 K_eff 6.63 churn 0.21 dpart 0.000 | acc* 1.00 |   379s
+ep  59 it   900 | L_pos 0.287 L_neg 0.177 twin 0.83 KL  301.4 L_inv -0.000 m_std 0.48 | ent 0.30 | clusters 5 K_eff 6.76 churn 0.20 dpart 0.000 | acc* 1.00 |   386s
+ep  60 it   915 | L_pos 0.291 L_neg 0.180 twin 0.81 KL  303.8 L_inv -0.000 m_std 0.48 | ent 0.32 | clusters 5 K_eff 6.87 churn 0.21 dpart 0.000 | acc* 1.00 |   394s
+ep  61 it   930 | L_pos 0.292 L_neg 0.164 twin 0.81 KL  301.9 L_inv 0.000 m_std 0.49 | ent 0.31 | clusters 5 K_eff 6.78 churn 0.20 dpart 0.000 | acc* 1.00 |   401s
+ep  62 it   945 | L_pos 0.282 L_neg 0.159 twin 0.83 KL  298.4 L_inv -0.000 m_std 0.49 | ent 0.32 | clusters 6 K_eff 7.04 churn 0.22 dpart 0.081 | acc* 0.92 |   409s
+ep  63 it   960 | L_pos 0.294 L_neg 0.170 twin 0.81 KL  295.3 L_inv -0.000 m_std 0.49 | ent 0.34 | clusters 5 K_eff 7.06 churn 0.21 dpart 0.081 | acc* 1.00 |   416s
+ep  64 it   975 | L_pos 0.288 L_neg 0.165 twin 0.82 KL  292.0 L_inv 0.000 m_std 0.50 | ent 0.32 | clusters 5 K_eff 6.87 churn 0.22 dpart 0.000 | acc* 1.00 |   422s
+ep  65 it   990 | L_pos 0.285 L_neg 0.161 twin 0.83 KL  291.2 L_inv -0.000 m_std 0.49 | ent 0.30 | clusters 5 K_eff 6.70 churn 0.19 dpart 0.000 | acc* 1.00 |   429s
+ep  66 it  1005 | L_pos 0.277 L_neg 0.161 twin 0.83 KL  290.9 L_inv -0.000 m_std 0.49 | ent 0.29 | clusters 5 K_eff 6.58 churn 0.17 dpart 0.000 | acc* 1.00 |   436s
+ep  67 it  1020 | L_pos 0.298 L_neg 0.159 twin 0.81 KL  291.3 L_inv 0.000 m_std 0.49 | ent 0.27 | clusters 5 K_eff 6.54 churn 0.18 dpart 0.000 | acc* 1.00 |   443s
+ep  68 it  1035 | L_pos 0.271 L_neg 0.150 twin 0.83 KL  290.5 L_inv -0.000 m_std 0.48 | ent 0.27 | clusters 5 K_eff 6.60 churn 0.18 dpart 0.000 | acc* 1.00 |   450s
+ep  69 it  1050 | L_pos 0.300 L_neg 0.164 twin 0.82 KL  292.6 L_inv -0.000 m_std 0.49 | ent 0.27 | clusters 5 K_eff 6.61 churn 0.16 dpart 0.000 | acc* 1.00 |   457s
+ep  70 it  1065 | L_pos 0.284 L_neg 0.157 twin 0.83 KL  291.2 L_inv -0.000 m_std 0.48 | ent 0.29 | clusters 5 K_eff 6.61 churn 0.16 dpart 0.000 | acc* 1.00 |   466s
+ep  71 it  1080 | L_pos 0.301 L_neg 0.159 twin 0.79 KL  288.1 L_inv 0.000 m_std 0.49 | ent 0.28 | clusters 5 K_eff 6.61 churn 0.18 dpart 0.000 | acc* 1.00 |   473s
+ep  72 it  1095 | L_pos 0.287 L_neg 0.158 twin 0.82 KL  288.4 L_inv -0.000 m_std 0.50 | ent 0.29 | clusters 5 K_eff 6.66 churn 0.17 dpart 0.000 | acc* 1.00 |   480s
+ep  73 it  1110 | L_pos 0.278 L_neg 0.149 twin 0.82 KL  288.1 L_inv 0.000 m_std 0.50 | ent 0.29 | clusters 5 K_eff 6.87 churn 0.19 dpart 0.000 | acc* 1.00 |   488s
+ep  74 it  1125 | L_pos 0.275 L_neg 0.148 twin 0.83 KL  286.9 L_inv -0.000 m_std 0.49 | ent 0.32 | clusters 5 K_eff 6.98 churn 0.20 dpart 0.000 | acc* 1.00 |   495s
+ep  75 it  1140 | L_pos 0.283 L_neg 0.153 twin 0.82 KL  287.4 L_inv 0.000 m_std 0.49 | ent 0.34 | clusters 5 K_eff 7.05 churn 0.21 dpart 0.000 | acc* 1.00 |   501s
+ep  76 it  1155 | L_pos 0.278 L_neg 0.152 twin 0.81 KL  285.1 L_inv -0.000 m_std 0.49 | ent 0.35 | clusters 5 K_eff 7.05 churn 0.22 dpart 0.000 | acc* 1.00 |   509s
+ep  77 it  1170 | L_pos 0.286 L_neg 0.147 twin 0.82 KL  284.9 L_inv -0.000 m_std 0.49 | ent 0.34 | clusters 5 K_eff 7.03 churn 0.21 dpart 0.000 | acc* 1.00 |   515s
+ep  78 it  1185 | L_pos 0.270 L_neg 0.150 twin 0.83 KL  283.3 L_inv 0.000 m_std 0.49 | ent 0.34 | clusters 5 K_eff 6.92 churn 0.21 dpart 0.000 | acc* 1.00 |   522s
+ep  79 it  1200 | L_pos 0.310 L_neg 0.164 twin 0.81 KL  283.3 L_inv -0.000 m_std 0.49 | ent 0.32 | clusters 6 K_eff 6.91 churn 0.20 dpart 0.029 | acc* 0.97 |   530s
+ep  80 it  1215 | L_pos 0.279 L_neg 0.146 twin 0.82 KL  281.1 L_inv 0.000 m_std 0.49 | ent 0.33 | clusters 5 K_eff 6.90 churn 0.19 dpart 0.029 | acc* 1.00 |   538s
+ep  81 it  1230 | L_pos 0.287 L_neg 0.155 twin 0.81 KL  282.7 L_inv -0.000 m_std 0.49 | ent 0.32 | clusters 5 K_eff 6.86 churn 0.20 dpart 0.000 | acc* 1.00 |   545s
+ep  82 it  1245 | L_pos 0.291 L_neg 0.149 twin 0.81 KL  283.9 L_inv 0.000 m_std 0.48 | ent 0.30 | clusters 5 K_eff 6.80 churn 0.20 dpart 0.000 | acc* 1.00 |   553s
+ep  83 it  1260 | L_pos 0.276 L_neg 0.146 twin 0.82 KL  280.6 L_inv -0.000 m_std 0.49 | ent 0.30 | clusters 5 K_eff 6.74 churn 0.19 dpart 0.000 | acc* 1.00 |   561s
+ep  84 it  1275 | L_pos 0.301 L_neg 0.171 twin 0.81 KL  279.8 L_inv 0.000 m_std 0.49 | ent 0.25 | clusters 5 K_eff 6.78 churn 0.26 dpart 0.000 | acc* 1.00 |   568s
+ep  85 it  1290 | L_pos 0.296 L_neg 0.134 twin 0.79 KL  278.9 L_inv -0.000 m_std 0.49 | ent 0.30 | clusters 5 K_eff 6.90 churn 0.20 dpart 0.000 | acc* 1.00 |   575s
+ep  86 it  1305 | L_pos 0.316 L_neg 0.154 twin 0.79 KL  280.0 L_inv -0.000 m_std 0.49 | ent 0.31 | clusters 5 K_eff 6.72 churn 0.20 dpart 0.000 | acc* 1.00 |   583s
+ep  87 it  1320 | L_pos 0.266 L_neg 0.131 twin 0.84 KL  278.0 L_inv 0.000 m_std 0.49 | ent 0.29 | clusters 5 K_eff 6.63 churn 0.20 dpart 0.000 | acc* 1.00 |   590s
+ep  88 it  1335 | L_pos 0.282 L_neg 0.140 twin 0.81 KL  277.2 L_inv -0.000 m_std 0.50 | ent 0.28 | clusters 5 K_eff 6.71 churn 0.19 dpart 0.000 | acc* 1.00 |   598s
+ep  89 it  1350 | L_pos 0.272 L_neg 0.145 twin 0.83 KL  276.4 L_inv -0.000 m_std 0.49 | ent 0.26 | clusters 5 K_eff 6.35 churn 0.18 dpart 0.000 | acc* 1.00 |   605s
+ep  90 it  1365 | L_pos 0.285 L_neg 0.148 twin 0.82 KL  274.9 L_inv -0.000 m_std 0.48 | ent 0.26 | clusters 5 K_eff 6.57 churn 0.16 dpart 0.000 | acc* 1.00 |   613s
+
+stopped after 91 epochs: converged
+
+                          name: crp_a10_seed6
+                          seed: 6
+                          data: toy
+                     n_classes: 5
+                   n_per_class: 300
+                          size: 16
+                      spurious: 0.000
+                     transform: toy_oracle
+                    epochs_run: 91
+                     converged: True
+                   stop_reason: converged
+                           acc: 1.000
+                     nmi_class: 1.000
+                nmi_background: 0.005
+  nmi_class_background_in_data: 0.005
+                 clusters_used: 5
+
+figures and metrics in /home/claude/cib-irl/results/toy_cov_k10_crp/crp_a10_seed6

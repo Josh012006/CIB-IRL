@@ -37,6 +37,38 @@ def valid_slot_mask(empty: Tensor) -> Tensor:
     return (~empty) | first_empty
 
 
+def crp_log_prior(counts: Tensor, empty: Tensor, alpha: float, prev: Tensor | int | None = None) -> Tensor:
+    """log pi0(k | s): the Chinese-restaurant-process prior on where the next image goes (docs 5.24).
+
+        pi0(k)    = n_k / (n - 1 + alpha)     for an occupied slot k   (n_k = its size WITHOUT the image being placed)
+        pi0(open) = alpha / (n - 1 + alpha)   for the new cluster      (the first empty slot)
+
+    counts [K] (slot sizes); empty [K] or [B, K] (occupancy of the state the policy sees, the image itself included);
+    prev: the slot the image sits in right now (-1 or None: nowhere). It is withdrawn from its own slot's size, as in a
+    collapsed Gibbs sampler; a slot left with no other member counts as a new cluster (mass alpha). Returns [K] or [B, K],
+    normalized over the valid slots (the occupied ones plus the first empty one), -inf elsewhere.
+
+    The prior is a CONSTANT of the state (no gradient): it is an additive offset in the logits of the policy, so that
+    pi(a | s) is proportional to exp(score_omega(s, a)) * pi0(a | s). Where the reward is indifferent between two slots
+    (identical summaries) the scores tie and the prior alone decides: in proportion to the sizes.
+    """
+    if alpha <= 0:
+        raise ValueError(f"alpha must be > 0, got {alpha}")
+    squeeze = empty.dim() == 1
+    empty2 = empty.unsqueeze(0) if squeeze else empty
+    n = counts.to(torch.float32).unsqueeze(0).expand(empty2.shape).clone()
+    if prev is not None:
+        prev = torch.as_tensor(prev, device=n.device, dtype=torch.long).reshape(-1)
+        rows = (prev >= 0).nonzero().flatten()
+        if len(rows):
+            n[rows, prev[rows]] -= 1.0
+    valid = valid_slot_mask(empty2)
+    mass = torch.where(n > 0, n, torch.full_like(n, float(alpha)))
+    log_mass = mass.log().masked_fill(~valid, NEG_INF)
+    out = log_mass - torch.logsumexp(log_mass, dim=-1, keepdim=True)
+    return out[0] if squeeze else out
+
+
 def masked_log_softmax(scores: Tensor, valid: Tensor) -> Tensor:
     """log softmax over the valid slots only. Invalid slots get -inf."""
     return scores.masked_fill(~valid, NEG_INF).log_softmax(-1)

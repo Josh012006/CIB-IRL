@@ -22,21 +22,28 @@ class PolicyNet(nn.Module):
         self.scorer = SlotScorer(z_dim, m_dim, hidden, rel_dim, use_z)
         self.temperature = float(temperature)
 
-    def log_probs(self, z: Tensor, m: Tensor, summaries: Tensor, empty: Tensor) -> Tensor:
+    def log_probs(self, z: Tensor, m: Tensor, summaries: Tensor, empty: Tensor,
+                  log_prior: Tensor | None = None) -> Tensor:
         """log pi(a | s) over the valid slots: [B, K] (-inf on invalid slots).
 
-        pi = softmax(scores / T). T is part of the DEFINITION of the policy, so sampling, the PPO ratio and
+        pi = softmax(scores / T + log_prior). T is part of the DEFINITION of the policy, so sampling, the PPO ratio and
         the entropy all use the same distribution. T < 1 sharpens it (less exploration); it never changes the argmax.
+        `log_prior` [B, K] (memory.crp_log_prior) is a fixed additive offset, outside of T: the prior over partitions
+        (docs 5.24). None = no prior, exactly the policy of before.
         """
         scores = self.scorer(z, m, summaries, empty)
         if self.temperature != 1.0:
             scores = scores / self.temperature
-        return masked_log_softmax(scores, valid_slot_mask(empty))
+        valid = valid_slot_mask(empty)
+        if log_prior is not None:
+            scores = scores + log_prior.masked_fill(~valid, 0.0)
+        return masked_log_softmax(scores, valid)
 
     @torch.no_grad()
-    def act(self, z: Tensor, m: Tensor, summaries: Tensor, empty: Tensor, greedy: bool = False):
+    def act(self, z: Tensor, m: Tensor, summaries: Tensor, empty: Tensor, greedy: bool = False,
+            log_prior: Tensor | None = None):
         """Sample (or argmax) one action per row. Returns action [B], log-prob [B]."""
-        logp = self.log_probs(z, m, summaries, empty)
+        logp = self.log_probs(z, m, summaries, empty, log_prior)
         a = logp.argmax(-1) if greedy else torch.distributions.Categorical(logits=logp).sample()
         return a, logp.gather(-1, a.unsqueeze(-1)).squeeze(-1)
 

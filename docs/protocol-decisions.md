@@ -480,5 +480,40 @@ Question (suite de 5.22) : si l'intention et la représentation sont correctes, 
 * **Lecture (non testée directement).** Les orbites idéales améliorent un point que la représentation avait déjà résolu (séparer les classes), et sont neutres sur ce qui manque : un état où deux slots portent la même classe n'apparaît jamais dans les épisodes experts (une mémoire d'épisode a un slot par groupe), donc rien n'apprend à la reward à préférer l'un des deux. À $K=5$ la capacité forçait la fermeture ; à $K=10$ une égalité exacte n'a aucune raison de se défaire (un slot de 150 images ne se vide pas par tirage au hasard). Les pistes à discuter portent donc sur le départage des égalités entre slots d'une même classe, pas sur l'expert ni sur la représentation.
 * Limites : 8 runs sur 3 conditions pour les distances de $m$, 4 runs pour les écarts de reward entre doublons ; l'invariance est mesurée avec un seul tirage de fond par image ; je n'ai pas séparé le rôle de la reward et celui de la politique (les deux sont à égalité d'après la sonde de 5.19).
 
+### 5.24 A priori CRP sur les placements (2026-10-16)
+Suite de 5.23 : à égalité de reward entre deux slots d'une même classe, rien ne départage les deux ; `rho` n'y change rien (il porte sur les indices de slots des états experts, pas sur les slots de l'apprenant). On remplace l'a priori implicite de la politique (uniforme sur les slots valides, via le bonus d'entropie) par un a priori explicite sur les partitions, le processus du restaurant chinois (CRP).
+
+* **Définition.** Pour l'image en cours de placement, avec $n_k$ la taille du slot $k$ sans cette image, $n$ le nombre d'images placées et $\alpha>0$ la concentration :
+$$\pi_0(k\mid s)=\frac{n_k}{n-1+\alpha}\ \text{(slot occupé)},\qquad \pi_0(\text{ouvrir}\mid s)=\frac{\alpha}{n-1+\alpha}.$$
+Un slot dont l'image est le seul membre compte comme un nouveau cluster (masse $\alpha$). La politique devient $\pi(a\mid s)\propto\exp(\mathrm{score}_\omega(s,a))\,\pi_0(a\mid s)$ : $\log\pi_0$ est un décalage additif fixe des logits, utilisé pour l'échantillonnage, le ratio PPO, l'entropie, $L_{inv}$, la phase teacher et `predict` (chaque image y est retirée de son propre slot). Aucun label n'intervient, l'a priori ne lit que les tailles de slots.
+* **Pourquoi un décalage des logits et pas une reward shapée.** La politique n'a aucune entrée de taille de slot (entrées : $z$, $m$, summaries, indicateurs de slots vides) : elle ne pourrait pas représenter une reward qui dépend de $\log n_k$, et elle ne peut pas défaire le décalage. Où la reward est indifférente (scores égaux) l'a priori seul décide, en proportion des tailles ; ailleurs les écarts de logit réels (19 à 70, 5.23) écrasent $\log n_k$ (environ 5).
+* **Code.** `cibirl/memory.py` : `crp_log_prior` ; `cibirl/policy.py` : `log_probs` et `act` prennent `log_prior` ; `cibirl/train.py` : `TrainConfig.slot_prior` (`uniform` par défaut = ancien comportement, `crp`) et `crp_alpha` (1,0), `Rollout.log_prior`, branchement dans `learner_rollout`, `policy_step`, `distill_step`, `_invariance` et `predict`. Tests : `tests/test_slot_prior.py` (masses exactes, retrait de l'image, départage des égalités, échantillonnage proportionnel aux tailles, un balayage de re-placement qui conserve les proportions au lieu de revenir à 50/50 sous a priori uniforme, `predict`) ; 166 tests passent au total. Le défaut est bit-identique à l'ancien code (même hash des métriques et de la partition sur un entraînement de 4 epochs avec $L_{cov}$, `rho` et plancher).
+* **Suite `configs/suites/toy_cov_k10_crp.yml`** : identique à `toy_cov_k10` ($K=10$, $\lambda_{cov}=3$, `rho=0,1`, `neg_floor=0,1`, 10 graines, arrêt à la convergence sans labels ou à 300 epochs) avec `slot_prior=crp` et $\alpha=1$ ou $\alpha=10$.
+
+Résultat de la partition évaluée (argmax de la politique, a priori inclus) : **20 runs sur 20 convergent, ACC 1,000, NMI 1,000, 5 clusters**, en 55.4 epochs en moyenne pour $\alpha=1$ et 61.1 pour $\alpha=10$ (contre 1 graine sur 10 dans 5.19 et 0 sur 10 dans 5.22, à $K=10$). Pas de différence visible entre les deux $\alpha$ à ce niveau.
+
+Mais le même run lu sans l'a priori à l'inférence et l'état de la mémoire donnent une autre image (`results/toy_cov_k10_crp/summary.png`) :
+
+| graine | $\alpha=1$ : epochs | clusters sans a priori | slots mémoire | classes coupées en mémoire | $\alpha=10$ : epochs | clusters sans a priori | slots mémoire | classes coupées en mémoire |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 41 | 8 | 9 | 1 | 50 | 9 | 10 | 2 |
+| 1 | 51 | 6 | 6 | 1 | 51 | 6 | 6 | 0 |
+| 2 | 54 | 6 | 6 | 1 | 90 | 7 | 9 | 2 |
+| 3 | 61 | 6 | 6 | 1 | 60 | 9 | 9 | 2 |
+| 4 | 71 | 9 | 9 | 3 | 47 | 5 | 6 | 1 |
+| 5 | 53 | 7 | 7 | 0 | 52 | 10 | 10 | 2 |
+| 6 | 85 | 7 | 7 | 2 | 91 | 8 | 8 | 2 |
+| 7 | 45 | 6 | 7 | 2 | 73 | 6 | 6 | 1 |
+| 8 | 46 | 7 | 8 | 3 | 50 | 8 | 10 | 2 |
+| 9 | 47 | 6 | 6 | 1 | 47 | 8 | 10 | 3 |
+
+Moyennes ($\alpha=1$ puis $\alpha=10$) : clusters sans a priori à l'inférence 6.8 et 7.6 (ACC 0.91 et 0.90) ; slots occupés en mémoire à l'arrêt 7.1 et 8.4 ; classes coupées en mémoire (au moins deux slots de plus de 10 % de la classe) 1.5 et 1.7, 18 runs sur 20 avec au moins une classe coupée ; pureté de la mémoire 0,99 à 1,00.
+
+* **L'effet est surtout un départage à la lecture.** Sur les 20 runs, la sortie est juste parce que l'argmax envoie chaque image dans le plus gros des slots doublons (maximum a posteriori sous le CRP), pas parce que la mémoire s'est refermée : sans l'a priori à l'inférence, la même politique donne 5 à 10 clusters (ACC 0,77 à 1,00), comme avant.
+* **L'a priori change quand même la dynamique de formation.** Moyennes sur les 10 graines : $K_{eff}$ de la mémoire aux epochs 20 à 30 : 6,3 ($\alpha=1$) et 6,8 ($\alpha=10$) contre 8,1 sans a priori ; slots occupés 7,6 et 8,3 contre 9,9 ; images qui changent de slot par epoch (epochs 40 à 50) 0,19 contre 0,35. $K_{eff}$ passe par environ 4,8 à l'epoch 12 avec l'a priori (valeur la plus proche de 5) puis remonte à 6-7. $\alpha=1$ ouvre moins que $\alpha=10$, dans le sens attendu.
+* **Aucune fermeture des doublons déjà formés sur la durée observée.** $K_{eff}$ passe de 6,27 (epochs 20 à 30) à 6,04 (epochs 40 à 50) pour $\alpha=1$, de 6,80 à 6,76 pour $\alpha=10$ (8,08 à 8,06 sans a priori). C'est compatible avec la dérive neutre attendue : à reward égale, la taille d'un slot suit une marche sans dérive, de temps de fixation de l'ordre de $n/2$ epochs pour un slot de $n$ images (estimation par diffusion, non testée), soit un ordre de grandeur de 150 epochs pour 300 images, plus que la durée de ces runs.
+* **Limite de la règle d'arrêt.** La règle (partition argmax stable, nombre de clusters constant, plateau des pertes) ne regarde que la partition évaluée, qui inclut maintenant l'a priori : elle s'arrête dès `min_epochs` (41 à 91 epochs) sans voir les doublons de la mémoire. La convergence déclarée est donc celle de la sortie, pas celle de la mémoire.
+* **Non testé** : l'effet de longue durée sur la mémoire (runs sans arrêt anticipé jusqu'à 300 epochs), une règle d'arrêt qui regarde aussi la mémoire, le choix de $\alpha$. Un run par graine et par $\alpha$.
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.

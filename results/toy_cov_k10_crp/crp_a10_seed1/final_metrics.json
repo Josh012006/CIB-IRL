@@ -1,0 +1,18 @@
+{
+  "name": "crp_a10_seed1",
+  "seed": 1,
+  "data": "toy",
+  "n_classes": 5,
+  "n_per_class": 300,
+  "size": 16,
+  "spurious": 0.0,
+  "transform": "toy_oracle",
+  "epochs_run": 51,
+  "converged": true,
+  "stop_reason": "converged",
+  "acc": 1.0,
+  "nmi_class": 1.0,
+  "nmi_background": 0.0016107140001436913,
+  "nmi_class_background_in_data": 0.0016107140001436913,
+  "clusters_used": 5
+}

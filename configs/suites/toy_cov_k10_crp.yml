@@ -1,0 +1,22 @@
+# Same as toy_cov_k10 (K = 10 slots for 5 classes, lambda_cov = 3, rho = 0.1, neg_floor = 0.1, 10 seeds, convergence or 300
+# epochs) with the CRP prior on the placements (docs/protocol-decisions.md, 5.24): the policy is
+# pi(a | s) proportional to exp(score_omega(s, a)) * pi0(a | s), pi0(k) = n_k / (n - 1 + alpha) for an occupied slot (n_k = its size,
+# the image itself withdrawn) and pi0(open) = alpha / (n - 1 + alpha). It only decides where the reward is indifferent: the two
+# slots of one class (5.23). Two concentrations, one order of magnitude apart; the point is to see whether the prior closes the
+# duplicate slots at all, not yet to choose alpha. No label is used anywhere (the prior reads slot sizes only).
+#
+#   python scripts/run_suite.py configs/suites/toy_cov_k10_crp.yml --cpu-count 2 --skip-existing
+name: toy_cov_k10_crp
+description: toy data, K = 10 slots, lambda_cov = 3 + rho + neg_floor, CRP prior on the placements (alpha 1 and 10), 10 seeds, convergence or 300 epochs
+seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  stop: {max_epochs: 300, min_epochs: 40}
+experiments:
+  - name: crp_a1
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 1.0}
+  - name: crp_a10
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 10.0}
