@@ -32,6 +32,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
+import torch
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,7 +40,8 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import datasets                                                     # noqa: E402
 from cibirl import transforms                                       # noqa: E402
-from cibirl.convergence import ConvergenceMonitor, StopConfig       # noqa: E402
+from cibirl.cleanup import merge_twin_slots                         # noqa: E402
+from cibirl.convergence import ConvergenceMonitor, StopConfig, partition_change   # noqa: E402
 from cibirl.train import TrainConfig, Trainer                       # noqa: E402
 from eval import visualize as viz                                   # noqa: E402
 from eval.metrics import cluster_acc, nmi                           # noqa: E402
@@ -184,11 +186,31 @@ def main(argv=None) -> None:
     # ---- final clustering: argmax of the policy with the memory frozen (README 6.7) ----------------
     pred = tr.predict().cpu().numpy()
     m = tr.intents().cpu().numpy()
+    cleanup = None
+    if cfg.final_cleanup:
+        # last step, nothing is trained: merge the slots that hold one cluster twice, then read the output again (docs 5.28)
+        mem_before = tr.memory.assign.cpu().numpy().copy()
+        before = {"acc": cluster_acc(pred, y, cfg.num_slots), "clusters": int(len(np.unique(pred))),
+                  "memory_clusters": int(len(np.unique(mem_before[mem_before >= 0]))), "mem_gap": partition_change(mem_before, pred)}
+        info = merge_twin_slots(tr.memory, torch.from_numpy(m).to(tr.memory.device), cfg.cleanup_ratio)
+        pred = tr.predict().cpu().numpy()
+        mem_after = tr.memory.assign.cpu().numpy()
+        # EVALUATION ONLY: did a merge join two different classes?
+        dominant = {int(k): int(np.bincount(y[mem_before == k], minlength=int(y.max()) + 1).argmax()) for k in np.unique(mem_before[mem_before >= 0])}
+        wrong = sum(1 for k, r in info["rep"].items() if k != r and dominant[k] != dominant[r])
+        cleanup = {"before": before, "merged_slots": info["merged_pairs"], "jump": info["jump"], "threshold": info["threshold"],
+                   "slot_distances": info["distances"], "merges_across_classes": wrong,
+                   "after": {"acc": cluster_acc(pred, y, cfg.num_slots), "clusters": int(len(np.unique(pred))),
+                             "memory_clusters": int(len(np.unique(mem_after[mem_after >= 0]))), "mem_gap": partition_change(mem_after, pred)}}
     final = {"name": out.name, "seed": cfg.seed, "data": args.data, **data.info, "transform": bank.name,
              "epochs_run": len(history), "converged": monitor.converged, "stop_reason": monitor.reason,
              "output_converged_epoch": monitor.output_converged_epoch, "memory_converged_epoch": monitor.memory_converged_epoch,
              "mem_gap": history[-1].get("mem_gap"), "memory_clusters": history[-1].get("n_clusters", 0) + history[-1].get("mem_excess", 0),
              "acc": cluster_acc(pred, y, cfg.num_slots), "nmi_class": nmi(pred, y)}
+    if cleanup is not None:
+        final["before_cleanup"] = cleanup["before"]
+        final["cleanup"] = {k: v for k, v in cleanup.items() if k != "before"}
+        final["mem_gap"], final["memory_clusters"] = cleanup["after"]["mem_gap"], cleanup["after"]["memory_clusters"]
     if oracle:
         final["oracle_labels_used"] = True                          # diagnostic run: not comparable to the method
     if bg is not None:

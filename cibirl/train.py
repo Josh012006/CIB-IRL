@@ -117,6 +117,9 @@ class TrainConfig:
                                    # feedback towards the bigger of two slots the reward cannot tell apart (docs 5.25)
     crp_gate: float = -1.0         # delta >= 0: the prior only acts among the slots whose score is within delta nats of the best one
                                    # (the slots the scores cannot tell apart; docs 5.26). < 0: the prior acts everywhere (5.24)
+    final_cleanup: bool = False    # after training (policy frozen): merge the memory slots that are the same cluster twice, then read
+                                   # the output again (cibirl/cleanup.py, docs 5.28). Not part of the training.
+    cleanup_ratio: float = 10.0    # guard of that step: merge only if the largest jump between sorted slot distances is >= this
     ppo_clip: float = 0.2
     ppo_epochs: int = 4
     value_coef: float = 0.5
@@ -260,6 +263,8 @@ class Trainer:
             raise ValueError("intent_decorrelate must be none, whiten or cov, and intent_cov_weight >= 0")
         if cfg.slot_prior not in ("uniform", "crp") or cfg.crp_alpha <= 0 or cfg.crp_power <= 0:
             raise ValueError("slot_prior must be uniform or crp, and crp_alpha > 0, crp_power > 0")
+        if cfg.cleanup_ratio <= 1:
+            raise ValueError("cleanup_ratio must be > 1")
         oracle_on = cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0
         if oracle_on and oracle_labels is None:
             raise ValueError("expert_oracle_link / oracle_warm_memory are oracle diagnostics: pass oracle_labels "

@@ -1,0 +1,11 @@
+runs finis: 100
+convergées (règle de sortie): 100 / 100 ; epoch de convergence: min 40 médiane 51 max 95
+sortie juste avant nettoyage: 96/100 ; après: 93/100
+mémoire = sortie (mem_gap<=0.01) avant: 22/100 ; après: 96/100
+slots mémoire avant: moyenne 7.13 [3-10] ; après: moyenne 4.96 [3-6]
+slots mémoire après == clusters de sortie: 96/100
+fusions entre classes différentes (éval.): 0 sur 217 fusions
+runs avec doublons fusionnés: 79 ; saut min parmi eux: 53 ; runs sans doublon: 21 ; saut max parmi eux: 1.19
+distance max entre doublons fusionnés: 0.0938 ; distance min entre clusters distincts: 2.36
+sorties non justes après nettoyage: [('final_seed12', 4, 0.8, 4, 0.8), ('final_seed19', 5, 1.0, 4, 0.8), ('final_seed30', 4, 0.8, 4, 0.8), ('final_seed59', 4, 0.8, 4, 0.8), ('final_seed80', 5, 1.0, 4, 0.8), ('final_seed81', 5, 1.0, 3, 0.6), ('final_seed94', 3, 0.6, 3, 0.6)]
+échecs de sortie: 7/100 ; borne sup. 95% (Clopper-Pearson): 0.139

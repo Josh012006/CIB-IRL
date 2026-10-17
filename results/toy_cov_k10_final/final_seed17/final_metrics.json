@@ -1,0 +1,63 @@
+{
+  "name": "final_seed17",
+  "seed": 17,
+  "data": "toy",
+  "n_classes": 5,
+  "n_per_class": 300,
+  "size": 16,
+  "spurious": 0.0,
+  "transform": "toy_oracle",
+  "epochs_run": 44,
+  "converged": true,
+  "stop_reason": "converged",
+  "output_converged_epoch": 44,
+  "memory_converged_epoch": null,
+  "mem_gap": 0.002,
+  "memory_clusters": 5,
+  "acc": 1.0,
+  "nmi_class": 1.0,
+  "before_cleanup": {
+    "acc": 1.0,
+    "clusters": 5,
+    "memory_clusters": 7,
+    "mem_gap": 0.13333333333333333
+  },
+  "cleanup": {
+    "merged_slots": 2,
+    "jump": 106.32290949477152,
+    "threshold": 0.0446113757789135,
+    "slot_distances": [
+      0.0008546707686036825,
+      0.0446113757789135,
+      4.743211269378662,
+      4.750668048858643,
+      4.751156330108643,
+      4.751805782318115,
+      4.763834476470947,
+      4.769586563110352,
+      4.772848129272461,
+      4.773341178894043,
+      4.778732776641846,
+      4.77899694442749,
+      4.7964067459106445,
+      4.814417839050293,
+      4.825229167938232,
+      4.825419902801514,
+      4.837001323699951,
+      4.866061687469482,
+      4.866797924041748,
+      4.866875171661377,
+      4.8683390617370605
+    ],
+    "merges_across_classes": 0,
+    "after": {
+      "acc": 1.0,
+      "clusters": 5,
+      "memory_clusters": 5,
+      "mem_gap": 0.002
+    }
+  },
+  "nmi_background": 0.004595632686189313,
+  "nmi_class_background_in_data": 0.004595632686189338,
+  "clusters_used": 5
+}

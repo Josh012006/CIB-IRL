@@ -133,6 +133,25 @@ def test_save_epochs_saves_the_requested_checkpoints_and_does_not_touch_the_trai
     assert [r["L_pos"] for r in rows("plain")] == [r["L_pos"] for r in rows("saved")]      # same numbers, bit for bit
 
 
+def test_final_cleanup_is_recorded_and_the_default_run_is_untouched(tmp_path):
+    def go(name, *extra):
+        return run([ROOT / "scripts" / "run_experiment.py", "--data", "toy", "--transform", "generic", "--out-root", tmp_path,
+                    "--fixed-epochs", "3", "--name", name, *TINY, "num_slots=10", "slot_prior=crp", *extra])
+    assert go("plain").returncode == 0
+    res = go("clean", "final_cleanup=true")
+    assert res.returncode == 0, res.stderr[-2000:]
+    plain = json.loads((tmp_path / "plain" / "final_metrics.json").read_text(encoding="utf-8"))
+    clean = json.loads((tmp_path / "clean" / "final_metrics.json").read_text(encoding="utf-8"))
+    assert "cleanup" not in plain and "before_cleanup" not in plain
+    for key in ("before_cleanup", "cleanup"):
+        assert key in clean
+    assert {"acc", "clusters", "memory_clusters", "mem_gap"} <= set(clean["before_cleanup"])
+    assert {"merged_slots", "jump", "threshold", "slot_distances", "merges_across_classes", "after"} <= set(clean["cleanup"])
+    assert clean["cleanup"]["after"]["memory_clusters"] <= clean["before_cleanup"]["memory_clusters"]
+    rows = lambda n: [json.loads(l) for l in (tmp_path / n / "metrics.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r["L_pos"] for r in rows("plain")] == [r["L_pos"] for r in rows("clean")]       # the training is not touched
+
+
 def test_run_errors_are_explicit(tmp_path):
     base = [ROOT / "scripts" / "run_experiment.py", "--out-root", tmp_path]
     assert "unknown transform bank" in (run([*base, "--transform", "nope"]).stderr)
