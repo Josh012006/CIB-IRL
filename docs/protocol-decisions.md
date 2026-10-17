@@ -568,5 +568,25 @@ avec $\pi_0$ l'a priori CRP de 5.24. La constante $c$ est choisie pour que l'a p
 * **Pourquoi $\delta=1$ ne referme pas : pas parce que les jumeaux sortent de $S$.** Sur les 5 runs non fermés (checkpoints finaux), l'écart de score de la politique entre slots jumeaux est 0,00 à 0,01 nat et l'écart de reward 0,000 : les jumeaux sont toujours dans $S$ et le départage par la taille y est identique à 5.24 (dérive neutre). Ce qui change est la création de doublons : slots en excès ($K_{mém}-K_{sortie}$) à l'epoch 40, moyennes sur 5 graines : 4,4 ($\delta=1$), 4,2 ($\delta=5$), 2,8 (sans gate). Hypothèse, non testée directement : sans gate le biais $\log(\alpha/n)$ taxe aussi « ouvrir » pendant la formation et limite les doublons ; avec le gate cette taxe disparaît dès que « ouvrir » est à plus de $\delta$ nats, il y a plus de doublons à refermer, et la dérive neutre est lente (plusieurs paires, parfois trois slots pour une classe). C'est la même taxe qui, dans l'état ambigu, maintenait les absorptions.
 * **Limites.** 5 graines, un run par cellule. Le comportement entre $\delta=5$ et $\delta=\infty$ (= 5.25) n'est pas exploré. $\delta$ est un paramètre de plus (en nats de score de la politique), sans valeur motivée au-delà de « distingué = écart de plus de $\delta$ » ; les écarts de reward observés entre classes différentes sont de 19 à 70 nats (5.23), entre jumeaux 0.
 
+### 5.27 Balayage de la concentration $\alpha$ du CRP, 0,5 à 1,2 (2026-10-17)
+Suite `configs/suites/toy_cov_k10_alpha.yml` : même base que `toy_cov_k10_mem` ($K=10$, $\lambda_{cov}=3$, `rho=0,1`, `neg_floor=0,1`, $\nu=1$), $\alpha\in\{0{,}5;\ 0{,}6;\ \dots;\ 1{,}2\}$, graines 0 à 4, 40 runs, arrêt quand la sortie est stable et que la mémoire est la sortie (`stop.memory`, `mem_tol` 0,01) ou à 400 epochs. Aucun label. Figure : `results/toy_cov_k10_alpha/summary.png`. $\alpha=1{,}0$ reproduit `mem_a1` de 5.25 sur les 5 graines (écart maximal 0 sur toutes les métriques).
+
+| $\alpha$ | sortie juste (5 clusters, ACC 1,00) | mémoire convergée | epochs de convergence mémoire : médiane [min-max] | non convergés à 400 epochs (graine : slots mémoire, mem_gap) |
+|---|---|---|---|---|
+| 0,5 | 5/5 | 5/5 | 262 [61-302] | aucun |
+| 0,6 | 5/5 | 4/5 | 90 [80-198] | graine 2 : 6, 0,036 |
+| 0,7 | 5/5 | 5/5 | 80 [41-251] | aucun |
+| 0,8 | 5/5 | 4/5 | 205 [77-319] | graine 3 : 8, 0,062 |
+| 0,9 | 5/5 | 5/5 | 213 [142-279] | aucun |
+| 1,0 | 3/5 | 5/5 | 216 [120-289] | aucun |
+| 1,1 | 5/5 | 4/5 | 180 [47-339] | graine 1 : 7, 0,004 |
+| 1,2 | 5/5 | 4/5 | 200 [112-229] | graine 0 : 7, 0,092 |
+
+* **Sortie.** Convergée entre les epochs 40 et 80 (médiane 51) dans les 40 runs. Sortie juste dans 38 runs sur 40.
+* **Mémoire.** Convergée dans 36 runs sur 40, médiane 191 epochs, de 41 à 339. Les 4 runs non convergés à 400 epochs gardent 6 à 8 slots pour 5 clusters de sortie (sortie juste dans les 4).
+* **Pas de tendance en $\alpha$ pour le temps de fermeture** : les médianes (262, 90, 80, 205, 213, 216, 180, 200) varient moins que la dispersion à l'intérieur d'une même valeur (par exemple 41 à 251 pour $\alpha=0{,}7$).
+* **Classes perdues** : 2 runs sur 40, tous deux à $\alpha=1{,}0$ (graines 2 et 4, 4 clusters, ACC 0,8), aucun aux 7 autres valeurs (0 sur 35). Ce sont les mêmes graines qui absorbent à $\alpha=0{,}1$ (5.25). Ni $\alpha=0{,}9$ ni $\alpha=1{,}1$ ne les perdent : la perte n'est pas monotone en $\alpha$. Le choix de $\alpha=1$ comme cas à problème est post hoc (c'est la valeur où les pertes avaient été vues) ; la fréquence des pertes est de l'ordre de 2 sur 40 à 5 graines par valeur, ce qui ne permet pas de conclure à un effet de $\alpha$.
+* **Limites.** 5 graines par valeur, un run par cellule ; les pertes dépendent de la trajectoire (graine $\times$ $\alpha$), comme le montre la reproductibilité bit à bit à $\alpha$ fixé et l'absence de lien monotone entre valeurs voisines ; les 4 runs non convergés pourraient fermer au-delà de 400 epochs.
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.

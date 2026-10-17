@@ -1,0 +1,33 @@
+# CRP concentration alpha, 0.5 to 1.2 in steps of 0.1 (docs/protocol-decisions.md, 5.27)
+# Same base as toy_cov_k10_mem (K = 10 slots for 5 classes, lambda_cov = 3, rho = 0.1, neg_floor = 0.1, nu = 1), seeds 0-4.
+# Stop rule with the memory criterion (stop.memory: true): the run ends when the output is stable AND the partition the
+# learner HOLDS (sampled placements) is the output partition up to a renaming (mem_gap <= 1 % over 10 epochs), else at 400 epochs.
+# No label is used anywhere. alpha = 1.0 repeats mem_a1 of toy_cov_k10_mem (same seeds: the result must be identical up to epoch 300).
+#
+#   python scripts/run_suite.py configs/suites/toy_cov_k10_alpha.yml --cpu-count 2 --skip-existing
+name: toy_cov_k10_alpha
+description: toy data, K = 10 slots, CRP prior, stop rule with memory = output; alpha 0.5 to 1.2 step 0.1, seeds 0-4, up to 400 epochs
+seeds: [0, 1, 2, 3, 4]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  stop: {max_epochs: 400, min_epochs: 40, memory: true}
+experiments:
+  - name: alpha05
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 0.5}
+  - name: alpha06
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 0.6}
+  - name: alpha07
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 0.7}
+  - name: alpha08
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 0.8}
+  - name: alpha09
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 0.9}
+  - name: alpha10
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 1.0}
+  - name: alpha11
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 1.1}
+  - name: alpha12
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 1.2}

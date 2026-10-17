@@ -1,0 +1,22 @@
+{
+  "name": "alpha11_seed1",
+  "seed": 1,
+  "data": "toy",
+  "n_classes": 5,
+  "n_per_class": 300,
+  "size": 16,
+  "spurious": 0.0,
+  "transform": "toy_oracle",
+  "epochs_run": 400,
+  "converged": false,
+  "stop_reason": "max_epochs",
+  "output_converged_epoch": 51,
+  "memory_converged_epoch": null,
+  "mem_gap": 0.004,
+  "memory_clusters": 7,
+  "acc": 1.0,
+  "nmi_class": 1.0,
+  "nmi_background": 0.0016107140001436167,
+  "nmi_class_background_in_data": 0.0016107140001436913,
+  "clusters_used": 5
+}
