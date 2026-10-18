@@ -1,4 +1,14 @@
-"""Last step after training, policy and encoder frozen: merge the memory slots that hold the same cluster twice.
+"""Last step after training, policy and encoder frozen: close the memory slots that hold the same cluster twice.
+
+Three ways to do it (docs 5.28 and 5.29), all with the networks frozen; `TrainConfig.cleanup_mode` picks the one that gives the output:
+
+    merge        merge the twin slots (below), then read the output again with the policy on the merged memory;
+    relabel      (A) keep the output read BEFORE the merge, and only rename its slots with the merge: the policy is never
+                 asked about a memory it has not seen;
+    reintroduce  (C) sweep the images one by one: each is taken out of its slot and put back where the policy, on the current
+                 memory, sends it (argmax, the summaries follow). The bigger twin attracts the images of the smaller one,
+                 which empties. The output is the partition the sweeps end in. `reintroduce_no_open`: the same without the
+                 action "open a new cluster" (the images are reintroduced INTO the existing clusters).
 
 Why it is needed (docs 5.23-5.28). Two slots of one class have the same summary up to the noise of the intents: the
 reward cannot tell them apart, nothing closes them, and the memory only loses the duplicate by a slow neutral drift
@@ -13,10 +23,13 @@ tuned value: the ratio is > 1000 when twins exist and < 3 between well-separated
 """
 from __future__ import annotations
 
+import copy
+from contextlib import contextmanager
+
 import numpy as np
 import torch
 
-from .memory import ClusterMemory
+from .memory import ClusterMemory, crp_log_prior
 
 EPS = 1e-8           # distances are floored here so that two identical summaries give a finite ratio
 
@@ -80,3 +93,64 @@ def merge_twin_slots(memory: ClusterMemory, m_all: torch.Tensor, ratio: float = 
         memory.recompute(m_all)
     info["rep"] = {int(k): int(r) for k, r in rep.items()}
     return info
+
+
+def relabel(pred: torch.Tensor, rep: dict[int, int]) -> torch.Tensor:
+    """A: rename the slots of an output with the merge (`rep[k]` = slot that k is merged into). A slot that is not in `rep`
+    (for instance the "outlier" id of the images sent to an empty slot) keeps its id."""
+    size = max(int(pred.max()) if pred.numel() else 0, max(rep, default=0)) + 1
+    lookup = torch.arange(size, device=pred.device)
+    for k, r in rep.items():
+        lookup[k] = r
+    return lookup[pred]
+
+
+@contextmanager
+def use_memory(trainer, memory: ClusterMemory):
+    """Temporarily read the output (`trainer.predict()`) with another memory."""
+    keep = trainer.memory
+    trainer.memory = memory
+    try:
+        yield
+    finally:
+        trainer.memory = keep
+
+
+MAX_SWEEPS = 20      # safety cap of `reintroduce`; the sweeps stop earlier, when no image changes slot
+
+
+@torch.no_grad()
+def reintroduce(trainer, allow_open: bool = True, max_sweeps: int = MAX_SWEEPS, seed: int = 0) -> dict:
+    """C: sweep the images one by one, in a random order, until a whole sweep moves no image. Same transition as a
+    training rollout, with the policy frozen and ARGMAX instead of a sample: the image is withdrawn from its slot (the
+    summaries follow), the policy reads the memory as it is now (CRP prior with the image withdrawn), and the image is put
+    where the argmax says. At a tie between two twins the prior favours the bigger one, every move makes it bigger: the
+    smaller twin is drained, then empty (the neutral drift of the training, made a ratchet).
+    `allow_open=False` removes the action "open a new cluster" (the empty slots are not choosable).
+    Works in place on `trainer.memory`. Returns {"sweeps", "moved" (per sweep), "slots" (non-empty at the end)}."""
+    mem, cfg, N = trainer.memory, trainer.cfg, trainer.N
+    bs = 512
+    z = torch.cat([trainer.encoder(trainer.images[s:s + bs].to(trainer.device), sample=False).z for s in range(0, N, bs)])
+    m = trainer.intent.mean(z)
+    g = torch.Generator().manual_seed(int(seed))
+    moved: list[int] = []
+    for _ in range(max_sweeps):
+        changes = 0
+        for i in torch.randperm(N, generator=g).tolist():
+            summ, empty = mem.state()
+            lp0 = None
+            if cfg.slot_prior == "crp":
+                lp0 = crp_log_prior(mem.counts, empty, cfg.crp_alpha, int(mem.assign[i]), cfg.crp_power).unsqueeze(0)
+            lp = trainer.policy.log_probs(z[i:i + 1], m[i:i + 1], summ.unsqueeze(0), empty.unsqueeze(0), lp0)
+            if not allow_open and bool((~empty).any()):
+                lp = lp.masked_fill(empty.unsqueeze(0), float("-inf"))
+            changes += int(mem.place(i, m[i], int(lp.argmax(-1))))
+        moved.append(changes)
+        if changes == 0:
+            break
+    mem.recompute(m)
+    return {"sweeps": len(moved), "moved": moved, "slots": mem.num_nonempty()}
+
+
+def clone_memory(memory: ClusterMemory) -> ClusterMemory:
+    return copy.deepcopy(memory)

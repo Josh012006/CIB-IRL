@@ -1,0 +1,96 @@
+{
+  "name": "final_seed94",
+  "seed": 94,
+  "data": "toy",
+  "n_classes": 5,
+  "n_per_class": 300,
+  "size": 16,
+  "spurious": 0.0,
+  "transform": "toy_oracle",
+  "epochs_run": 53,
+  "converged": true,
+  "stop_reason": "converged",
+  "output_converged_epoch": 53,
+  "memory_converged_epoch": 53,
+  "mem_gap": 0.0,
+  "memory_clusters": 3,
+  "acc": 0.6,
+  "nmi_class": 0.8096040720878851,
+  "before_cleanup": {
+    "acc": 0.6,
+    "clusters": 3,
+    "clusters_ge10": 3,
+    "memory_clusters": 3,
+    "memory_acc": 0.6,
+    "mem_gap": 0.0
+  },
+  "cleanup": {
+    "mode": "relabel",
+    "merged_slots": 0,
+    "jump": 1.1922185124756288,
+    "threshold": null,
+    "slot_distances": [
+      3.0743744373321533,
+      3.6653261184692383,
+      3.7632081508636475
+    ],
+    "merges_across_classes": 0,
+    "after": {
+      "acc": 0.6,
+      "clusters": 3,
+      "clusters_ge10": 3,
+      "memory_clusters": 3,
+      "memory_acc": 0.6,
+      "mem_gap": 0.0
+    },
+    "variants": {
+      "merge": {
+        "acc": 0.6,
+        "clusters": 3,
+        "clusters_ge10": 3,
+        "memory_clusters": 3,
+        "memory_acc": 0.6,
+        "mem_gap": 0.0
+      },
+      "relabel": {
+        "acc": 0.6,
+        "clusters": 3,
+        "clusters_ge10": 3,
+        "memory_clusters": 3,
+        "memory_acc": 0.6,
+        "mem_gap": 0.0
+      },
+      "reintroduce": {
+        "acc": 0.6,
+        "clusters": 3,
+        "clusters_ge10": 3,
+        "memory_clusters": 3,
+        "memory_acc": 0.6,
+        "mem_gap": 0.0,
+        "sweeps": 1,
+        "moved": [
+          0
+        ],
+        "predict_acc": 0.6,
+        "predict_clusters": 3
+      },
+      "reintroduce_no_open": {
+        "acc": 0.6,
+        "clusters": 3,
+        "clusters_ge10": 3,
+        "memory_clusters": 3,
+        "memory_acc": 0.6,
+        "mem_gap": 0.0,
+        "sweeps": 1,
+        "moved": [
+          0
+        ],
+        "predict_acc": 0.6,
+        "predict_clusters": 3
+      }
+    }
+  },
+  "nmi_background": 0.0025393342079430004,
+  "nmi_class_background_in_data": 0.003192032897212606,
+  "clusters_used": 3
+}

@@ -120,6 +120,9 @@ class TrainConfig:
     final_cleanup: bool = False    # after training (policy frozen): merge the memory slots that are the same cluster twice, then read
                                    # the output again (cibirl/cleanup.py, docs 5.28). Not part of the training.
     cleanup_ratio: float = 10.0    # guard of that step: merge only if the largest jump between sorted slot distances is >= this
+    cleanup_mode: str = "merge"    # which reading gives the output after training (docs 5.29): merge (merge, read again), relabel
+                                   # (rename the slots of the output read before the merge), reintroduce (sweep the images,
+                                   # argmax, until nothing moves), reintroduce_no_open (the same without "open a new cluster")
     ppo_clip: float = 0.2
     ppo_epochs: int = 4
     value_coef: float = 0.5
@@ -265,6 +268,8 @@ class Trainer:
             raise ValueError("slot_prior must be uniform or crp, and crp_alpha > 0, crp_power > 0")
         if cfg.cleanup_ratio <= 1:
             raise ValueError("cleanup_ratio must be > 1")
+        if cfg.cleanup_mode not in ("merge", "relabel", "reintroduce", "reintroduce_no_open"):
+            raise ValueError("cleanup_mode must be merge, relabel, reintroduce or reintroduce_no_open")
         oracle_on = cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0
         if oracle_on and oracle_labels is None:
             raise ValueError("expert_oracle_link / oracle_warm_memory are oracle diagnostics: pass oracle_labels "

@@ -1,0 +1,32 @@
+runs finis: 100
+convergées (règle de sortie): 100/100 ; epoch: min 40 médiane 51 max 95
+
+                            juste     échecs  borne 95% sup mém=sortie  slots (moy)  mémoire juste
+sortie à l'arrêt (pre)       96/100          4          0.099      22/100         7.13           19/100
+merge                        93/100          7          0.139      96/100         4.96           82/100
+relabel                      96/100          4          0.099      99/100         4.96           82/100
+reintroduce                  92/100          8          0.152     100/100         5.15           92/100
+reintroduce_no_open          96/100          4          0.099     100/100         4.95           96/100
+
+slots de la mémoire: pre 3-10 ; merge 3-6 ; relabel 3-6 ; reintroduce 3-10 ; reintroduce_no_open 3-5
+
+par rapport à la sortie à l'arrêt, run par run:
+  merge                perdus (juste -> faux): [19, 80, 81] ; gagnés (faux -> juste): []
+  relabel              perdus (juste -> faux): [] ; gagnés (faux -> juste): []
+  reintroduce          perdus (juste -> faux): [18, 19, 80, 81] ; gagnés (faux -> juste): []
+  reintroduce_no_open  perdus (juste -> faux): [] ; gagnés (faux -> juste): []
+
+sorties fausses à l'arrêt: [12, 30, 59, 94]
+sorties fausses, merge:               [12, 19, 30, 59, 80, 81, 94]
+sorties fausses, relabel:             [12, 30, 59, 94]
+sorties fausses, reintroduce:         [12, 18, 19, 30, 59, 80, 81, 94]
+sorties fausses, reintroduce_no_open: [12, 30, 59, 94]
+
+runs dont la mémoire était pleine à l'arrêt: 16 ; sorties fausses parmi eux: merge 3 ; relabel 0 ; reintroduce 4 ; reintroduce_no_open 0
+fusions entre classes différentes (éval.): 0 sur 217 fusions
+
+reintroduce: balayages moy 2.5 max 20 ; plafond atteint (20 balayages, une image bouge encore): 4/100 ; images déplacées au 1er balayage: médiane 120
+   la politique relue sur cette mémoire (predict): juste 96/100
+
+reintroduce_no_open: balayages moy 1.8 max 2 ; plafond atteint (20 balayages, une image bouge encore): 0/100 ; images déplacées au 1er balayage: médiane 120
+   la politique relue sur cette mémoire (predict): juste 93/100

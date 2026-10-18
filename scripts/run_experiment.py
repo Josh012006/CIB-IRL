@@ -40,7 +40,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import datasets                                                     # noqa: E402
 from cibirl import transforms                                       # noqa: E402
-from cibirl.cleanup import merge_twin_slots                         # noqa: E402
+from cibirl.cleanup import clone_memory, merge_twin_slots, reintroduce, relabel, use_memory   # noqa: E402
 from cibirl.convergence import ConvergenceMonitor, StopConfig, partition_change   # noqa: E402
 from cibirl.train import TrainConfig, Trainer                       # noqa: E402
 from eval import visualize as viz                                   # noqa: E402
@@ -188,20 +188,52 @@ def main(argv=None) -> None:
     m = tr.intents().cpu().numpy()
     cleanup = None
     if cfg.final_cleanup:
-        # last step, nothing is trained: merge the slots that hold one cluster twice, then read the output again (docs 5.28)
-        mem_before = tr.memory.assign.cpu().numpy().copy()
-        before = {"acc": cluster_acc(pred, y, cfg.num_slots), "clusters": int(len(np.unique(pred))),
-                  "memory_clusters": int(len(np.unique(mem_before[mem_before >= 0]))), "mem_gap": partition_change(mem_before, pred)}
-        info = merge_twin_slots(tr.memory, torch.from_numpy(m).to(tr.memory.device), cfg.cleanup_ratio)
-        pred = tr.predict().cpu().numpy()
-        mem_after = tr.memory.assign.cpu().numpy()
+        # last step, nothing is trained (docs 5.28, 5.29). Every way of closing the memory starts from the SAME trained model and
+        # the same memory (copies), so they are compared on the same runs; `cleanup_mode` says which one gives the output.
+        pred_pre = pred.copy()
+        mem_pre = clone_memory(tr.memory)
+        mem_before = mem_pre.assign.cpu().numpy().copy()
+        m_t = torch.from_numpy(m).to(tr.memory.device)
+
+        def describe(p, mem):
+            ma = mem.assign.cpu().numpy()
+            return {"acc": cluster_acc(p, y, cfg.num_slots), "clusters": int(len(np.unique(p))),
+                    "clusters_ge10": int(sum(1 for q in np.unique(p) if (p == q).sum() >= 10)),
+                    "memory_clusters": int(len(np.unique(ma[ma >= 0]))), "memory_acc": cluster_acc(ma, y, cfg.num_slots),
+                    "mem_gap": partition_change(ma, p)}
+        before = describe(pred_pre, mem_pre)
+        variants: dict[str, tuple] = {}
+        # merge: merge the twin slots, then read the output again on the merged memory
+        mem_m = clone_memory(mem_pre)
+        info = merge_twin_slots(mem_m, m_t, cfg.cleanup_ratio)
+        with use_memory(tr, mem_m):
+            variants["merge"] = (tr.predict().cpu().numpy(), mem_m, {})
+        # A, relabel: the output read before, with its slots renamed by the merge
+        variants["relabel"] = (relabel(torch.from_numpy(pred_pre), info["rep"]).numpy(), clone_memory(mem_m), {})
+        # C, reintroduce: sweep the images from the memory of before (no distance, no guard). The OUTPUT of C is the partition
+        # the sweeps end in (a fixed point of the policy when a sweep moves nothing); `predict_*` is the policy read once more on
+        # that memory, which can open a cluster again once empty slots exist (kept for information).
+        for name, allow in (("reintroduce", True), ("reintroduce_no_open", False)):
+            mem_c = clone_memory(mem_pre)
+            with use_memory(tr, mem_c):
+                rinfo = reintroduce(tr, allow_open=allow, seed=cfg.seed)
+                p_read = tr.predict().cpu().numpy()
+            variants[name] = (mem_c.assign.cpu().numpy().copy(), mem_c,
+                              {"sweeps": rinfo["sweeps"], "moved": rinfo["moved"], "predict_acc": cluster_acc(p_read, y, cfg.num_slots),
+                               "predict_clusters": int(len(np.unique(p_read)))})
         # EVALUATION ONLY: did a merge join two different classes?
         dominant = {int(k): int(np.bincount(y[mem_before == k], minlength=int(y.max()) + 1).argmax()) for k in np.unique(mem_before[mem_before >= 0])}
         wrong = sum(1 for k, r in info["rep"].items() if k != r and dominant[k] != dominant[r])
-        cleanup = {"before": before, "merged_slots": info["merged_pairs"], "jump": info["jump"], "threshold": info["threshold"],
-                   "slot_distances": info["distances"], "merges_across_classes": wrong,
-                   "after": {"acc": cluster_acc(pred, y, cfg.num_slots), "clusters": int(len(np.unique(pred))),
-                             "memory_clusters": int(len(np.unique(mem_after[mem_after >= 0]))), "mem_gap": partition_change(mem_after, pred)}}
+        described = {n: {**describe(p, mem), **extra} for n, (p, mem, extra) in variants.items()}
+        np.savez(out / "variants.npz", pre=pred_pre, mem_pre=mem_before,
+                 **{n: p for n, (p, _, _) in variants.items()}, **{f"mem_{n}": mem.assign.cpu().numpy() for n, (_, mem, _) in variants.items()})
+        torch.save({"assign": mem_pre.assign, "member_m": mem_pre.member_m, "counts": mem_pre.counts, "summaries": mem_pre.summaries},
+                   out / "memory_pre.pt")
+        pred, chosen, _ = variants[cfg.cleanup_mode]
+        tr.memory = chosen
+        cleanup = {"before": before, "mode": cfg.cleanup_mode, "merged_slots": info["merged_pairs"], "jump": info["jump"],
+                   "threshold": info["threshold"], "slot_distances": info["distances"], "merges_across_classes": wrong,
+                   "after": described[cfg.cleanup_mode], "variants": described}
     final = {"name": out.name, "seed": cfg.seed, "data": args.data, **data.info, "transform": bank.name,
              "epochs_run": len(history), "converged": monitor.converged, "stop_reason": monitor.reason,
              "output_converged_epoch": monitor.output_converged_epoch, "memory_converged_epoch": monitor.memory_converged_epoch,

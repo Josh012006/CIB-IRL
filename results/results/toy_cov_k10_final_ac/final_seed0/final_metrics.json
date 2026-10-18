@@ -1,0 +1,131 @@
+{
+  "name": "final_seed0",
+  "seed": 0,
+  "data": "toy",
+  "n_classes": 5,
+  "n_per_class": 300,
+  "size": 16,
+  "spurious": 0.0,
+  "transform": "toy_oracle",
+  "epochs_run": 41,
+  "converged": true,
+  "stop_reason": "converged",
+  "output_converged_epoch": 41,
+  "memory_converged_epoch": null,
+  "mem_gap": 0.0,
+  "memory_clusters": 5,
+  "acc": 1.0,
+  "nmi_class": 1.0,
+  "before_cleanup": {
+    "acc": 1.0,
+    "clusters": 5,
+    "clusters_ge10": 5,
+    "memory_clusters": 9,
+    "memory_acc": 0.9633333333333334,
+    "mem_gap": 0.03666666666666667
+  },
+  "cleanup": {
+    "mode": "relabel",
+    "merged_slots": 4,
+    "jump": 489.1456973995041,
+    "threshold": 0.010494326241314411,
+    "slot_distances": [
+      0.0009937953436747193,
+      0.001212446135468781,
+      0.005182033404707909,
+      0.005196256563067436,
+      0.010494326241314411,
+      5.133254528045654,
+      5.138017654418945,
+      5.165944576263428,
+      5.166072845458984,
+      5.166485786437988,
+      5.166614055633545,
+      5.166916847229004,
+      5.167457580566406,
+      5.175915241241455,
+      5.176265716552734,
+      5.176604747772217,
+      5.176778793334961,
+      5.178651332855225,
+      5.179002285003662,
+      5.2667927742004395,
+      5.26726770401001,
+      5.267563343048096,
+      5.269010543823242,
+      5.2694926261901855,
+      5.269781589508057,
+      5.2699809074401855,
+      5.269999980926514,
+      5.270031929016113,
+      5.47440767288208,
+      5.573494911193848,
+      5.573974132537842,
+      5.6012282371521,
+      5.606197357177734,
+      5.655871391296387,
+      5.6562018394470215,
+      5.659587383270264
+    ],
+    "merges_across_classes": 0,
+    "after": {
+      "acc": 1.0,
+      "clusters": 5,
+      "clusters_ge10": 5,
+      "memory_clusters": 5,
+      "memory_acc": 1.0,
+      "mem_gap": 0.0
+    },
+    "variants": {
+      "merge": {
+        "acc": 1.0,
+        "clusters": 5,
+        "clusters_ge10": 5,
+        "memory_clusters": 5,
+        "memory_acc": 1.0,
+        "mem_gap": 0.0
+      },
+      "relabel": {
+        "acc": 1.0,
+        "clusters": 5,
+        "clusters_ge10": 5,
+        "memory_clusters": 5,
+        "memory_acc": 1.0,
+        "mem_gap": 0.0
+      },
+      "reintroduce": {
+        "acc": 1.0,
+        "clusters": 5,
+        "clusters_ge10": 5,
+        "memory_clusters": 5,
+        "memory_acc": 1.0,
+        "mem_gap": 0.0,
+        "sweeps": 2,
+        "moved": [
+          55,
+          0
+        ],
+        "predict_acc": 1.0,
+        "predict_clusters": 5
+      },
+      "reintroduce_no_open": {
+        "acc": 1.0,
+        "clusters": 5,
+        "clusters_ge10": 5,
+        "memory_clusters": 5,
+        "memory_acc": 1.0,
+        "mem_gap": 0.0,
+        "sweeps": 2,
+        "moved": [
+          55,
+          0
+        ],
+        "predict_acc": 1.0,
+        "predict_clusters": 5
+      }
+    }
+  },
+  "nmi_background": 0.003730520940796289,
+  "nmi_class_background_in_data": 0.0037305209407963165,
+  "clusters_used": 5
+}

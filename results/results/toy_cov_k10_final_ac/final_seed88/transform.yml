@@ -1,0 +1,4 @@
+name: toy_oracle
+description: exact background redraw of the toy images (oracle)
+ops:
+- toy_background_redraw

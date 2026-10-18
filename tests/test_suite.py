@@ -146,8 +146,29 @@ def test_final_cleanup_is_recorded_and_the_default_run_is_untouched(tmp_path):
     for key in ("before_cleanup", "cleanup"):
         assert key in clean
     assert {"acc", "clusters", "memory_clusters", "mem_gap"} <= set(clean["before_cleanup"])
-    assert {"merged_slots", "jump", "threshold", "slot_distances", "merges_across_classes", "after"} <= set(clean["cleanup"])
-    assert clean["cleanup"]["after"]["memory_clusters"] <= clean["before_cleanup"]["memory_clusters"]
+    assert {"merged_slots", "jump", "threshold", "slot_distances", "merges_across_classes", "after", "mode", "variants"} <= set(clean["cleanup"])
+    assert clean["cleanup"]["mode"] == "merge" and clean["cleanup"]["after"] == clean["cleanup"]["variants"]["merge"]
+    assert set(clean["cleanup"]["variants"]) == {"merge", "relabel", "reintroduce", "reintroduce_no_open"}
+    for v in clean["cleanup"]["variants"].values():
+        assert {"acc", "clusters", "memory_clusters", "memory_acc", "mem_gap"} <= set(v)
+    assert {"sweeps", "moved", "predict_acc", "predict_clusters"} <= set(clean["cleanup"]["variants"]["reintroduce"])
+    assert clean["cleanup"]["variants"]["reintroduce"]["mem_gap"] == 0.0       # the output of C is the partition of its memory
+    assert clean["cleanup"]["variants"]["merge"]["memory_clusters"] <= clean["before_cleanup"]["memory_clusters"]
+    assert clean["cleanup"]["variants"]["reintroduce"]["memory_clusters"] <= clean["before_cleanup"]["memory_clusters"]
+    assert (tmp_path / "clean" / "memory_pre.pt").exists()
+    import numpy as np
+    v = np.load(tmp_path / "clean" / "variants.npz")
+    assert {"pre", "merge", "relabel", "reintroduce", "reintroduce_no_open", "mem_pre", "mem_relabel"} <= set(v.files)
+    # relabel only renames: the same partition as the output read before, up to the names of the slots
+    assert len(np.unique(v["relabel"])) <= len(np.unique(v["pre"]))
+    # the mode that gives the output is the one in the config, and it is what preds.npy holds
+    res = go("clean_c", "final_cleanup=true", "cleanup_mode=reintroduce")
+    assert res.returncode == 0, res.stderr[-2000:]
+    c = json.loads((tmp_path / "clean_c" / "final_metrics.json").read_text(encoding="utf-8"))
+    assert c["cleanup"]["mode"] == "reintroduce" and c["acc"] == c["cleanup"]["variants"]["reintroduce"]["acc"]
+    assert (np.load(tmp_path / "clean_c" / "preds.npy") == np.load(tmp_path / "clean_c" / "variants.npz")["reintroduce"]).all()
+    res = go("clean_bad", "final_cleanup=true", "cleanup_mode=nope")
+    assert res.returncode != 0 and "cleanup_mode" in res.stderr
     rows = lambda n: [json.loads(l) for l in (tmp_path / n / "metrics.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [r["L_pos"] for r in rows("plain")] == [r["L_pos"] for r in rows("clean")]       # the training is not touched
 

@@ -1,0 +1,25 @@
+data: toy
+data_params:
+  n_classes: 5
+  n_per_class: 300
+  size: 16
+  spurious: 0.0
+transform: toy_oracle
+stop:
+  max_epochs: 300
+  min_epochs: 40
+  window: 10
+  part_tol: 0.01
+  twin_tol: 0.01
+  loss_tol: 0.02
+  enabled: true
+  memory: false
+  mem_tol: 0.01
+device: cpu
+uses_labels_for_training: false
+command: /home/claude/cib-irl/scripts/run_experiment.py --data toy --transform toy_oracle
+  --name final_seed54 --out-root /home/claude/cib-irl/results/toy_cov_k10_final_ac
+  --overwrite --data-set spurious=0.0 --config configs/toy.yml --set seed=54 num_slots=10
+  intent_decorrelate="cov" intent_cov_weight=3.0 rho=0.1 neg_floor=0.1 slot_prior="crp"
+  crp_alpha=1.0 final_cleanup=true cleanup_mode="relabel" --stop-set max_epochs=300
+  min_epochs=40
