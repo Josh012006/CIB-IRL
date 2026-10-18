@@ -1,0 +1,89 @@
+# RETAINED CONFIGURATION OF THE TOY BENCHMARK: the TrainConfig of the 200 runs of README Section 11.1 (seeds 0-199).
+# Every value is written out (none is left to the defaults of cibirl/train.py), so the file stays the same if a default changes later.
+# tests/test_benchmark_configs.py checks that it loads to exactly the configuration stored in the runs of results/toy_cov_k10_final_ac*.
+#
+# What a run of this benchmark also needs (not TrainConfig keys, so they live in the command / the suite):
+#   dataset         toy, no colour shortcut in training          --data toy --data-set spurious=0.0
+#   transformation  toy_oracle (exact redraw of the background)   --transform toy_oracle
+#   stopping rule   label-free output convergence                --stop-set max_epochs=300 min_epochs=40   (window 10, 1 %, 0.01, 2 %)
+#   seeds           0-199, 5 classes of 300 images, K = 10 slots
+#
+#   python scripts/run_experiment.py --data toy --transform toy_oracle --config configs/benchmarks/toy.yml \
+#          --stop-set max_epochs=300 min_epochs=40 --set seed=0
+#   python scripts/run_suite.py configs/suites/toy_final.yml --cpu-count 2          # the whole benchmark, seeds 0-199
+#
+# Other datasets get their own file here once their configuration has been settled (not before: nothing here is a default).
+
+# Data shape and architecture
+num_slots: 10
+z_dim: 32
+m_dim: 16
+hidden: 128
+rel_dim: 64
+in_channels: 3
+image_size: 16
+use_z: true
+intent_standardize: true
+
+# Experts (README 6.2): 3 orbits x 2 views per episode, 2000 fixed episodes built from 30 % of the images
+phase: 1
+expert_fraction: 0.3
+num_expert_episodes: 2000
+orbits_per_episode: 3
+views_per_orbit: 2
+episodes_per_batch: 32
+d_max: 2
+tau_plus: null
+
+# Reward (README 5.3): collapse safeguard rho and repulsion floor eps
+rho: 0.1
+neg_floor: 0.1
+free_debias_scale: 1.0
+center_reward: true
+
+# Intent (README 5.2): decorrelation of m
+intent_decorrelate: cov
+intent_cov_weight: 3.0
+psi_fixed_logvar: null
+
+# Encoder (README 5.1): compression and invariance
+beta: 0.0001
+beta_warmup_iters: 300
+lam: 1.0
+
+# Policy (README 5.4): PPO, and the Chinese-restaurant-process prior
+gamma: 0.9
+gae_lambda: 0.95
+alpha: 0.01
+policy_temperature: 1.0
+ppo_clip: 0.2
+ppo_epochs: 4
+value_coef: 0.5
+slot_prior: crp
+crp_alpha: 1.0
+crp_power: 1.0
+crp_gate: -1.0
+policy_teacher_iters: 0
+consolidate: false
+
+# Final clean-up (README 5.7)
+final_cleanup: true
+cleanup_ratio: 10.0
+cleanup_mode: relabel
+
+# Optimization
+lr_reward: 0.0003
+lr_policy: 0.001
+grad_clip: 5.0
+learner_batch: 100
+reward_warmup_iters: 150
+
+# Diagnostics that are OFF in the final pipeline (oracle labels, memory tricks)
+expert_oracle_link: 0.0
+oracle_warm_memory: 0
+burn_in_epochs: 0
+burn_in_fraction: 0.1
+recompute_every: 0
+freeze_repr_after: 0
+repr_lr_scale: 0.0
+memory_discard_epochs: 0

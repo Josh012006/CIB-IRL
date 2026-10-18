@@ -1,0 +1,18 @@
+# THE TOY BENCHMARK, as retained (README Section 11.1): our model with the final configuration, 200 seeds, no colour shortcut in
+# training, oracle transformation bank, label-free stopping rule, final clean-up `relabel`. Same runs as
+# toy_cov_k10_final_ac (seeds 0-99) + toy_cov_k10_final_ac_val (seeds 100-199), in one suite and one results folder, with the
+# configuration read from configs/benchmarks/toy.yml (nothing is overridden here).
+#
+#   python scripts/run_suite.py configs/suites/toy_final.yml --cpu-count 2 --skip-existing
+#   python scripts/eval_heldout.py results/toy_final --out results/toy_final/heldout          # the three test partitions
+name: toy_final
+description: toy benchmark, final configuration (configs/benchmarks/toy.yml), seeds 0-199
+seeds: "0-199"
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/benchmarks/toy.yml]
+  stop: {max_epochs: 300, min_epochs: 40}
+experiments:
+  - name: final

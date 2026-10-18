@@ -1,0 +1,22 @@
+# Waterbirds (scripts/datasets.py `waterbirds`): landbirds / waterbirds on land / water, official training split, images resized to
+# 64 x 64 (`size`; the official images are larger and the pretrained ResNet baselines resize to 224 themselves).
+# Same role as configs/toy.yml: the SHAPE of the data and the sizes of the first design. NOT validated (nothing has been run on this
+# benchmark); the retained configuration will go to configs/benchmarks/waterbirds.yml once it exists. The data are not downloaded by
+# the code: see the message of `datasets.build("waterbirds", 0)` and README Section 13.
+#
+# Two classes with a strong imbalance (about 77 % / 23 %): tau+ = sum_c p_c^2 rather than 1/K (assumption A2), to be swept.
+#
+#   python scripts/run_experiment.py --data waterbirds --transform natural
+num_slots: 4              # K, upper bound (2 classes)
+image_size: 64
+in_channels: 3
+tau_plus: 0.64            # sum_c p_c^2 with p = (0.77, 0.23); to be swept (README Section 6.6, A2)
+
+orbits_per_episode: 4     # B <= K
+views_per_orbit: 2        # n >= 2
+num_expert_episodes: 2000
+expert_fraction: 0.3
+
+learner_batch: 100
+reward_warmup_iters: 150
+beta_warmup_iters: 300

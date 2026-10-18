@@ -34,9 +34,14 @@ def test_every_committed_suite_is_valid(path):
     suite = run_suite.load_suite(path)
     bank_dir = ROOT / "configs" / "transforms"
     for exp in suite["experiments"]:
-        assert (bank_dir / f"{exp['transform']}.yml").exists(), exp["name"]
-        transforms.build(bank_dir / f"{exp['transform']}.yml")
+        if exp.get("transform"):
+            assert (bank_dir / f"{exp['transform']}.yml").exists(), exp["name"]
+            transforms.build(bank_dir / f"{exp['transform']}.yml")
         assert exp.get("data", "toy") in datasets.DATASETS
+        if exp.get("method", "cibirl") in run_suite.BASELINES:             # kmeans, gmm, simclr, iic: BaselineConfig, no stop rule
+            from baselines import BaselineConfig
+            BaselineConfig.from_yaml(*[ROOT / c for c in exp.get("configs", [])], method=exp["method"], **exp["set"])
+            continue
         for c in exp.get("configs", []):
             TrainConfig.from_yaml(ROOT / c, **exp["set"])
         from cibirl.convergence import StopConfig

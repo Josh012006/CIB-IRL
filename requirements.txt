@@ -4,4 +4,6 @@ scipy          # Hungarian matching (eval/metrics.py)
 matplotlib     # figures (eval/visualize.py)
 pyyaml         # configs/*.yml
 scikit-learn   # optional: t-SNE of the intent space (falls back to PCA)
+pillow         # Waterbirds images (scripts/datasets.py)
+# torchvision  # optional: ImageNet-ResNet features of the baselines on Colored MNIST / Waterbirds (not tested)
 pytest         # python -m pytest tests -q

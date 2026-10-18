@@ -1,0 +1,19 @@
+# Colored MNIST (scripts/datasets.py `colored_mnist`): MNIST digits 0-9 painted in a colour, 3 x 28 x 28, 300 images per digit.
+# Same role as configs/toy.yml and configs/mnist.yml: the SHAPE of the data and the sizes of the first design. These values have NOT been
+# validated (nothing has been run on this benchmark); the retained configuration will go to configs/benchmarks/colored_mnist.yml
+# once it exists. Only what differs from the defaults of TrainConfig (cibirl/train.py) is written here.
+#
+#   python scripts/run_experiment.py --data colored_mnist --data-set spurious=0.9 --transform generic
+#   python scripts/run_experiment.py --data colored_mnist --data-set spurious=0.9 --transform informed_color     # declared colour prior
+num_slots: 20             # K, upper bound (10 digits)
+image_size: 28
+in_channels: 3
+
+orbits_per_episode: 5     # B <= K
+views_per_orbit: 2        # n >= 2
+num_expert_episodes: 2000
+expert_fraction: 0.3
+
+learner_batch: 100
+reward_warmup_iters: 150
+beta_warmup_iters: 300

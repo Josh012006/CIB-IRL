@@ -1,0 +1,40 @@
+{
+ "generator": "scripts/toy_data.py (make_toy, make_toy_test)",
+ "parameters": {
+  "n_classes": 5,
+  "n_per_class": 300,
+  "size": 16
+ },
+ "spurious_levels": [
+  0.9
+ ],
+ "test_modes": [
+  "iid",
+  "aligned",
+  "inverted"
+ ],
+ "seeds": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9
+ ],
+ "content_sha256": {
+  "seed000.npz": "9d74c649937d66d84ebc62572232835633c33cd88920e509d5f005408335c2d6",
+  "seed001.npz": "2f40fa71b9b0f0741f4770f4cb4708fdbcdc7e20191d22f832197fb6ecbb7459",
+  "seed002.npz": "8c4292bf71f891019268135f1a57097a3c2f25db1918c60e1f98a97ecd0fe38d",
+  "seed003.npz": "fcf012fe8cc391a0d1e70b760a23021b8a777a364fe530772271a7baf2fc9b30",
+  "seed004.npz": "cdd33a1758cda05d39f068e95d0ab044c1cef9984f5d910eca8518641eedce37",
+  "seed005.npz": "fe1a3c3073c67222f927469a666562ec867f127852faeef388cfb8a99171fe8a",
+  "seed006.npz": "d71f6a557fb9eaafa19389c64b2aafcbe5734b6ef99344d1d182719029dcd47f",
+  "seed007.npz": "4b817e8b81a379e0536c0a06a6a412a87cfb7254df008cb971374011be541f2f",
+  "seed008.npz": "4237f1ba2f5f4a55da539a27224de0c140fdf5920da3171c7c45b1e9d3c73436",
+  "seed009.npz": "151fdb630d669d81825f57e0139b8cf944eff5ea39ba4e774c68adbed7c0ead7"
+ }
+}

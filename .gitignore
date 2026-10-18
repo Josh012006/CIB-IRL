@@ -2,6 +2,8 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .venv/
-data/
+data/*
+!data/README.md
+!data/toy/
 results/**/checkpoint.pt
 thinking-process.txt

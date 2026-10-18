@@ -24,6 +24,10 @@ Suite file (all keys optional except experiments):
         stop: {max_epochs: 500}        # stopping rule (cibirl/convergence.py)
         fixed_epochs: 30               # run exactly N epochs instead
         seeds: [2, 4]                  # seeds of this experiment only (default: the suite's `seeds`)
+        method: simclr                 # cibirl (default: scripts/run_experiment.py) or a baseline: kmeans, gmm, simclr, iic
+                                       # (scripts/run_baseline.py; `configs` are then BaselineConfig files and `set` their keys)
+
+`seeds` is a list, or a range written as a string: "0-199" is 0, 1, ..., 199 (also "0-9,20-22").
 """
 import argparse
 import json
@@ -39,8 +43,24 @@ from _parallel import Job, run_jobs, say          # noqa: E402
 from eval.aggregate import main as aggregate      # noqa: E402
 
 SUITE_KEYS = {"name", "description", "seeds", "out_root", "common", "experiments"}
-EXPERIMENT_KEYS = {"name", "data", "data_params", "transform", "configs", "set", "stop", "fixed_epochs", "seeds"}
+EXPERIMENT_KEYS = {"name", "data", "data_params", "transform", "configs", "set", "stop", "fixed_epochs", "seeds", "method"}
 DICT_KEYS = {"data_params", "set", "stop"}
+BASELINES = ("kmeans", "gmm", "simclr", "iic")           # run by scripts/run_baseline.py; any other method is our trainer
+NO_BANK = ("kmeans", "gmm")                              # baselines that never draw a view: no transformation bank needed
+
+
+def parse_seeds(value):
+    """A list of integers, or a string "0-199" / "0-9,20-22". Returns None if the value is neither."""
+    if isinstance(value, str):
+        try:
+            out = []
+            for part in value.split(","):
+                lo, _, hi = part.strip().partition("-")
+                out += list(range(int(lo), int(hi or lo) + 1))
+            return out or None
+        except ValueError:
+            return None
+    return value if isinstance(value, list) and value and all(isinstance(s, int) for s in value) else None
 
 
 def load_suite(path: Path) -> dict:
@@ -51,6 +71,10 @@ def load_suite(path: Path) -> dict:
     if extra:
         raise SystemExit(f"{path}: unknown key(s) {sorted(extra)} (allowed: {sorted(SUITE_KEYS)})")
     raw.setdefault("name", path.stem)
+    if "seeds" in raw:
+        raw["seeds"] = parse_seeds(raw["seeds"])
+        if raw["seeds"] is None:
+            raise SystemExit(f"{path}: 'seeds' must be a non-empty list of integers (or a range like \"0-199\")")
     common = raw.get("common") or {}
     experiments, seen = [], set()
     for exp in raw["experiments"]:
@@ -59,13 +83,18 @@ def load_suite(path: Path) -> dict:
             raise SystemExit(f"{path}: experiment {exp.get('name')!r} has unknown key(s) {sorted(extra)} "
                              f"(allowed: {sorted(EXPERIMENT_KEYS)})")
         seeds = exp.get("seeds")
-        if seeds is not None and not (isinstance(seeds, list) and seeds and all(isinstance(s, int) for s in seeds)):
-            raise SystemExit(f"{path}: experiment {exp.get('name')!r}: 'seeds' must be a non-empty list of integers")
+        if seeds is not None:
+            exp = {**exp, "seeds": parse_seeds(seeds)}
+            if exp["seeds"] is None:
+                raise SystemExit(f"{path}: experiment {exp.get('name')!r}: 'seeds' must be a non-empty list of integers (or a range like \"0-199\")")
         merged = {k: v for k, v in common.items() if k not in DICT_KEYS}
         for k in DICT_KEYS:
             merged[k] = {**(common.get(k) or {}), **(exp.get(k) or {})}
         merged.update({k: v for k, v in exp.items() if k not in DICT_KEYS})
-        if "name" not in merged or "transform" not in merged:
+        method = merged.get("method", "cibirl")
+        if method not in ("cibirl", *BASELINES):
+            raise SystemExit(f"{path}: experiment {merged.get('name')!r}: unknown method {method!r} (cibirl, {', '.join(BASELINES)})")
+        if "name" not in merged or ("transform" not in merged and method not in NO_BANK):
             raise SystemExit(f"{path}: every experiment needs a 'name' and a 'transform'")
         if merged["name"] in seen:
             raise SystemExit(f"{path}: duplicate experiment name {merged['name']!r}")
@@ -80,7 +109,24 @@ def kv(d: dict) -> list[str]:
     return [f"{k}={json.dumps(v)}" for k, v in d.items()]
 
 
+def baseline_command(exp: dict, seed: int, name: str, out_root: Path, max_epochs: int | None) -> list[str]:
+    cmd = [sys.executable, str(ROOT / "scripts" / "run_baseline.py"), "--method", exp["method"], "--data", exp.get("data", "toy"),
+           "--name", name, "--out-root", str(out_root), "--overwrite"]
+    if exp.get("transform"):
+        cmd += ["--transform", str(exp["transform"])]
+    if exp["data_params"]:
+        cmd += ["--data-set", *kv(exp["data_params"])]
+    if exp.get("configs"):
+        cmd += ["--config", *exp["configs"]]
+    overrides = dict(exp["set"])
+    if max_epochs is not None and exp["method"] in ("simclr", "iic"):
+        overrides["epochs"] = max_epochs                        # quick checks: --max-epochs also shortens the contrastive training
+    return cmd + ["--set", f"seed={seed}", *kv(overrides)]
+
+
 def command(exp: dict, seed: int, name: str, out_root: Path, max_epochs: int | None) -> list[str]:
+    if exp.get("method", "cibirl") in BASELINES:
+        return baseline_command(exp, seed, name, out_root, max_epochs)
     cmd = [sys.executable, str(ROOT / "scripts" / "run_experiment.py"), "--data", exp.get("data", "toy"),
            "--transform", str(exp["transform"]), "--name", name, "--out-root", str(out_root), "--overwrite"]
     if exp["data_params"]:

@@ -1,0 +1,8 @@
+# BASELINE 3 (README Section 9.2): standard multi-intention IRL, i.e. the pipeline WITHOUT the causal Information Bottleneck.
+# Applied on top of a benchmark config: nothing else changes (same experts, intent, reward, policy, CRP prior, stopping rule and
+# final clean-up), so the comparison isolates the contribution of the bottleneck encoder.
+#
+#   python scripts/run_experiment.py --data toy --transform toy_oracle \
+#          --config configs/benchmarks/toy.yml configs/baselines/irl_noib.yml --stop-set max_epochs=300 min_epochs=40
+beta: 0.0      # no compression: the KL to the prior is not penalized (README 5.1)
+lam: 0.0       # no invariance check L_inv (README 5.1); on the toy it is inactive anyway, here it is removed to match "no IB encoder"
