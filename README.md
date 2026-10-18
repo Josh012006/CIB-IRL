@@ -920,7 +920,7 @@ Each seed draws five classes. A class is a $4\times4$ pattern of white blocks (u
 
 ![The five classes of one seed, and one orbit](results/toy_final_report/fig1_task.png)
 
-*Figure 1. Left: images of the five classes (one row per class) with different backgrounds. Right: an orbit, the same image under $\mathcal{T}$ (only the background changes).*
+*Figure 1. Left: images of the five classes (one row per class) with different backgrounds. Right: an orbit, the same image under T (only the background changes).*
 
 #### 10.1.2 Why it is hard
 
@@ -985,7 +985,7 @@ Figure 3 follows one run (seed 20, replayed with a checkpoint at every epoch; th
 
 ![Clusters at the start, during, and at the end of one run](results/toy_final_report/fig3_clusters_seed20.png)
 
-*Figure 3. Seed 20. At epoch 12, right after the policy starts to act, the output is a single cluster of 1500 images (ACC $0.20$). At epoch 13, three clusters, two of them mixing classes (ACC $0.60$). At the end, five clusters of 300 images each, one per class (ACC $1.00$).*
+*Figure 3. Seed 20. At epoch 12, right after the policy starts to act, the output is a single cluster of 1500 images (ACC 0.20). At epoch 13, three clusters, two of them mixing classes (ACC 0.60). At the end, five clusters of 300 images each, one per class (ACC 1.00).*
 
 - **The intent space is already separated at epoch 12.** The five classes form five compact groups in $m$ before the policy has placed a single image: the improvement comes from the policy learning to read $m$, not from the representation changing afterwards.
 - **From one cluster to five in two epochs.** The reward alone is trained during the first 10 epochs, so the output is one cluster. The policy then opens clusters: three at epoch 13, five pure ones at epoch 14.
@@ -993,7 +993,7 @@ Figure 3 follows one run (seed 20, replayed with a checkpoint at every epoch; th
 
 ![Evolution of one run](results/toy_final_report/fig4_trace_seed20.png)
 
-*Figure 4. Seed 20, per epoch: number of clusters of the output and occupied slots of the memory; ACC of the output; share of images that change cluster (the stopping rule needs it below $1\\,\%$, dotted line, over 10 epochs). Epoch 17 shows a transient: one class is split in two for one epoch, and the output then returns to five; this is why the rule asks for a plateau and not for a first right partition.*
+*Figure 4. Seed 20, per epoch: number of clusters of the output and occupied slots of the memory; ACC of the output; share of images that change cluster (the stopping rule needs it below 1%, dotted line, over 10 epochs). Epoch 17 shows a transient: one class is split in two for one epoch, and the output then returns to five; this is why the rule asks for a plateau and not for a first right partition.*
 
 #### 10.1.6 Training dynamics over 200 seeds
 
