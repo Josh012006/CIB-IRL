@@ -21,41 +21,41 @@ def main():
     runs = [json.load(open(f, encoding="utf-8")) for f in sorted(glob.glob(R + "/final_seed*/final_metrics.json"),
                                                                   key=lambda p: int(p.split("final_seed")[1].split("/")[0]))]
     n = len(runs)
-    print("runs finis:", n)
+    print("finished runs:", n)
     if not n:
         return
     ok = lambda a: a["clusters"] == K_TRUE and a["acc"] > 0.999                          # the output is right
     mem_ok = lambda a: a["memory_clusters"] == K_TRUE and a["memory_acc"] > 0.999        # the memory holds the right partition
     ep = [r["epochs_run"] for r in runs]
-    print("convergées (règle de sortie): %d/%d ; epoch: min %d médiane %d max %d" % (sum(r["converged"] for r in runs), n, min(ep), np.median(ep), max(ep)))
+    print("converged (output rule): %d/%d ; epoch: min %d median %d max %d" % (sum(r["converged"] for r in runs), n, min(ep), np.median(ep), max(ep)))
     pre = [r["before_cleanup"] for r in runs]
     var = {v: [r["cleanup"]["variants"][v] for r in runs] for v in NAMES}
-    rows = [("sortie à l'arrêt (pre)", pre)] + [(v, var[v]) for v in NAMES]
-    print("\n%-24s %8s %10s %14s %9s %12s %14s" % ("", "juste", "échecs", "borne 95% sup", "mém=sortie", "slots (moy)", "mémoire juste"))
+    rows = [("output at stop (pre)", pre)] + [(v, var[v]) for v in NAMES]
+    print("\n%-24s %8s %10s %14s %9s %12s %14s" % ("", "right", "failures", "95% upper", "mem=output", "slots (mean)", "right memory"))
     for name, rr in rows:
         k = sum(not ok(a) for a in rr)
         print("%-24s %6d/%d %10d %14.3f %7d/%d %12.2f %12d/%d" % (name, n - k, n, k, beta.ppf(0.975, k + 1, n - k) if k < n else 1.0,
               sum(a["mem_gap"] <= 0.01 for a in rr), n, np.mean([a["memory_clusters"] for a in rr]),
               sum(mem_ok(a) for a in rr), n))
-    print("\nslots de la mémoire: pre %d-%d ; " % (min(a["memory_clusters"] for a in pre), max(a["memory_clusters"] for a in pre)) +
+    print("\nmemory slots: pre %d-%d ; " % (min(a["memory_clusters"] for a in pre), max(a["memory_clusters"] for a in pre)) +
           " ; ".join("%s %d-%d" % (v, min(a["memory_clusters"] for a in var[v]), max(a["memory_clusters"] for a in var[v])) for v in NAMES))
-    print("\npar rapport à la sortie à l'arrêt, run par run:")
+    print("\nrelative to the output at stop, run by run:")
     for v in NAMES:
         lost = [r["seed"] for r, a, b in zip(runs, pre, var[v]) if ok(a) and not ok(b)]
         won = [r["seed"] for r, a, b in zip(runs, pre, var[v]) if not ok(a) and ok(b)]
-        print("  %-20s perdus (juste -> faux): %s ; gagnés (faux -> juste): %s" % (v, lost, won))
-    print("\nsorties fausses à l'arrêt:", [r["seed"] for r, a in zip(runs, pre) if not ok(a)])
+        print("  %-20s lost (right -> wrong): %s ; gained (wrong -> right): %s" % (v, lost, won))
+    print("\nwrong outputs at stop:", [r["seed"] for r, a in zip(runs, pre) if not ok(a)])
     for v in NAMES:
-        print("sorties fausses, %-20s %s" % (v + ":", [r["seed"] for r, a in zip(runs, var[v]) if not ok(a)]))
+        print("wrong outputs, %-20s %s" % (v + ":", [r["seed"] for r, a in zip(runs, var[v]) if not ok(a)]))
     full = [i for i, a in enumerate(pre) if a["memory_clusters"] == runs[i].get("num_slots", 10) or a["memory_clusters"] >= 10]
-    print("\nruns dont la mémoire était pleine à l'arrêt: %d ; sorties fausses parmi eux: " % len(full) +
+    print("\nruns whose memory was full at stop: %d ; wrong outputs among them: " % len(full) +
           " ; ".join("%s %d" % (v, sum(not ok(var[v][i]) for i in full)) for v in NAMES))
-    print("fusions entre classes différentes (éval.): %d sur %d fusions" % (sum(r["cleanup"]["merges_across_classes"] for r in runs), sum(r["cleanup"]["merged_slots"] for r in runs)))
+    print("merges between different classes (eval.): %d out of %d merges" % (sum(r["cleanup"]["merges_across_classes"] for r in runs), sum(r["cleanup"]["merged_slots"] for r in runs)))
     for v in ("reintroduce", "reintroduce_no_open"):
         sw = [a["sweeps"] for a in var[v]]
-        print("\n%s: balayages moy %.1f max %d ; plafond atteint (20 balayages, une image bouge encore): %d/%d ; images déplacées au 1er balayage: médiane %d" % (
+        print("\n%s: sweeps mean %.1f max %d ; cap reached (20 sweeps, an image still moves): %d/%d ; images moved in the 1st sweep: median %d" % (
             v, np.mean(sw), max(sw), sum(s >= 20 for s in sw), n, np.median([a["moved"][0] for a in var[v]])))
-        print("   la politique relue sur cette mémoire (predict): juste %d/%d" % (sum(a["predict_clusters"] == K_TRUE and a["predict_acc"] > 0.999 for a in var[v]), n))
+        print("   policy re-read on this memory (predict): right %d/%d" % (sum(a["predict_clusters"] == K_TRUE and a["predict_acc"] > 0.999 for a in var[v]), n))
 
 
 if __name__ == "__main__":

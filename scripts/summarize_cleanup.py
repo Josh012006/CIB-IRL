@@ -11,25 +11,25 @@ R = sys.argv[1].rstrip("/") if len(sys.argv) > 1 else "results/toy_cov_k10_final
 runs = []
 for f in sorted(glob.glob(R + "/final_seed*/final_metrics.json"), key=lambda p: int(p.split("final_seed")[1].split("/")[0])):
     runs.append(json.load(open(f, encoding="utf-8")))
-n = len(runs); print("runs finis:", n)
+n = len(runs); print("finished runs:", n)
 if not n: raise SystemExit
 ok = lambda a: a["clusters"] == 5 and a["acc"] > 0.999
 A = [r["cleanup"]["after"] for r in runs]; Bf = [r["before_cleanup"] for r in runs]
-print("convergées (règle de sortie):", sum(r["converged"] for r in runs), "/", n, "; epoch de convergence: min %d médiane %d max %d" % (
+print("converged (output rule):", sum(r["converged"] for r in runs), "/", n, "; convergence epoch: min %d median %d max %d" % (
     min(r["epochs_run"] for r in runs), np.median([r["epochs_run"] for r in runs]), max(r["epochs_run"] for r in runs)))
-print("sortie juste avant nettoyage: %d/%d ; après: %d/%d" % (sum(map(ok, Bf)), n, sum(map(ok, A)), n))
-print("mémoire = sortie (mem_gap<=0.01) avant: %d/%d ; après: %d/%d" % (sum(b["mem_gap"] <= 0.01 for b in Bf), n, sum(a["mem_gap"] <= 0.01 for a in A), n))
-print("slots mémoire avant: moyenne %.2f [%d-%d] ; après: moyenne %.2f [%d-%d]" % (np.mean([b["memory_clusters"] for b in Bf]), min(b["memory_clusters"] for b in Bf), max(b["memory_clusters"] for b in Bf),
+print("right output before clean-up: %d/%d ; after: %d/%d" % (sum(map(ok, Bf)), n, sum(map(ok, A)), n))
+print("memory = output (mem_gap<=0.01) before: %d/%d ; after: %d/%d" % (sum(b["mem_gap"] <= 0.01 for b in Bf), n, sum(a["mem_gap"] <= 0.01 for a in A), n))
+print("memory slots before: mean %.2f [%d-%d] ; after: mean %.2f [%d-%d]" % (np.mean([b["memory_clusters"] for b in Bf]), min(b["memory_clusters"] for b in Bf), max(b["memory_clusters"] for b in Bf),
       np.mean([a["memory_clusters"] for a in A]), min(a["memory_clusters"] for a in A), max(a["memory_clusters"] for a in A)))
-print("slots mémoire après == clusters de sortie: %d/%d" % (sum(a["memory_clusters"] == a["clusters"] for a in A), n))
-print("fusions entre classes différentes (éval.):", sum(r["cleanup"]["merges_across_classes"] for r in runs), "sur", sum(r["cleanup"]["merged_slots"] for r in runs), "fusions")
+print("memory slots after == output clusters: %d/%d" % (sum(a["memory_clusters"] == a["clusters"] for a in A), n))
+print("merges between different classes (eval.):", sum(r["cleanup"]["merges_across_classes"] for r in runs), "out of", sum(r["cleanup"]["merged_slots"] for r in runs), "merges")
 mj = [r["cleanup"]["jump"] for r in runs if r["cleanup"]["merged_slots"]]; nj = [r["cleanup"]["jump"] for r in runs if not r["cleanup"]["merged_slots"] and r["cleanup"]["jump"] is not None]
-print("runs avec doublons fusionnés: %d ; saut min parmi eux: %.0f ; runs sans doublon: %d ; saut max parmi eux: %.2f" % (
+print("runs with merged duplicates: %d ; min jump among them: %.0f ; runs without duplicates: %d ; max jump among them: %.2f" % (
     len(mj), min(mj) if mj else float("nan"), len(nj), max(nj) if nj else float("nan")))
 tw = [r["cleanup"]["threshold"] for r in runs if r["cleanup"]["threshold"] is not None]
-print("distance max entre doublons fusionnés: %.4f" % max(tw) if tw else "", end="")
+print("max distance between merged duplicates: %.4f" % max(tw) if tw else "", end="")
 dmin = [min(d for d in r["cleanup"]["slot_distances"] if d > (r["cleanup"]["threshold"] or 0)) for r in runs if r["cleanup"]["slot_distances"]]
-print(" ; distance min entre clusters distincts: %.2f" % min(dmin))
+print(" ; min distance between distinct clusters: %.2f" % min(dmin))
 bad = [(r["name"], r["before_cleanup"]["clusters"], r["before_cleanup"]["acc"], r["cleanup"]["after"]["clusters"], r["cleanup"]["after"]["acc"]) for r in runs if not ok(r["cleanup"]["after"])]
-print("sorties non justes après nettoyage:", bad)
-k = sum(not ok(a) for a in A); print("échecs de sortie: %d/%d ; borne sup. 95%% (Clopper-Pearson): %.3f" % (k, n, beta.ppf(0.975, k + 1, n - k) if k < n else 1.0))
+print("wrong outputs after clean-up:", bad)
+k = sum(not ok(a) for a in A); print("output failures: %d/%d ; 95%% upper bound (Clopper-Pearson): %.3f" % (k, n, beta.ppf(0.975, k + 1, n - k) if k < n else 1.0))
