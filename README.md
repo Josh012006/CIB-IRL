@@ -263,7 +263,7 @@ Take one image and transform it: crop it, change its colors, replace its backgro
 **Definitions.**
 
 - **Nuisance family $\mathcal{T}$.** Transformations that change appearance (crop, color, blur, background, style) but are meant to preserve the object.
-- **Orbit of an image $x_i$.** $\mathcal{O}_i=\{\,g_D\circ\cdots\circ g_1(x_i)\;:\;g_k\in\mathcal{T},\ D\le D_{\max}\,\}$: everything reachable by chaining at most $D_{\max}$ transformations, with bounded cumulative strength (long chains drift away from the object).
+- **Orbit of an image $x_i$.** $\mathcal O_i=\{\,g_D\circ\cdots\circ g_1(x_i) : g_k\in\mathcal{T},\ D\le D_{\max}\,\}$: everything reachable by chaining at most $D_{\max}$ transformations, with bounded cumulative strength (long chains drift away from the object).
 - **Expert portion $\mathcal{D}_E$.** The portion of the training images dedicated to building the expert demonstrations; its size is a hyperparameter. The learner's environment is the whole training set.
 - **Demonstration (episode).** An episode presents views drawn from several orbits, one after the other, in random order. It plays the role of the trajectory in PEMIRL. The state of each decision is $(z_t, m_t, C^E_t)$, where $C^E_t$ is the **expert's own memory**: the groups the expert has formed so far in this episode, built by the same transition as the learner's memory ([Section 4.2](#42-episodic-mdp-over-a-growing-set-of-clusters)). It starts empty and is discarded at the end of the episode.
 
