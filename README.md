@@ -2,7 +2,7 @@
 
 **Unsupervised image clustering that groups images by *what they are*, not by *where they appear*, by learning a causal representation (Information Bottleneck) together with a latent reward (multi-intention Inverse RL) from experts built out of image transformations, and a policy that builds the clusters by reinforcement learning.**
 
-> **Status:** research prototype, work in progress. The conceptual framework is stable; the toy environment is implemented and evaluated (see [Results](#10-results)); the real benchmarks are being built (see [Roadmap](#12-status--roadmap)).
+> **Status:** research prototype, work in progress. The conceptual framework is stable; the toy environment is implemented and evaluated (see [Results](#11-results)); the real benchmarks are being built (see [Roadmap](#13-status--roadmap)).
 
 ---
 
@@ -12,15 +12,16 @@
 2. [Motivation](#2-motivation)
 3. [Background & Reading List](#3-background--reading-list)
 4. [Method](#4-method)
-5. [Where Do the Experts Come From?](#5-where-do-the-experts-come-from)
-6. [Components & Training](#6-components--training)
+5. [Components & Training](#5-components--training)
+6. [Where Do the Experts Come From?](#6-where-do-the-experts-come-from)
 7. [Decisions & Open Questions](#7-decisions--open-questions)
-8. [Evaluation Protocol](#8-evaluation-protocol)
-9. [Ablations](#9-ablations)
-10. [Results](#10-results)
-11. [Repository Structure](#11-repository-structure)
-12. [Status & Roadmap](#12-status--roadmap)
-13. [License](#13-license)
+8. [Failure Modes & Monitoring](#8-failure-modes--monitoring)
+9. [Evaluation Protocol](#9-evaluation-protocol)
+10. [Ablations](#10-ablations)
+11. [Results](#11-results)
+12. [Repository Structure](#12-repository-structure)
+13. [Status & Roadmap](#13-status--roadmap)
+14. [License](#14-license)
 
 ---
 
@@ -49,7 +50,7 @@ IRL needs expert demonstrations, but an unsupervised problem has none (a supervi
 - all the transformed versions of an image (crops, color changes, new backgrounds, transformations of transformations) obviously show the same thing: when one of them arrives and another is already in a group, the expert demonstrates "join that group";
 - two random images usually show different things: the expert demonstrates "do not put these together".
 
-The expert never says *which* cluster in absolute terms; it only answers "same group or not?". That is enough to learn a reward that tells clusters apart. These decisions form expert demonstrations: episodes in which the views of a few images arrive one after the other and a rule-based expert places them in its own groups. The data pipeline generated the views, so it knows which ones share an orbit. The expert does not constrain the learner's policy, which builds its own clusters; only the reward learns from the demonstrations. Details in [Section 5](#5-where-do-the-experts-come-from).
+The expert never says *which* cluster in absolute terms; it only answers "same group or not?". That is enough to learn a reward that tells clusters apart. These decisions form expert demonstrations: episodes in which the views of a few images arrive one after the other and a rule-based expert places them in its own groups. The data pipeline generated the views, so it knows which ones share an orbit. The expert does not constrain the learner's policy, which builds its own clusters; only the reward learns from the demonstrations. Details in [Section 6](#6-where-do-the-experts-come-from).
 
 ### 1.4 Two safeguards against shortcuts
 
@@ -67,7 +68,7 @@ Image datasets are full of spurious cues (background, texture, style) that are e
 | The groups I have formed so far | The learner's cluster memory $C$: for each cluster, the list of its members and their average intent (empty slots included); it persists across episodes |
 | Why this image belongs here and not there | Reward $R_\theta(z, m, C, a)$ |
 | Putting it in a group (or starting a new one) | Policy $\pi_\omega(a \mid z, m, C)$, $a\in\\{1,\dots,K\\}$, trained by RL |
-| Someone who already knows what goes together | A rule-based expert built from transformations, with its own per-episode memory; it guides the reward and never constrains the learner ([Section 5](#5-where-do-the-experts-come-from)) |
+| Someone who already knows what goes together | A rule-based expert built from transformations, with its own per-episode memory; it guides the reward and never constrains the learner ([Section 6](#6-where-do-the-experts-come-from)) |
 | Not being fooled by the background | Compression + invariance of the decision |
 
 ---
@@ -99,14 +100,14 @@ Six papers cover the theoretical foundations of the framework:
   [PDF](https://arxiv.org/pdf/1909.09314.pdf)
   Core multi-intention IRL method — learns rewards from unlabeled multi-task demonstrations
   through a latent context variable $m$ inferred from the demonstrations, and infers the reward
-  of a new task from a single demonstration. Source of our intent $m$ (Section 4.2).
+  of a new task from a single demonstration. Source of our intent $m$ (Section 5.2).
 
 - [x] Alemi, A. A., Fischer, I., Dillon, J. V., & Murphy, K. (2017).
   *Deep Variational Information Bottleneck*. ICLR 2017.
   [PDF](https://arxiv.org/pdf/1612.00410.pdf)
   Core compression method — turns the Information Bottleneck into a trainable objective with
   a variational bound on $I(z;x)$ (a KL to a prior) and a bound on relevance. Gives the
-  $\beta\\,\mathrm{KL}$ term of our encoder (Section 4.4).
+  $\beta\\,\mathrm{KL}$ term of our encoder (Section 5.1).
 
 - [x] Arjovsky, M., Bottou, L., Gulrajani, I., & Lopez-Paz, D. (2019).
   *Invariant Risk Minimization*. arXiv.
@@ -129,11 +130,13 @@ Six papers cover the theoretical foundations of the framework:
   objective per cluster with an EM procedure over IRL. Closest ancestor of the idea that a
   cluster is defined by its reward.
 
-Additional references used by the expert design ([Section 5](#5-where-do-the-experts-come-from)): **Debiased Contrastive Learning** (Chuang et al., NeurIPS 2020), **SCAN: Learning to Classify Images without Labels** (Van Gansbeke et al., ECCV 2020), **SimCLR** (Chen et al., 2020), **MoCo v3** (Chen, Xie, He, 2021), and **Waterbirds / Group DRO** (Sagawa et al., 2020).
+Additional references used by the expert design ([Section 6](#6-where-do-the-experts-come-from)): **Debiased Contrastive Learning** (Chuang et al., NeurIPS 2020), **SCAN: Learning to Classify Images without Labels** (Van Gansbeke et al., ECCV 2020), **SimCLR** (Chen et al., 2020), **MoCo v3** (Chen, Xie, He, 2021), and **Waterbirds / Group DRO** (Sagawa et al., 2020).
 
 ---
 
 ## 4. Method
+
+This section gives the overview: the pipeline, the decision process and the objective. Each component and its loss are detailed in [Section 5](#5-components--training); the construction of the experts is in [Section 6](#6-where-do-the-experts-come-from).
 
 ### 4.1 Pipeline
 
@@ -163,7 +166,7 @@ flowchart TD
 Two kinds of episodes share the same state, transition and reward:
 
 - **Learner episodes.** The learner's policy $\pi_\omega$ sweeps a minibatch of training images, one view per image, presented one after the other in random order. The learner's cluster memory $C$ **persists across episodes and across training**: it is the set of clusters built so far. These episodes carry no label and no expert.
-- **Expert episodes.** A dataset of demonstrations built before training from a portion of the images ([Section 5.2](#52-the-key-idea-an-images-transformations-are-an-expert-demonstration)): the views of a few images, shuffled, placed by a rule-based expert in the expert's own memory $C^E$. This memory starts empty at the beginning of each episode and is discarded at its end. Only the reward learns from these episodes.
+- **Expert episodes.** A dataset of demonstrations built before training from a portion of the images ([Section 6.2](#62-the-key-idea-an-images-transformations-are-an-expert-demonstration)): the views of a few images, shuffled, placed by a rule-based expert in the expert's own memory $C^E$. This memory starts empty at the beginning of each episode and is discarded at its end. Only the reward learns from these episodes.
 
 The expert never parametrizes the learner: $\pi_\omega$ rolls out on its own states and is free to build memories and clusters that differ from the expert's.
 
@@ -172,24 +175,15 @@ The expert never parametrizes the learner: $\pi_\omega$ rolls out on its own sta
 | State $s_t$ | $(z_t, m_t, C_t)$. $z_t = f_\phi(x_t)$ is the code of the image arriving at step $t$ and $m_t = \mu_\psi(z_t)$ is its inferred intent. $C_t=\\{(n_k,c_k)\\}_{k=1}^{K}$ is the **cluster memory**: for each slot $k$, the number of members $n_k$ and the **average intent** $c_k$ of its members. An empty slot ($n_k = 0$) carries a learned "empty" embedding. $C$ is a memory, not a differentiable function: it is updated by the transition and is stop-gradient everywhere. In an expert episode the state is the same, with the expert's memory $C^E_t$ in place of $C_t$ |
 | Action $a_t$ | A slot $a\in\\{1,\dots,K\\}$. Choosing a non-empty slot means *joining* that cluster. Choosing an empty slot means *opening a new cluster*. $K$ is an **upper bound**; the number of clusters actually constructed starts at 0 and grows during training |
 | Transition | The chosen slot is updated: $n_a \leftarrow n_a + 1$, $c_a \leftarrow c_a + (m_t - c_a)/n_a$ (running mean of the member intents). The next image then sees a different state |
-| Reward | $R_\theta(s_t, a_t)$: compatibility of $z_t$ with the chosen group **and** distinctness from the other groups. One network, permutation-equivariant over slots, reading the summaries $c_k$ but not the counts $n_k$. Learned by IRL from the experts ([Section 5](#5-where-do-the-experts-come-from)) |
-| Policy | $\pi_\omega(a \mid s_t)$, a **separate network** trained by RL to maximize the entropy-regularized cumulative return $\mathbb{E}\big[\textstyle\sum_t\gamma^t R_\theta(s_t,a_t)\big]+\alpha\\,\mathcal{H}(\pi_\omega)$. It is *not* $\mathrm{softmax} (R_\theta)$ |
-| Expert | Not observed: a rule-based expert built from image transformations, acting in its own per-episode memory ([Section 5](#5-where-do-the-experts-come-from)) |
+| Reward | $R_\theta(s_t, a_t)$: compatibility of $z_t$ with the chosen group **and** distinctness from the other groups. Learned by IRL from the experts ([Section 5.3](#53-reward-model-r_theta), [Section 6](#6-where-do-the-experts-come-from)) |
+| Policy | $\pi_\omega(a \mid s_t)$, a **separate network** trained by RL to maximize the cumulative return of $R_\theta$ ([Section 5.4](#54-policy-pi_omega-separate-network-trained-by-rl)). It is *not* $\mathrm{softmax}(R_\theta)$ |
+| Expert | Not observed: a rule-based expert built from image transformations, acting in its own per-episode memory ([Section 6](#6-where-do-the-experts-come-from)) |
 
-**Keeping the learner's memory consistent.** The memory keeps, for each slot, the list of its members (a map image → slot, so an image belongs to at most one slot at a time). When an image is visited again, its previous placement is withdrawn ($n$ and $c$ are updated) before the new placement. Because the encoder keeps changing, a summary computed with an old encoder would no longer match the intents of new images: at the end of each epoch the summaries $c_k$ are **recomputed from the members with the current encoder**. The reward does not receive the counts $n_k$: in an expert episode a slot holds at most $n$ views, in a learner episode it can hold thousands, so a count would be out of distribution. The counts are still used by the transition and to know whether a slot is empty.
-
-**What $m$ is, and why the cluster memory is made of intents.** In Meta-IRL (PEMIRL), the context $m$ is inferred from a *set* of demonstrations that share a task, and it indexes the reward of that task. Our counterpart of a set of demonstrations is a **group of images**: an orbit at first, then a cluster that gathers orbits. The $m$ of a group is its **intent**, what its members have in common. This gives two levels:
-
-- **Per image, $m_u = \mu_\psi(z_u)$.** The intent that a single image expresses. During training $q_\psi$ is pushed to give the same intent to all views of an orbit (Section 6.2), so $m$ is the orbit-consistent, nuisance-free part of the code. At test time it is computed from one image, as PEMIRL infers the context of a new task from a single demonstration.
-- **Per cluster, $c_k$.** The average of the intents of its members. The intent of a cluster *is* the summary stored in the memory.
-
-The reward and the policy therefore receive no extra label: they compare the intent of the arriving image with the intents of the existing clusters. We do not take $m$ to be the cluster index (a distribution over slots), because that would duplicate the output of the policy. One honest remark: $m$ is a function of $z$, so it adds no information. What it adds is an extra invariance signal (orbit consistency, $L_\psi$) and a space in which clusters are compared. The ablations "without $m$" and "summaries in $z$-space" measure it ([Section 9](#9-ablations)).
-
-**What RL brings that a classifier does not.** The reward is a *one-step* score: it says whether placing this image here is good *given the clusters as they currently are*. A placement also changes the cluster summary, hence the rewards of all later images. The policy optimizes this whole chain: it can leave an uncertain image in a fresh slot instead of polluting an existing summary, or open a cluster early because several later images will need it. If $\gamma=0$ the return is the immediate reward and the policy is essentially greedy on $R_\theta$; the ablation $\gamma=0$ / $\mathrm{softmax} (R_\theta)$ ([Section 9](#9-ablations)) measures what the sequential structure really adds.
+**Keeping the learner's memory consistent.** The memory keeps, for each slot, the list of its members (a map image → slot, so an image belongs to at most one slot at a time). When an image is visited again, its previous placement is withdrawn ($n$ and $c$ are updated) before the new placement. Because the encoder keeps changing, a summary computed with an old encoder would no longer match the intents of new images: at the end of each epoch the summaries $c_k$ are **recomputed from the members with the current encoder**, $c_k\leftarrow\frac{1}{|M_k|}\sum_{u\in M_k}\mu_\psi\big(\mu_\phi(u)\big)$, with $M_k$ the member list of slot $k$. The counts $n_k$ are used by the transition and to know whether a slot is empty; the reward and the policy network never read them ([Section 5.3](#53-reward-model-r_theta)).
 
 ### 4.3 Joint objective
 
-Encoder $f_\phi$, intent predictor $q_\psi$ and reward $R_\theta$ are optimized together (the policy $\pi_\omega$ is trained against the reward, Section 6.5):
+Encoder $f_\phi$, intent predictor $q_\psi$ and reward $R_\theta$ are optimized together (the policy $\pi_\omega$ is trained against the reward, Section 5.5):
 
 <br>
 
@@ -203,9 +197,44 @@ Encoder $f_\phi$, intent predictor $q_\psi$ and reward $R_\theta$ are optimized 
 - **Compression term** $I\big(f_\phi(x);x\big)$: forces the encoder to be as restrictive as possible, deleting bits that vary a lot or do not help clustering (changing backgrounds, styles).
 - **$\beta$** controls the compression / utility trade-off.
 
-### 4.4 Tractable training objective
+These two terms are turned into a trainable loss by variational bounds, and the compression is checked by an invariance term on the decision; both are given with the encoder's loss in [Section 5.1](#51-encoder-f_phi).
 
-As in the Deep VIB, both terms are replaced by variational bounds. With a stochastic encoder $p_\phi(z\mid x)$ and a fixed prior $r(z)$:
+---
+
+## 5. Components & Training
+
+The architecture has four trained components: the **encoder**, the **intent predictor**, the **reward model** and the **policy** (a separate network with its critic, trained by RL), plus the learner's non-differentiable **cluster memory** that the policy writes to (the expert has a memory of its own, per episode). This section fixes the notation, then gives for each component its role, its loss, and the intuition behind each term. It closes with the two ways of training the encoder (joint, [5.5](#55-joint-training-the-encoder-is-trained-with-the-rest-alternating-reward-and-policy-steps), and sequential, [5.6](#56-sequential-training-the-encoder-is-trained-first-then-frozen)) and exactly what is frozen where.
+
+> **Reading guide.** The values given in this section are those of the final toy pipeline ([Section 11](#11-results)). Where the pipeline departs from the first design, the text says **(changed)**; the experiments and reasons behind each change are in `docs/protocol-decisions.md`. Sections 5.1 to 5.6 describe the training; [5.7](#57-stopping-rule-and-final-clean-up) the stopping rule and the final clean-up; [5.8](#58-hyperparameters) the role of each hyperparameter (the values used on the toy are in [Section 11.1.2](#1112-hyperparameters-of-the-toy-pipeline)).
+
+### 5.0 Notation
+
+- For a view $u$: $z_u = f_\phi(u)$ and $m_u = \mu_\psi(z_u)$ (mean of the inferred intent).
+- $C=\\{(n_k,c_k)\\}$ is the learner's cluster memory (Section 4.2): $c_k$ is the average of the intents $m_v$ of the members of cluster $k$, recomputed with the current encoder at each epoch. $s_u = (z_u, m_u, C)$ is the state in which $u$ arrives. In an expert episode the memory is the expert's own, $C^E$, and the state is written $s^E_u = (z_u, m_u, C^E)$. Memories are always treated as constants. States and summaries always use the **single-view** intent $m_u$, as at test time; the orbit mean $m^{*}$ below is only a training target for $q_\psi$.
+- $R_\theta(s, a)$ is the reward of placing the arriving image in slot $a$. $q_\theta(a\mid s)=\mathrm softmax_a \\, R_\theta(s,a)$ is the choice model it induces, used to score the experts (Section 6.2).
+- $\pi_\omega(a \mid s)$ is the **policy**, a network of its own, trained by RL against $R_\theta$. It is not $q_\theta$.
+- A bar ($\bar{\theta}$, $\bar{\omega}$, $\bar{m}$, $\bar{C}$) means **stop-gradient**: the value is used in the computation but not updated by that loss.
+- Expert signals (Section 6), always in the expert's states $s^E$: forced moves (twin already placed in the expert's memory), random previously placed views (repulsion), with $\tau^{+} = 1/K$. The expert never acts on the learner: only $L_\theta$ reads them.
+- $K$ is the number of slots, an upper bound on the number of clusters. A slot is **empty** until an image is placed in it; the action "open a new cluster" is the choice of the first empty slot. During a pass over the training images, $n$ is the number of images placed so far and $n_k$ the size of slot $k$. The reward and the policy network never read $n_k$; only the prior $\pi_0$ of [5.4](#54-policy-pi_omega-separate-network-trained-by-rl) does.
+- Intent target of an image $i$: $m_i^{*} = \mathrm{sg} \\Big[\tfrac{1}{|\text orbit_i|}\sum_{v\in\text orbit_i}\mu_\psi(z_v)\\Big]$, where $\mathrm{sg}[\cdot]$ is stop-gradient. The intent is a property of the orbit, not of a single view.
+
+### 5.1 Encoder $f_\phi$
+
+**Role.** The only component that sees pixels. It maps an image to a stochastic code $z=\mu_\phi(x)+\sigma_\phi(x)\odot\varepsilon$, $\varepsilon\sim\mathcal{N}(0,I)$, and everything downstream sees only $z$. Its job is a trade-off: keep what the intent and the reward need, discard everything else, in particular backgrounds and styles.
+
+**Loss.**
+
+<br>
+
+```math
+\mathcal{L}_{\text{enc}}(\phi) = \underbrace{\mathcal{L}_\psi + \mathcal{L}_\theta}_{\text{utility, through } z} + \beta\,\underbrace{\mathbb{E}_x\,\mathrm{KL}\big(p_\phi(z\mid x)\|\mathcal{N}(0,I)\big)}_{\text{compression}} + \lambda\,\underbrace{\mathcal{L}_{\text{inv}}}_{\text{invariance}}
+```
+
+<br>
+
+For a diagonal Gaussian the KL has a closed form: $\tfrac12\sum_j\big(\mu_j^2+\sigma_j^2-1-\log\sigma_j^2\big)$. The intent loss $\mathcal{L}_\psi$ of the utility term includes the decorrelation penalty of the intent ([5.2](#52-intent-predictor-q_psi)).
+
+**Where the loss comes from.** As in the Deep VIB, the two mutual-information terms of [Section 4.3](#43-joint-objective) are replaced by variational bounds. With a stochastic encoder $p_\phi(z\mid x)$ and the fixed prior $r(z)=\mathcal{N}(0,I)$:
 
 <br>
 
@@ -217,26 +246,12 @@ I(z;a,m) \ge H(a,m) + \mathbb{E}\,\big[\log q_\psi(m\mid z) + \log q_\theta(a\mi
 
 <br>
 
-where $q_\theta(a\mid s)=\mathrm softmax_a\\,R_\theta(s,a)$ is the **choice model induced by the reward** (Section 5.2). It is used to score the experts' decisions; it is not the policy that acts. Two remarks on the second bound:
+Here $q_\theta$ is the choice model induced by the reward ([5.3](#53-reward-model-r_theta)); it scores the experts' decisions and is not the policy that acts. Two remarks on the second bound:
 
-- **The targets are relational, not categorical.** Our experts say whether an image goes with a group that already exists, or whether two images go together, not which cluster is "the right" one ([Section 5](#5-where-do-the-experts-come-from)). We therefore instantiate the relevance term with the *expert likelihood*: the intent loss $L_\psi$ and the reward loss $L_\theta$ of [Section 6](#6-components--training) play the roles of $-\mathbb{E}\log q_\psi(m\mid z)$ and $-\mathbb{E}\log q_\theta(a\mid z,C,m)$. This is a surrogate for the bound, not a strict bound.
-- **The entropy $H(a,m)$** is what prevents collapse in the bound. In our setting it is supplied by the repulsion between random pairs ([Section 5.3](#53-two-forces-attraction-and-repulsion)) and by the finite number of slots.
+- **The targets are relational, not categorical.** Our experts say whether an image goes with a group that already exists, or whether two images go together, not which cluster is "the right" one ([Section 6](#6-where-do-the-experts-come-from)). We therefore instantiate the relevance term with the *expert likelihood*: the intent loss $\mathcal L_\psi$ ([5.2](#52-intent-predictor-q_psi)) and the reward loss $\mathcal L_\theta$ ([5.3](#53-reward-model-r_theta)) play the roles of $-\mathbb{E}\log q_\psi(m\mid z)$ and $-\mathbb{E}\log q_\theta(a\mid z,C,m)$. This is a surrogate for the bound, not a strict bound.
+- **The entropy $H(a,m)$** is what prevents collapse in the bound. In our setting it is supplied by the repulsion between random pairs ([Section 6.3](#63-two-forces-attraction-and-repulsion)) and by the finite number of slots.
 
-The loss minimized on the encoder, intent predictor and reward is
-
-<br>
-
-```math
-\mathcal{L} = \mathcal{L}_\psi + \mathcal{L}_\theta + \beta\,\mathbb{E}_x\,\mathrm{KL}\big(p_\phi(z\mid x)\|r(z)\big) + \lambda\,\mathcal{L}_{\text{inv}}
-```
-
-<br>
-
-and the policy is trained separately, with its own RL loss $L_\omega$ (Section 6.4), in alternation with it (Section 6.5).
-
-### 4.5 Decision-consistency (invariance) term
-
-A feature is spurious if removing it leaves the decision unchanged. We operationalize this with a consistency penalty under nuisance perturbations $g\sim\mathcal{T}$ (background swaps, color jitter, style transfer). Because a softmax policy is only defined up to an additive constant per image in the reward, and because the policy is what actually decides, we compare the **policies** on the clean and the perturbed view, in the same (learner's) cluster state. With $z = f_\phi(x)$ and $\tilde{z} = f_\phi(g(x))$:
+**The invariance term.** A feature is spurious if removing it leaves the decision unchanged. We operationalize this with a consistency penalty under nuisance perturbations $g\sim\mathcal{T}$ (background swaps, color jitter, style transfer). Because a softmax policy is only defined up to an additive constant per image in the reward, and because the policy is what actually decides, we compare the **policies** on the clean and the perturbed view, in the same (learner's) cluster state. With $z = f_\phi(x)$ and $\tilde{z} = f_\phi(g(x))$:
 
 <br>
 
@@ -246,26 +261,269 @@ A feature is spurious if removing it leaves the decision unchanged. We operation
 
 <br>
 
-A bar means **stop-gradient**: the value is used but not updated by this term. The policy $\omega$, the intent $\psi$ (hence $\bar{m}$, the intent of the clean view, given to both views) and the cluster memory $C$ are *frozen* here, while the encoder $\phi$ is updated through both views. The term therefore tests the dependence of the decision on $z$; the invariance of $m$ itself is enforced by $L_\psi$. Section 6.5 explains why. This is inspired by IRM (invariance across environments) and IIC (agreement across views), but it is not the IRMv1 penalty: IRM needs labels to compute a risk per environment and only observes environments, whereas here $\mathcal{T}$ gives an intervention on each image and no label exists, so a consistency check on a frozen policy is enough. It only covers the nuisances that $\mathcal{T}$ contains (A1). It acts as a *check* on the encoder: if the useless features were really compressed away, the distribution over clusters must not move. Alternatives (the reward-induced choice model $q_{\bar{\theta}}$ instead of $\pi_{\bar{\omega}}$, raw reward differences, $\omega$ unfrozen) are covered by the ablations in [Section 9](#9-ablations).
+A bar means **stop-gradient**: the value is used but not updated by this term. The policy $\omega$, the intent $\psi$ (hence $\bar{m}$, the intent of the clean view, given to both views) and the cluster memory $C$ are *frozen* here, while the encoder $\phi$ is updated through both views. The term therefore tests the dependence of the decision on $z$; the invariance of $m$ itself is enforced by $L_\psi$. Section 5.5 explains why. This is inspired by IRM (invariance across environments) and IIC (agreement across views), but it is not the IRMv1 penalty: IRM needs labels to compute a risk per environment and only observes environments, whereas here $\mathcal{T}$ gives an intervention on each image and no label exists, so a consistency check on a frozen policy is enough. It only covers the nuisances that $\mathcal{T}$ contains (A1). It acts as a *check* on the encoder: if the useless features were really compressed away, the distribution over clusters must not move. Alternatives (the reward-induced choice model $q_{\bar{\theta}}$ instead of $\pi_{\bar{\omega}}$, raw reward differences, $\omega$ unfrozen) are covered by the ablations in [Section 10](#10-ablations).
+
+**Hyperparameters (toy).** $\dim_z = 32$; $\beta = 10^{-4}$ **(changed, was $10^{-3}$)**, reached after a warm-up of 300 iterations from 0; $\lambda = 1$. With $\beta=10^{-3}$ the KL falls to about 40 and the twin accuracy (`twin_acc`: share of the expert's forced moves that the reward reproduces) drops from about 0.83 to 0.5; with $\beta=10^{-4}$ it stays near 0.8 (`docs/protocol-decisions.md`, Section 3).
+
+**Status of $\mathcal{L}_{\text{inv}}$ (kept, inactive on the toy).** On the toy, $\mathcal{L}_{\text{inv}}$ never exceeds $3\cdot10^{-7}$ and carries $0.5\\,\%$ of the encoder gradient; the policy takes the same decision on the clean and the perturbed view for $100\\,\%$ of the images. The orbits already make the encoder invariant to the background, so no effect is expected there; the ablation $\lambda=0$ is not run yet ([Section 10](#10-ablations)).
+
+**Reading the terms.**
+- **Utility $L_\psi + L_\theta$.** The gradients of the intent and expert losses flow back into $z$. This is the "retain as much information as possible" pressure: anything needed to predict the concept and to tell images apart must survive.
+- **Compression $\beta\\,\mathrm{KL}$.** Pulls every code toward the prior, i.e. makes $z$ carry as few bits about $x$ as possible. $\beta$ sets how hard it pushes; it must stay small enough that the reward is not degraded.
+- **Invariance $\lambda\\,L_{\mathrm{inv}}$.** The check on the encoder. $L_{\mathrm{pos}}$ already asks that the views of an image join the same cluster; $L_{\mathrm{inv}}$ asks that the whole distribution over clusters chosen by the policy stay the same under perturbation. $\omega$, $\psi$ and $C$ are frozen in this term (see Section 5.5); otherwise the policy could simply learn to ignore the image and satisfy it for free.
+
+### 5.2 Intent predictor $q_\psi$
+
+**Role.** Infers from $z$ a continuous intent $m$ (what the image is "about", e.g. species morphology), the counterpart of the context variable of Meta-IRL. It plays two roles. For an image, it is the nuisance-free summary of what the image expresses. For a cluster, the average of the intents of its members is the cluster's summary in the memory $C$, so the intent of a cluster is built from the intents of its images, as PEMIRL infers the context of a task from its demonstrations. The reward and the policy receive $m$ and compare it with the intents of the existing clusters. At test time $m$ is computed from a single image, as PEMIRL infers the context of a new task from a single demonstration. We do not take $m$ to be the cluster index (a distribution over slots), because that would duplicate the output of the policy.
+
+**Loss.**
+
+<br>
+
+```math
+\mathcal{L}_{\text{orbit}} = -\mathbb{E}_{i,u\in\text{orbit}_i}\,\big[\log q_\psi(m^*_i \mid z_u)\big]
+```
+
+<br>
+
+**Decorrelating the coordinates of the intent.** Alone, $\mathcal L_{\text{orbit}}$ lets the intent collapse to a single direction: the covariance of $\mu_\psi(z)$ over a batch has rank 1 and the classes superpose on one axis, so that the clusters the policy builds are not separable (docs 5.15 to 5.18). We add
+
+<br>
+
+```math
+\mathcal{L}_{\text{cov}}=\frac1d\sum_{i\neq j}C_{ij}^{2},\qquad C=\mathrm{Cov}_{\text{expert batch}}\big(\mu_\psi(z)\big)\in\mathbb{R}^{d\times d},\qquad d=\dim_m=16
+```
+
+<br>
+
+added to the intent loss with the weight $\lambda_{\text{cov}}=3$:
+
+<br>
+
+```math
+\mathcal{L}_\psi=\mathcal{L}_{\text{orbit}}+\lambda_{\text{cov}}\mathcal{L}_{\text{cov}}
+```
+
+<br>
+
+$\mathcal L_{\text{cov}}$ penalizes the off-diagonal entries of $C$ only, so it asks the coordinates of $m$ to be uncorrelated without fixing their scale. As an implementation choice (outside the first design), $\mu_\psi(z)$ goes through a BatchNorm without affine parameters, so that every coordinate has unit scale. The variance $\sigma^2_\psi$ stays learned (a fixed variance and a Cholesky whitening were tested and rejected, docs 5.15 and 5.16).
+
+**Reading the terms.**
+- **$\mathcal{L}_{\text{cov}}$.** Forces the intent to use several independent directions, so that different classes can sit at different places of $m$-space instead of on one line. It uses no label.
+- **Log-likelihood of the orbit's intent $m^{*}$.** Every view of an image must give the same concept. A concept that changes when only the background changes is penalized, so $m$ is pushed toward content.
+- **Gaussian case.** With $q_\psi(m\mid z)=\mathcal{N}\big(\mu_\psi(z),\sigma_\psi^2(z)\big)$, this is a squared error weighted by the predicted precision, plus $\log\sigma_\psi$: the model can express uncertainty but pays for it.
+- **Caveat.** $m$ is a function of $z$: it adds an invariance signal, not information. A constant $m$ would leave the memory with only counts and reduce the model to single-intention IRL. The "without $m$" ablation measures what $m$ really contributes.
+
+### 5.3 Reward model $R_\theta$
+
+**Role.** Scores every placement $(s, a)$: how well the arriving image, coded by $z$, fits the group in slot $a$ **and** how well it is told apart from the other groups in the memory $C$. It is the object that IRL recovers, the *intention of distinction*, shared by the whole dataset. It is a permutation-equivariant network over the slots, $R_\theta(z,m,C,a)=g_\theta\big(z,m,c_a,\mathrm{pool}_{k\neq a}\\,c_k\big)$: it reads the chosen slot together with a pooled view of the others, so the identity of a slot never matters, only its content (the first part measures compatibility, the second distinctness). It does **not** read the counts $n_k$, which would differ between the expert's small groups and the learner's large ones. It is trained by IRL on the expert's states $s^E$ and applied to the learner's states $s$, which is a known distribution shift ([Section 8](#8-failure-modes--monitoring)); it is **not** the policy.
+
+**Loss.** Maximum-likelihood IRL of the expert's decisions ([Section 6](#6-where-do-the-experts-come-from)). The expert is modelled as choosing slot $a$ with probability proportional to $\exp R_\theta(s,a)$, the choice model induced by the reward:
+
+<br>
+
+```math
+q_\theta(a\mid s) = \frac{\exp R_\theta(s,a)}{\sum_{a'=1}^{K}\exp R_\theta(s,a')}
+```
+
+<br>
+
+Learning the reward that makes the expert's decisions likely under $q_\theta$ is maximum-likelihood IRL with relational demonstrations. Two approximations are explicit: the expert is modelled as Boltzmann-rational on the *immediate* reward (no soft value iteration through the transitions), and the reward is trained on the expert's states only while it is used on the learner's states. The loss has three parts, all evaluated in the expert's states $s^E_u$:
+
+<br>
+
+```math
+\mathcal{L}_\theta = \mathcal{L}_{\text{pos}} + \mathcal{L}_{\text{neg}} - \rho\,\mathcal{H}\big(\mathbb{E}_s\,q_\theta(\cdot\mid s)\big), \qquad \rho = 0.1
+```
+
+<br>
+
+```math
+\mathcal{L}_{\text{pos}}=-\mathbb{E}\,\big[\log q_\theta(k^+(u)\mid s^E_u)\big],\qquad
+\mathcal{L}_{\text{neg}}=\mathbb{E}_{u}\,\max\Big\{\tfrac{1}{1-\tau^+}\Big(\mathbb{E}_{v}\,\ell(u,v)-\tau^+\,\ell^+(u)\Big),\ \varepsilon\,\mathbb{E}_{v}\,\ell(u,v)\Big\}
+```
+
+<br>
+
+with $\ell(u,v)=-\log\big(1-q_\theta(k(v)\mid s^E_u)\big)$ and $\varepsilon=0.1$. Here $k^{+}(u)$ is the expert slot of the twin of $u$, $k(v)$ the expert slot of a random placed view $v$ of another orbit, and $\ell^{+}(u)=\ell(u,v^{+})$ for the twin $v^{+}$ when one is already placed (the batch average over the forced moves otherwise, so that the correction is defined for first views too).
+
+**Reading the terms.**
+- **$L_{\mathrm{pos}}$ (attraction, forced moves).** Raises the reward of the twin's slot, in the expert's memory, for the arriving view.
+- **$L_{\mathrm{neg}}$ (repulsion).** Lowers the reward of joining a slot that holds a different orbit in the expert's memory. A fraction $\tau^{+}$ of random $v$ are actually of the same concept, so their share is subtracted, approximated by a positive pair (the standard debiasing of Chuang et al. 2020). We use $\tau^{+} = 1/K$ on Colored MNIST; on Waterbirds, where classes are imbalanced, $\tau^{+}$ is swept as a hyperparameter (assumption A2). This is the "reward that distinguishes": it exists because the softmax inside $q_\theta$ is *relative*, so lowering a cluster's reward for one image raises the others, empty slots included. It is also what makes an **empty slot attractive**: when an image fits no existing group, the mass leaves the occupied slots and goes to an empty one, i.e. the reward values *opening a new cluster*.
+- **$\rho\\,\mathcal{H}(\text{marginal})$ ($\rho=0.1$, **changed**: it was off, $\rho=0$, and switched on only if $K_{\mathrm{eff}}<0.7\\,K$).** Entropy of the average choice distribution over the batch, a safeguard against collapse; it is now always on, with a small weight. $K_{\mathrm{eff}}=\exp\big(\mathcal{H}(\bar p)\big)$, with $\bar{p}$ the average assignment distribution, is still monitored. We keep $\rho$ small because uniform cluster usage is wrong for imbalanced classes (e.g. Waterbirds), and because $K$ is only an upper bound.
+- **Repulsion floor $\varepsilon$ (in $L_{\mathrm{neg}}$).** The debiased repulsion has zero gradient as soon as $\mathbb E_v\,\ell(u,v)\le\tau^{+}\ell^{+}(u)$ (a dead zone: $\ell^{+}$ is measured on twins, the easy cases, so the correction subtracts too much), which switches the repulsion off exactly where the reward is too permissive and joins things that should stay apart (docs 5.9). A constant added to $L_{\mathrm{neg}}$ would have no gradient, so the floor is placed inside the maximum: the second branch keeps a fraction $\varepsilon$ of the raw repulsion loss, and with $\varepsilon=0$ only the debiased loss remains. This is the only change to the debiasing; $\tau^{+}=1/K=0.1$ is unchanged. Alone, $\rho$ and the floor did not change the formation of the clusters (docs 5.10); they are kept because they belong to the configuration validated on 200 seeds together with $\mathcal{L}_{\text{cov}}$ (the effect of each of the three was not isolated).
+
+**Hyperparameters (toy).** Experts: $B=3$ orbits $\times$ $n=2$ views per episode, 2000 fixed episodes built from $30\\,\%$ of the images, maximum transformation distance $d_{\max}=2$, 32 episodes per batch, no link between the expert's and the learner's memories. Learning rate $3\cdot10^{-4}$; the reward is trained alone during the first 150 iterations; the reward is centered. Tested and not retained: 5 orbits per episode (the reward opens more clusters but the formation is worse), and removing the debiasing on free moves (docs 5.9, 5.10).
+
+### 5.4 Policy $\pi_\omega$ (separate network, trained by RL)
+
+**Role.** The agent that builds the clustering. At each step it sees the arriving code and the clusters built so far, and picks a slot: join a group, or open a new one. It is a separate network $\pi_\omega(a \mid z, m, C)$ (set-conditioned over the slots, like the reward), with a critic $V_\xi(s)$ for the return estimates. It acts on the learner's states only and never sees the expert, the orbits or the expert's actions. Its score is multiplied by a fixed **Chinese-restaurant-process prior** $\pi_0$ on the placements (below). At inference the assignment is $a=\arg\max_a\pi_\omega(a\mid s)$, prior included, with the memory $C$ frozen at the end of training.
+
+**Loss.** Entropy-regularized RL against the *frozen* reward (actor-critic, e.g. PPO with advantages from $V_\xi$):
+
+<br>
+
+```math
+\mathcal{L}_\omega = -\mathbb{E}_{\pi_\omega}\,\Big[\sum_{t}\gamma^{t}\,R_{\bar\theta}(s_t,a_t)\Big] - \alpha\,\mathbb{E}\,\big[\mathcal{H}\big(\pi_\omega(\cdot\mid s_t)\big)\big]
+```
+
+<br>
+
+**Prior over placements.** With $K=10$ slots for 5 classes, two slots can carry one class, and nothing in the reward breaks the tie between them. The policy is therefore written as
+
+<br>
+
+```math
+\pi_\omega(a\mid s)\;\propto\;\exp\big(\mathrm{score}_\omega(s,a)\big)\,\pi_0(a\mid s),\qquad \pi_0(k\mid s)=\frac{n_k}{n-1+\alpha_{\text{CRP}}}\ \ (\text{occupied slot }k),\qquad \pi_0(\text{open}\mid s)=\frac{\alpha_{\text{CRP}}}{n-1+\alpha_{\text{CRP}}}
+```
+
+<br>
+
+with $\alpha_{\text{CRP}}=1$. $\log\pi_0$ is a fixed additive offset of the logits, used in the sampling, the PPO ratio, the entropy, $\mathcal{L}_{\text{inv}}$ and the final readout; $n_k$ is the size of slot $k$ without the image being placed. It reads only the slot sizes, never a label. Where the reward is indifferent between two slots the prior alone decides, in proportion to their sizes; elsewhere the score gaps of the policy ($19$ to $70$ nats) dwarf $\log n_k$ (docs 5.23 and 5.24).
+
+**Optimizer (changed: PPO only).** The policy is trained by PPO alone, with no teacher phase: clip $0.2$, 4 PPO epochs per step, $\gamma=0.9$, GAE parameter $0.95$, entropy weight $\alpha=0.01$, critic weight $0.5$, learning rate $10^{-3}$, gradient clipping $5$, learner batch of 100 images, $K=10$ slots. The critic regresses the return, $\mathcal L_\xi=\mathbb{E}\big[(V_\xi(s_t)-\hat G_t)^2\big]$ with $\hat G_t=\sum_{j\ge 0}\gamma^j R_{\bar\theta}(s_{t+j},a_{t+j})$.
+
+**Reading the terms.**
+- **Return $\sum_t\gamma^t R_{\bar\theta}$.** The reward is a *one-step* score: it says whether placing this image here is good *given the clusters as they currently are*. A placement also changes the cluster summary, hence the rewards of all later images, and the policy is judged on this whole chain: it can leave an uncertain image in a fresh slot instead of polluting an existing summary, or open a cluster early because several later images will need it. This is what makes it a policy and not a softmax of the reward. With $\gamma=0$ the return is the immediate reward and the policy is essentially greedy on $R_\theta$; the ablation $\gamma=0$ / $\mathrm{softmax}(R_\theta)$ ([Section 10](#10-ablations)) measures what the sequential structure adds.
+- **Entropy bonus $\alpha\\,\mathcal{H}$.** Keeps exploration alive, in particular the exploration of empty slots in the early phase.
+- **$\bar{\theta}$ frozen.** During the policy step the reward does not move; it is the ruler the policy is optimized against. The encoder is frozen too: $z$ and $C$ are given, so RL never reaches the pixels.
+- **Prior $\pi_0$.** Breaks ties between duplicate slots of one class in favour of the larger one, and makes opening a cluster cost $\alpha_{\text{CRP}}$ against the $n_k$ images already in the others.
+
+### 5.5 Joint training: the encoder is trained with the rest (alternating reward and policy steps)
+
+> **What "joint" and "sequential" mean.** Sections 5.5 and 5.6 describe two ways of training the **same architecture with the same losses**. The only thing that differs is **how the encoder $f_\phi$ is trained**. The intent predictor $\psi$, the reward $\theta$ and the policy $\omega$ keep the same losses and the same stop-gradients in both modes (gradient routing table below); what changes for them is only whether the codes $z$ they receive are still moving.
+>
+> - **Joint (this section).** The encoder is trained *at the same time* as $\psi$ and $\theta$, and receives the gradient of all the reward-side losses: $L_\psi$, $L_\theta$, $\beta\\,\mathrm{KL}$ and $L_{\mathrm{inv}}$. It never receives the gradient of the RL loss $L_\omega$ (the policy step freezes it).
+> - **Sequential ([5.6](#56-sequential-training-the-encoder-is-trained-first-then-frozen)).** The encoder is trained *first and alone*, with a reward-free objective, and is then frozen; $\psi$, $\theta$ and $\omega$ are trained on its fixed codes.
+
+In the joint mode, the encoder, the intent predictor and the reward are trained together in the reward step, in alternation with the policy step. One iteration:
+
+1. **Two batches.**
+   - *Expert batch.* A minibatch of expert episodes ([Section 6.2](#62-the-key-idea-an-images-transformations-are-an-expert-demonstration)), fixed in structure: $B$ images, $n$ views each, shuffled, placed by the expert in its own memory $C^E$. The codes $z_t$, intents $m_t$ and the memory summaries are recomputed with the current encoder. The pipeline labels the steps (forced moves, repulsion pairs). The learner's policy plays no role in this batch.
+   - *Learner rollout.* The current policy $\pi_\omega$ sweeps a minibatch of training images, one view each, placing them one by one, seeing only $(z_t, m_t, C_t)$; the persistent memory $C$ is updated by each transition. No label is used.
+2. **Reward step (IRL).** Minimize on $\phi, \psi, \theta$ the loss $\mathcal L_{\text{enc}}=\mathcal L_\psi+\mathcal L_\theta+\beta\,\mathrm{KL}+\lambda\,\mathcal L_{\text{inv}}$ of [Section 5.1](#51-encoder-f_phi), with $L_\psi$, $L_\theta$ computed on the expert batch and $L_{\mathrm{inv}}$ on the learner's states.
+3. **Policy step (RL).** With $\phi, \psi, \theta$ frozen, minimize $L_\omega$ (and the critic loss) on $\omega, \xi$ on learner rollouts. The reward is evaluated on the learner's states; it has never seen the learner's decisions.
+4. **End of epoch.** Recompute the summaries $c_k$ of the learner's memory from the member lists with the current encoder.
+
+This is the objective of Section 5.1, plus the RL loss of Section 5.4, which is why the training is alternating and not a single loss. Gradient routing (what each term updates, and what it treats as constant):
+
+| Term | Updates | Frozen (stop-gradient) |
+|---|---|---|
+| $L_\psi$ (intent: orbit log-likelihood and decorrelation of $m$) | $\psi$, and $\phi$ through $z$ | The orbit target $m^{*}$; the covariance is computed on the expert batch |
+| $L_\theta$ (expert likelihood) | $\theta$, and $\phi$ through $z$ | The memory $C^E$ and the intent $m$: $\psi$ gets no gradient from $L_\theta$. The intent is trained only by $L_\psi$, so the reward cannot bend it to make its own job easier, and the cluster summaries stay stable |
+| KL (compression) | $\phi$ | None |
+| $L_{\mathrm{inv}}$ (invariance) | $\phi$ only, through both $z$ and $\tilde{z}$ | $\omega$, $\psi$ (hence $m$) and $C$ |
+| $L_\omega$ (RL return + entropy) | $\omega$ (and the critic $\xi$) | $\phi$, $\psi$, $\theta$, $C$: the policy step treats the encoder and the reward as given |
+
+**What is frozen in $L_{\mathrm{inv}}$, and why.** With $\bar{\omega}$, $\bar{m}$, $\bar{C}$ frozen, the invariance term has gradient $\nabla_\omega L_{\mathrm{inv}}=0$ and $\nabla_\psi L_{\mathrm{inv}}=0$, while $\nabla_\phi L_{\mathrm{inv}}\neq 0$. This means the policy is used as a *fixed measuring stick*: if the decision it takes changes under a perturbation, the *encoder* is what gets corrected. If $\omega$ were free, the term would have a trivial minimizer: any policy that does not depend on the image,
+
+<br>
+
+```math
+\pi_\omega(\cdot\mid z,C,m) = \pi_\omega(\cdot\mid C,m) \Longrightarrow \pi_\omega(\cdot\mid z,C,m)=\pi_\omega(\cdot\mid \tilde z,C,m) \Longrightarrow \mathcal{L}_{\text{inv}} = 0 ,
+```
+
+<br>
+
+so the check would push the policy toward ignoring the image instead of pushing the encoder toward dropping the nuisance. The same holds for $m$: a free $\psi$ could make $m$ insensitive and cheat the term. Freezing is local to $L_{\mathrm{inv}}$: $\omega$ keeps being trained by RL through $L_\omega$, and $\theta$ by the experts through $L_\theta$, so the ruler still evolves, but never through the check. The ablations " $\omega$ unfrozen" and " $q_{\bar{\theta}}$ instead of $\pi_{\bar{\omega}}$ " ([Section 10](#10-ablations)) measure how much these choices matter.
+
+**What it means.** "Useless" is defined *relative to the reward and policy currently being learned*: the encoder compresses what they do not use, while they adapt to whatever the encoder keeps. This co-adaptation is the point of the method, and also its main risk: the early reward is random, so it can push the bottleneck to discard useful bits, and the early policy is random, so the memory $C$ is noisy. Mitigations: a warm-up of $\beta$ from 0, a reward warm-up on forced moves before the policy acts alone, and a reward updated more slowly than the policy. Since the expert's trajectories are fixed, the reward does not chase the policy's own memory; the only moving parts it sees are the encoder and, in Phase 2, the expert's links.
+
+### 5.6 Sequential training: the encoder is trained first, then frozen
+
+> **Only the encoder's training changes with respect to [5.5](#55-joint-training-the-encoder-is-trained-with-the-rest-alternating-reward-and-policy-steps).** The architecture and the losses $L_\psi$, $L_\theta$, $L_\omega$ are the same, and $\psi$, $\theta$, $\omega$ keep the same stop-gradients. What changes is that the encoder $f_\phi$ is trained **before** them, **alone**, with a reward-free objective, and is then **frozen**: it never sees the reward, the policy or $L_{\mathrm{inv}}$.
+
+Two stages, nothing flowing back from the second to the first.
+
+1. **Encoder alone.** No reward exists yet. The encoder is trained on the *same expert signals* (Section 6) but with a reward-free similarity head (e.g. a cosine / contrastive head on $z$), together with $\beta\\,\mathrm{KL}$ and an invariance penalty on the code itself, $\lVert z-\tilde z\rVert^{2}$.
+2. **IRL and RL modules on frozen codes.** $\phi$ is frozen. $L_\psi + L_\theta$ are minimized on $z$ and $L_\omega$ trains the policy, still in alternation (reward step, then policy step). There is no KL, no $L_{\mathrm{inv}}$, and no gradient into the encoder.
+
+| | Joint | Sequential |
+|---|---|---|
+| Optimization | One loop, all networks, alternating reward / policy steps | Encoder first, then intent / reward / policy |
+| What the encoder is trained on | $L_\psi+L_\theta+\beta\\,\mathrm{KL}+\lambda L_{\mathrm{inv}}$, at the same time as $\psi$ and $\theta$ (never $L_\omega$) | A reward-free similarity head + $\beta\\,\mathrm{KL}$ + $\lVert z-\tilde z\rVert^{2}$, alone, then frozen |
+| What $\psi$, $\theta$, $\omega$ are trained on | The same losses and stop-gradients, on codes $z$ that are still moving | The same losses and stop-gradients, on fixed codes $z$ |
+| Does the encoder see the reward? | Yes (through $L_\psi$, $L_\theta$, $L_{\mathrm{inv}}$) | No, only a similarity head |
+| Meaning of "useless" | Irrelevant to the current reward and policy | Irrelevant to the similarity objective |
+| Strengths | Matches the definition of the method; the encoder is shaped by what clustering needs | Simple, stable, modular; the IRL / RL stage can be re-run without retraining the encoder |
+| Risks | Moving targets, instability, need for warm-up | Frozen stage-1 errors; the encoder may drop cluster-relevant bits or keep spurious ones |
+
+Sequential training is the natural control for the claim that *joint* optimization matters (see [Ablations](#10-ablations)); with $\beta=0$ it reduces to the "standard multi-intention IRL" baseline.
+
+### 5.7 Stopping rule and final clean-up
+
+Both use no label and add no parameter to the training.
+
+**Stopping rule (output convergence).** Training stops when the **output** (the assignment $\arg\max_a\pi_\omega$ of every training image, memory frozen, prior included) has converged. Over a window of 10 epochs, all four conditions hold: 
+
+- (i) at most $1\\,\%$ of the images change cluster between two epochs (up to a renaming of the slots);
+- (ii) the number of clusters of the output is constant;
+- (iii) the twin accuracy stays within $\pm0.01$;
+- (iv) the expert part of the reward loss $L_{\text{pos}}+L_{\text{neg}}$ varies by less than $2\\,\%$ (relative).
+
+A minimum of 40 epochs and a maximum of 300 apply. The model evaluated is the last epoch. A criterion on the memory (memory equal to the output) was tried and removed: the memory keeps duplicate slots that the output does not use (docs 5.25 to 5.28).
+
+**Final clean-up (mode `relabel`, no training).** At the end of training the memory often holds two slots for one class (on the toy, 7.1 occupied slots on average for 5 classes, Section 11). The output is first **read** (argmax with the frozen memory and prior), then the duplicate slots are identified and used **only to rename** the clusters of that output:
+
+1. Take the distances $\lVert c_a-c_b\rVert$ between the summaries of the non-empty slots and sort them.
+2. If the largest ratio between two consecutive sorted distances is $\ge 10$ (a guard, not tuned), every pair of distances below that jump is a *twin pair* (two slots of one cluster). Otherwise nothing is merged.
+3. Merge the twin pairs by single linkage (the largest slot is kept) and give the images of the merged slots the same cluster index.
+
+The policy is never read again on the merged memory: doing so puts it in a state it has not seen (empty slots while the memory was full) and it then prefers to "open" a cluster, which broke 3 of 100 outputs (docs 5.28, 5.29). Two other ways to close the memory (`merge`, and re-placing the images with the frozen policy) were rejected on the same 100 seeds and on 100 fresh seeds (docs 5.29, 5.30). No distance has to be chosen: on the 200 runs, distances between twin slots are at most $0.094$ and between distinct clusters at least $2.0$ (one pair at $0.12$, Section 11).
+
+### 5.8 Hyperparameters
+
+The hyperparameters of the pipeline, by component, with their role and the section that defines them. The values used on the toy are in [Section 11.1.2](#1112-hyperparameters-of-the-toy-pipeline); the experiments behind each choice are in `docs/protocol-decisions.md`.
+
+| Component | Hyperparameter | Role | Defined in |
+|---|---|---|---|
+| Encoder | $\dim_z$ | Dimension of the code $z$ | [5.1](#51-encoder-f_phi) |
+| Encoder | $\beta$ | Weight of the compression term $\mathrm{KL}$; too large and the reward degrades | [5.1](#51-encoder-f_phi) |
+| Encoder | $\beta$ warm-up | Number of iterations over which $\beta$ grows from 0 to its value | [5.5](#55-joint-training-the-encoder-is-trained-with-the-rest-alternating-reward-and-policy-steps) |
+| Encoder | $\lambda$ | Weight of the invariance term $\mathcal{L}_{\text{inv}}$ | [5.1](#51-encoder-f_phi) |
+| Intent | $\dim_m$ | Dimension of the intent $m$ | [5.2](#52-intent-predictor-q_psi) |
+| Intent | $\lambda_{\text{cov}}$ | Weight of the decorrelation penalty $\mathcal{L}_{\text{cov}}$ | [5.2](#52-intent-predictor-q_psi) |
+| Intent | BatchNorm on $m$ | Gives every coordinate of $m$ a unit scale (no affine parameters) | [5.2](#52-intent-predictor-q_psi) |
+| Reward | $\rho$ | Weight of the entropy safeguard against collapse | [5.3](#53-reward-model-r_theta) |
+| Reward | $\varepsilon$ | Repulsion floor: fraction of the raw repulsion loss kept where the debiasing would switch it off | [5.3](#53-reward-model-r_theta) |
+| Reward | $\tau^{+}$ | Assumed share of random pairs that are of the same concept (false negatives of the repulsion) | [5.3](#53-reward-model-r_theta), A2 in [6.6](#66-declared-assumptions) |
+| Reward | learning rate | Step size of the reward step (encoder, intent, reward) | [5.5](#55-joint-training-the-encoder-is-trained-with-the-rest-alternating-reward-and-policy-steps) |
+| Reward | warm-up | Number of initial iterations with the reward step alone, before the policy acts | [5.5](#55-joint-training-the-encoder-is-trained-with-the-rest-alternating-reward-and-policy-steps) |
+| Reward | centering | Subtracts from each reward the mean over the valid slots | [5.3](#53-reward-model-r_theta) |
+| Experts | orbits $\times$ views | Number of orbits and of views per orbit in an expert episode | [6.2](#62-the-key-idea-an-images-transformations-are-an-expert-demonstration) |
+| Experts | episodes | Number of fixed expert episodes, built before training | [6.2](#62-the-key-idea-an-images-transformations-are-an-expert-demonstration) |
+| Experts | share of images | Share of the training images used to build the expert episodes | [6.2](#62-the-key-idea-an-images-transformations-are-an-expert-demonstration) |
+| Experts | $D_{\max}$ | Maximum number of transformations chained to build an orbit | [6.2](#62-the-key-idea-an-images-transformations-are-an-expert-demonstration) |
+| Experts | episodes per batch | Number of expert episodes in a reward step | [5.5](#55-joint-training-the-encoder-is-trained-with-the-rest-alternating-reward-and-policy-steps) |
+| Policy | $K$ | Number of slots, an upper bound on the number of clusters | [5.0](#50-notation) |
+| Policy | $\alpha_{\text{CRP}}$ | Concentration of the placement prior: the mass of "open a new cluster" against the slot sizes $n_k$ | [5.4](#54-policy-pi_omega-separate-network-trained-by-rl) |
+| Policy | PPO clip, PPO epochs | Bound on the policy ratio, and number of passes over a rollout per policy step | [5.4](#54-policy-pi_omega-separate-network-trained-by-rl) |
+| Policy | $\gamma$, GAE parameter | Discount of the return, and bias-variance trade-off of the advantage estimate | [5.4](#54-policy-pi_omega-separate-network-trained-by-rl) |
+| Policy | $\alpha$ | Weight of the entropy bonus | [5.4](#54-policy-pi_omega-separate-network-trained-by-rl) |
+| Policy | critic weight, learning rate, gradient clipping, batch | Weight of the critic loss, step size, norm bound of the gradient, and number of images per learner rollout | [5.4](#54-policy-pi_omega-separate-network-trained-by-rl) |
+| Stopping | window, partition change, twin, loss plateau | Length of the window and the four tolerances of the output-convergence rule | [5.7](#57-stopping-rule-and-final-clean-up) |
+| Stopping | min / max epochs | Bounds on the number of epochs | [5.7](#57-stopping-rule-and-final-clean-up) |
+| Clean-up | mode | How the final output is read (`relabel` in the final pipeline) | [5.7](#57-stopping-rule-and-final-clean-up) |
+| Clean-up | jump guard | Ratio between two consecutive sorted distances above which the pairs below are twin slots | [5.7](#57-stopping-rule-and-final-clean-up) |
 
 ---
 
-## 5. Where Do the Experts Come From?
+## 6. Where Do the Experts Come From?
 
-### 5.1 The problem
+### 6.1 The problem
 
 IRL learns a reward by asking: *which reward would make the expert's behavior optimal?* Here the "behavior" is putting an image in the right cluster, and nobody has done that: no labels, no demonstrations. At the very start we have **no experts, no clusters, no intents**, and the cluster memory is empty.
 
-### 5.2 The key idea: an image's transformations are an expert demonstration
+### 6.2 The key idea: an image's transformations are an expert demonstration
 
 Take one image and transform it: crop it, change its colors, replace its background, transform the result again. Whatever we get shows the *same thing*. Without placing a single label, we hold a group of images that the expert would put in the same cluster, and we can produce as many as we like because transformed images can be transformed again.
 
 **Definitions.**
 
-- **Nuisance family $\mathcal{T}$.** Transformations that change appearance (crop, color, blur, background, style) but are meant to preserve the object.
-- **Orbit of an image $x_i$.** $\mathcal O_i=\\{g_D\circ\cdots\circ g_1(x_i) \\; : \\; g_k\in\mathcal{T},\ D\le D_{\max}\\}$: everything reachable by chaining at most $D_{\max}$ transformations, with bounded cumulative strength (long chains drift away from the object).
-- **Expert portion $\mathcal{D}_E$.** The portion of the training images dedicated to building the expert demonstrations; its size is a hyperparameter. The learner's environment is the whole training set.
-- **Demonstration (episode).** An episode presents views drawn from several orbits, one after the other, in random order. It plays the role of the trajectory in PEMIRL. The state of each decision is $(z_t, m_t, C^E_t)$, where $C^E_t$ is the **expert's own memory**: the groups the expert has formed so far in this episode, built by the same transition as the learner's memory ([Section 4.2](#42-episodic-mdp-over-a-growing-set-of-clusters)). It starts empty and is discarded at the end of the episode.
+- **Nuisance family $\mathcal{T}$** :  Transformations that change appearance (crop, color, blur, background, style) but are meant to preserve the object.
+- **Orbit of an image $x_i$** : Defined as $\mathcal O_i=\\{g_D\circ\cdots\circ g_1(x_i) \\; : \\; g_k\in\mathcal{T},\ D\le D_{\max}\\}$. It's everything reachable by chaining at most $D_{\max}$ transformations, with bounded cumulative strength (long chains drift away from the object).
+- **Expert portion $\mathcal{D}_E$** : The portion of the training images dedicated to building the expert demonstrations; its size is a hyperparameter. The learner's environment is the whole training set.
+- **Demonstration (episode)** : An episode presents views drawn from several orbits, one after the other, in random order. It plays the role of the trajectory in PEMIRL. The state of each decision is $(z_t, m_t, C^E_t)$, where $C^E_t$ is the **expert's own memory**: the groups the expert has formed so far in this episode, built by the same transition as the learner's memory ([Section 4.2](#42-episodic-mdp-over-a-growing-set-of-clusters)). It starts empty and is discarded at the end of the episode.
 
 **The expert's rule.** The expert is *relational*: it never names a cluster in absolute terms. When view $u$ arrives in the state $s^E_t = (z_t, m_t, C^E_t)$:
 
@@ -297,21 +555,11 @@ A small example with six views, in this order: A1, B1, A2, C1, B2, C2 ($A$, $B$,
 | 5 | B2 | Forced move | Joins slot 2, the slot of B1 |
 | 6 | C2 | Forced move | Joins slot 3, the slot of C1 |
 
-In the expert's memory the two cats $A$ and $C$ sit in two different slots (the Phase 1 tolerance). Nothing in these signals says that they go together: if they end up in one cluster, that is the learner's doing ([Section 5.4](#54-why-two-different-cat-photos-end-up-together)).
+In the expert's memory the two cats $A$ and $C$ sit in two different slots (the Phase 1 tolerance). Nothing in these signals says that they go together: if they end up in one cluster, that is the learner's doing ([Section 6.4](#64-why-two-different-cat-photos-end-up-together)).
 
-**The same structure as classical IRL.** The demonstrations are data produced by the expert in the expert's own states and fixed before training. The learner's policy $\pi_\omega$ interacts with its environment (all the training images) on its own states and never reads the expert's actions; only the reward compares what the expert does with what the learner does. Two things are specific to us: the expert is a rule (orbit membership) and not an agent, and it is deliberately imperfect. Since the pipeline knows the orbits, it could also label the placements that the learner makes in its own episodes; we do not do this in the main method, because the signal would become "be consistent with your own placements" instead of "imitate an independent expert". It is kept as an ablation ([Section 9](#9-ablations)).
+**The same structure as classical IRL.** The demonstrations are data produced by the expert in the expert's own states and fixed before training. The learner's policy $\pi_\omega$ interacts with its environment (all the training images) on its own states and never reads the expert's actions; only the reward compares what the expert does with what the learner does. Two things are specific to us: the expert is a rule (orbit membership) and not an agent, and it is deliberately imperfect. Since the pipeline knows the orbits, it could also label the placements that the learner makes in its own episodes; we do not do this in the main method, because the signal would become "be consistent with your own placements" instead of "imitate an independent expert". It is kept as an ablation ([Section 10](#10-ablations)).
 
-**The reward-induced choice model.** To score the expert's decisions we model the expert as choosing slot $a$ with probability proportional to $\exp R_\theta(s, a)$:
-
-<br>
-
-```math
-q_\theta(a\mid s) = \frac{\exp R_\theta(s,a)}{\sum_{a'=1}^{K}\exp R_\theta(s,a')}
-```
-
-<br>
-
-Learning the reward that makes the expert's decisions likely under $q_\theta$ is maximum-likelihood IRL with relational demonstrations. Two approximations are explicit: the expert is modelled as Boltzmann-rational on the *immediate* reward (no soft value iteration through the transitions), and the reward is trained on the expert's states only while it is used on the learner's states ([Section 6.3](#63-reward-model-r_theta)). Acting is left to the separate policy $\pi_\omega$ (Section 6.4).
+**How the reward uses these decisions.** The expert's decisions are scored under the choice model $q_\theta(a\mid s)\propto\exp R_\theta(s,a)$ induced by the reward, and the reward is trained to make them likely: maximum-likelihood IRL with relational demonstrations ([Section 5.3](#53-reward-model-r_theta)). Acting is left to the separate policy $\pi_\omega$ ([Section 5.4](#54-policy-pi_omega-separate-network-trained-by-rl)).
 
 ```mermaid
 flowchart LR
@@ -323,37 +571,18 @@ flowchart LR
     E --> L["Expert likelihood under q_θ(a | s)<br/>= softmax of R_θ"]
 ```
 
-### 5.3 Two forces: attraction and repulsion
+### 6.3 Two forces: attraction and repulsion
 
 Positives alone are not enough: putting everything in one cluster satisfies "an orbit stays together" perfectly. We need a force that says *different things should be told apart*, which is the "reward that distinguishes".
 
-- **Attraction (forced moves).** When view $u$ arrives and a twin is already in slot $k^{+}(u)$ of the expert's memory (the slot opened by the first view of its orbit), the reward must make joining that slot likely (here and below $s_u$ is the expert's state):
+- **Attraction (forced moves).** When view $u$ arrives and a twin is already in slot $k^{+}(u)$ of the expert's memory (the slot opened by the first view of its orbit), the reward must make joining that slot likely. This is the loss $\mathcal{L}_{\text{pos}}$ ([Section 5.3](#53-reward-model-r_theta)).
+- **Repulsion (random negatives).** For a view $u$ and a random previously placed view $v$ of another orbit, sitting in the expert's slot $k(v)$, the reward must make joining $k(v)$ unlikely. This is the loss $\mathcal{L}_{\text{neg}}$ ([Section 5.3](#53-reward-model-r_theta)), which corrects for the fraction $\tau^{+}$ of random $v$ that are actually of the same concept.
 
-<br>
+The expert loss is $L_{\mathrm{expert}}=L_{\mathrm{pos}}+L_{\mathrm{neg}}$, and it is what trains the reward. In an expert episode an empty slot is always available when an orbit starts, which is why $B \le K$.
 
-```math
-\mathcal{L}_{\text{pos}} = -\mathbb{E}_{u:\text{twin placed}}\,\big[\log q_\theta\big(k^+(u)\mid s_u\big)\big]
-```
+**Why random negatives are not an intervention.** We never choose pairs using knowledge of concepts. The only assumption is that random pairs are rarely of the same concept, with a *known* error rate $\tau^{+}$. Choosing negatives from images we know to be different would inject labels at the start and defeat the unsupervised goal; we do not do it. In Phase 2, the candidate pairs mined by the model are excluded from the repulsion as well ([Section 6.5](#65-phase-1-and-phase-2-tolerating-then-correcting-the-expert)).
 
-<br>
-
-- **Repulsion (random negatives).** For a view $u$ and a random previously placed view $v$ of another orbit, sitting in the expert's slot $k(v)$, the reward must make joining $k(v)$ unlikely. With $\ell(u,v)=-\log\big(1-q_\theta(k(v)\mid s_u)\big)$, the naive negative term is $\mathbb{E}_v\\,\ell(u,v)$. A fraction $\tau^{+}$ of random $v$ are actually of the same concept, so we subtract their share, approximated by a positive pair (the standard debiasing of Chuang et al. 2020): the anchor's own twin $v^{+}$ when one is already placed, and the batch average over the forced moves otherwise. We use $\tau^{+} = 1/K$ on Colored MNIST; on Waterbirds, where classes are imbalanced, $\tau^{+}$ is swept as a hyperparameter (see assumption A2):
-
-<br>
-
-```math
-\mathcal{L}_{\text{neg}} = \mathbb{E}_{u}\,\max\Big\{\tfrac{1}{1-\tau^+}\Big(\mathbb{E}_{v\sim\text{placed}}\,\ell(u,v) - \tau^+\,\bar\ell^{+}(u) \Big), 0 \Big\}
-```
-
-<br>
-
-with $\bar\ell^{+}(u)=-\log\big(1-q_\theta(k^{+}(u)\mid s_u)\big)$ if a twin of $u$ is placed, and the average of this quantity over the forced moves of the batch otherwise (so that the correction is defined for first views too).
-
-The expert loss is $L_{\mathrm{expert}}=L_{\mathrm{pos}}+L_{\mathrm{neg}}$, and it is what trains the reward (Section 6.3). The same repulsion is what makes an **empty slot attractive**: when an image fits no existing group, the mass leaves the occupied slots and goes to an empty one, i.e. the reward values *opening a new cluster*. In an expert episode an empty slot is always available when an orbit starts, which is why $B \le K$.
-
-**Why random negatives are not an intervention.** We never choose pairs using knowledge of concepts. The only assumption is that random pairs are rarely of the same concept, with a *known* error rate $\tau^{+}$. Choosing negatives from images we know to be different would inject labels at the start and defeat the unsupervised goal; we do not do it. In Phase 2, the candidate pairs mined by the model are excluded from the repulsion as well ([Section 5.5](#55-phase-1-and-phase-2-tolerating-then-correcting-the-expert)).
-
-### 5.4 Why two different cat photos end up together
+### 6.4 Why two different cat photos end up together
 
 In Phase 1 the expert keeps two different orbits in two different slots, so nothing in the demonstrations says "these two cats belong together". The merge is the **learner's**: it is free to put them in one cluster, and with a limited number of slots it typically has to. Three things make it happen:
 
@@ -363,11 +592,11 @@ In Phase 1 the expert keeps two different orbits in two different slots, so noth
 
 So the encoder is not a side detail: it determines *along which axis* the expert's weak signal is turned into categories.
 
-### 5.5 Phase 1 and Phase 2: tolerating, then correcting the expert
+### 6.5 Phase 1 and Phase 2: tolerating, then correcting the expert
 
 The project runs the expert in two phases and compares them. Both use the same learner, the same reward and the same losses; only the expert's demonstrations change.
 
-**Phase 1: the expert is tolerated as it is.** Each image is its own orbit, so the expert separates two different cat photos. This is a known and accepted flaw: the expert is not optimal and it does not parametrize the learner ([Section 5.2](#52-the-key-idea-an-images-transformations-are-an-expert-demonstration)). The question of Phase 1 is how far this flaw biases the learner. The bias is not small on paper: with $K = 10$ balanced classes, an episode of $B$ random images contains at least one same-class pair with probability 10% for $B = 2$, 28% for $B = 3$ and about 70% for $B = 5$ (the episode is collision-free with probability 30%), and the expert places each such pair in two different groups. The repulsion $\tau^{+}$ correction absorbs part of this, but nothing in the demonstrations ever *attracts* two different cats. Phase 1 measures what the learner does with this: does it still merge the cats (limited slots, similarity in $z$, [Section 5.4](#54-why-two-different-cat-photos-end-up-together)), or does it fragment into one cluster per orbit?
+**Phase 1: the expert is tolerated as it is.** Each image is its own orbit, so the expert separates two different cat photos. This is a known and accepted flaw: the expert is not optimal and it does not parametrize the learner ([Section 6.2](#62-the-key-idea-an-images-transformations-are-an-expert-demonstration)). The question of Phase 1 is how far this flaw biases the learner. The bias is not small on paper: with $K = 10$ balanced classes, an episode of $B$ random images contains at least one same-class pair with probability 10% for $B = 2$, 28% for $B = 3$ and about 70% for $B = 5$ (the episode is collision-free with probability 30%), and the expert places each such pair in two different groups. The repulsion $\tau^{+}$ correction absorbs part of this, but nothing in the demonstrations ever *attracts* two different cats. Phase 1 measures what the learner does with this: does it still merge the cats (limited slots, similarity in $z$, [Section 6.4](#64-why-two-different-cat-photos-end-up-together)), or does it fragment into one cluster per orbit?
 
 **Phase 2: the expert is corrected during training.** Phase 2 changes the expert's demonstrations, slowly, so that two orbits that the model itself considers the same concept are treated as one. It does not change the learner or the loss. Its components:
 
@@ -381,11 +610,11 @@ The project runs the expert in two phases and compares them. Both use the same l
    - **decrease the effective $\tau^{+}$** as links remove part of the false negatives from the repulsion;
    - monitor the **churn** (fraction of images changing cluster between epochs) and the number of links used.
 
-**Comparison protocol.** The two phases are run with the same seeds, the same dataset, the same hyperparameters and the same budget. We report ACC, NMI, worst-group ACC, spurious leakage and the number of constructed clusters for Phase 1 and for Phase 2, and conclude whether Phase 2 **improves or degrades** the result. A degradation is a legitimate outcome and would be reported as such (confirmation bias, chain drift). The ablations of [Section 9](#9-ablations) remove the brakes one by one. Two Phase 1 diagnostics make the comparison interpretable: the **same-class rate among the nearest neighbors in $m$-space** (does the learner's intent space already group different cats?) and the number of non-empty slots against the number of expert orbits per episode.
+**Comparison protocol.** The two phases are run with the same seeds, the same dataset, the same hyperparameters and the same budget. We report ACC, NMI, worst-group ACC, spurious leakage and the number of constructed clusters for Phase 1 and for Phase 2, and conclude whether Phase 2 **improves or degrades** the result. A degradation is a legitimate outcome and would be reported as such (confirmation bias, chain drift). The ablations of [Section 10](#10-ablations) remove the brakes one by one. Two Phase 1 diagnostics make the comparison interpretable: the **same-class rate among the nearest neighbors in $m$-space** (does the learner's intent space already group different cats?) and the number of non-empty slots against the number of expert orbits per episode.
 
 **Considered, not adopted: initializing the expert with a pixel heuristic.** For Colored MNIST, a nuisance-invariant heuristic on raw pixels (e.g. grayscale binarized shape) could provide initial cross-orbit links. It would inject a prior about the classes and about the dataset, so it is not part of the method; it could be used as a sanity check to see how much a good initial linking would help.
 
-### 5.6 Declared assumptions
+### 6.6 Declared assumptions
 
 We prefer to state what the expert silently relies on:
 
@@ -395,398 +624,9 @@ We prefer to state what the expert silently relies on:
 | **A2. Random pairs are rarely the same concept** | $\tau^{+}\approx 1/K$ for balanced classes. | The true value is $\tau^{+}=\sum_c p_c^{2}$, the probability that two random images share a class (0.625 for two classes at 75% / 25%, instead of 0.5). We use $\tau^{+} = 1/K$ on Colored MNIST and sweep $\tau^{+}$ on Waterbirds. |
 | **A3. $K$ is a known upper bound** | $K$ is given and at least the true number of concepts. The model is free to use fewer slots. | The number of clusters actually constructed is monitored; sensitivity to a $K$ larger or smaller than the truth is part of the ablations. |
 
-### 5.7 Failure modes and what we monitor
+### 6.7 Relation to existing work
 
-| Failure | Symptom | Guard / monitor |
-|---|---|---|
-| Background shortcut | High $\mathrm{NMI}(\text{cluster},\text{background})$ | Nuisance-targeted $\mathcal{T}$ (A1), compression $\beta$; **track leakage from step 0**, not only at the end |
-| Low-level shortcut (color histogram, texture) | Clusters follow simple statistics | Diverse and strong $\mathcal{T}$, compression $\beta$ |
-| Collapse | Few clusters used (everything joins one slot) | Repulsion ([5.3](#53-two-forces-attraction-and-repulsion)); number of non-empty slots; entropy of the cluster-size histogram |
-| Fragmentation | One concept split across clusters, too many slots opened | Upper bound $K$, Phase 2 merging, over-clustering analysis |
-| Cold start of empty slots | Early on, all slots are empty and every placement looks equally good | Learned empty-slot embedding; warm-up of the reward on forced moves before the policy acts on its own; monitor the number of non-empty slots from step 0 |
-| Order dependence | Different clusters for different image orders within an episode | Random order every episode; summaries recomputed with the current encoder at each epoch; report variance across orders at test time |
-| Distribution shift, expert vs learner | The reward is trained on the expert's small single-orbit groups and applied to the learner's large mixed groups | No count $n_k$ in the reward input; memory summaries are averages; diagnostic: reward statistics on expert vs learner states; ablation with expert labels on learner states ([Section 9](#9-ablations)) |
-| Stale summaries | Summaries computed by an old encoder no longer match the intents of new images | Recompute the summaries from the member lists at each epoch; ablation against a slow EMA |
-| Expert bias (Phase 1) | Two images of the same concept are separated by the expert, so the learner fragments by orbit | Limited slots; Phase 1 vs Phase 2 comparison; same-class rate among nearest neighbors in $m$-space |
-| Non-stationary state and reward | The policy chases a reward and a memory that both move | Alternating updates with a slow reward relative to the policy; frozen reward during the policy step (Section 6.5) |
-| RL instability | Return oscillates, policy entropy collapses | Entropy bonus $\alpha$, small policy learning rate, critic target network, comparison with the closed-form $\mathrm{softmax} (R_\theta)$ control |
-| Semantic drift along chains | Views in an orbit no longer show the same object | Bound $D_{\max}$ and cumulative strength |
-| Over-strong transformations | Crops that remove the object, noisy "twin" decisions | Bound the strength of each $g \in \mathcal{T}$ |
-| Confirmation bias and chain drift (Phase 2) | Churn does not decrease, errors reinforced, distinct classes merged through a chain of links | EMA copy, mutual neighbors, confidence $\gamma_c$, rate cap $M$, persistence over several epochs, no automatic transitive closure |
-| Moving expert (Phase 2) | Reward loss oscillates | Change the expert slowly relative to reward learning (cap and ramp-up) |
-| False negatives | About $1/K$ of random pairs are the same concept | Debiasing; check for class imbalance |
-
-### 5.8 Relation to existing work
-
-Taken separately, the pieces are known: orbit positives and random negatives are contrastive learning (SimCLR), the debiasing is Chuang et al. 2020, the group-joining decision is close to online prototype / sequential clustering, the neighbor mining of Phase 2 is close to SCAN (mutual nearest neighbors), and relational supervision is constrained clustering. **What we test** is whether casting them as expert demonstrations for a latent reward, with an RL policy that builds the clusters, an Information Bottleneck on the encoder and a decision-level invariance check, removes spurious features better than the same pipeline with a plain classification head (see [Ablations](#9-ablations)).
-
----
-
-## 6. Components & Training
-
-The architecture has four trained components: the **encoder**, the **intent predictor**, the **reward model** and the **policy** (a separate network with its critic, trained by RL), plus the learner's non-differentiable **cluster memory** that the policy writes to (the expert has a memory of its own, per episode). This section fixes the notation, then gives for each component its role, its loss, and the intuition behind each term. It closes with the two ways of training the encoder (joint, [6.5](#65-joint-training-the-encoder-is-trained-with-the-rest-alternating-reward-and-policy-steps), and sequential, [6.6](#66-sequential-training-the-encoder-is-trained-first-then-frozen)) and exactly what is frozen where.
-
-> **Reading guide.** The values given in this section are those of the final toy pipeline ([Section 10](#10-results)). Where the pipeline departs from the first design, the text says **(changed)**; the experiments and reasons behind each change are in `docs/protocol-decisions.md`. Sections 6.1 to 6.7 describe the training; [6.8](#68-stopping-rule-and-final-clean-up) the stopping rule and the final clean-up; [6.9](#69-hyperparameters-of-the-toy-pipeline) the hyperparameters in one table.
-
-### 6.0 Notation
-
-- For a view $u$: $z_u = f_\phi(u)$ and $m_u = \mu_\psi(z_u)$ (mean of the inferred intent).
-- $C=\\{(n_k,c_k)\\}$ is the learner's cluster memory (Section 4.2): $c_k$ is the average of the intents $m_v$ of the members of cluster $k$, recomputed with the current encoder at each epoch. $s_u = (z_u, m_u, C)$ is the state in which $u$ arrives. In an expert episode the memory is the expert's own, $C^E$, and the state is written $s^E_u = (z_u, m_u, C^E)$. Memories are always treated as constants. States and summaries always use the **single-view** intent $m_u$, as at test time; the orbit mean $m^{*}$ below is only a training target for $q_\psi$.
-- $R_\theta(s, a)$ is the reward of placing the arriving image in slot $a$. $q_\theta(a\mid s)=\mathrm softmax_a \\, R_\theta(s,a)$ is the choice model it induces, used to score the experts (Section 5.2).
-- $\pi_\omega(a \mid s)$ is the **policy**, a network of its own, trained by RL against $R_\theta$. It is not $q_\theta$.
-- A bar ($\bar{\theta}$, $\bar{\omega}$, $\bar{m}$, $\bar{C}$) means **stop-gradient**: the value is used in the computation but not updated by that loss.
-- Expert signals (Section 5), always in the expert's states $s^E$: forced moves (twin already placed in the expert's memory), random previously placed views (repulsion), with $\tau^{+} = 1/K$. The expert never acts on the learner: only $L_\theta$ reads them.
-- $K$ is the number of slots, an upper bound on the number of clusters. A slot is **empty** until an image is placed in it; the action "open a new cluster" is the choice of the first empty slot. During a pass over the training images, $n$ is the number of images placed so far and $n_k$ the size of slot $k$. The reward and the policy network never read $n_k$; only the prior $\pi_0$ of [6.4](#64-policy-pi_omega-separate-network-trained-by-rl) does.
-- Intent target of an image $i$: $m_i^{*} = \mathrm{sg} \\Big[\tfrac{1}{|\text orbit_i|}\sum_{v\in\text orbit_i}\mu_\psi(z_v)\\Big]$, where $\mathrm{sg}[\cdot]$ is stop-gradient. The intent is a property of the orbit, not of a single view.
-
-### 6.1 Encoder $f_\phi$
-
-**Role.** The only component that sees pixels. It maps an image to a stochastic code $z=\mu_\phi(x)+\sigma_\phi(x)\odot\varepsilon$, $\varepsilon\sim\mathcal{N}(0,I)$, and everything downstream sees only $z$. Its job is a trade-off: keep what the intent and the reward need, discard everything else, in particular backgrounds and styles.
-
-**Loss.**
-
-<br>
-
-```math
-\mathcal{L}_{\text{enc}}(\phi) = \underbrace{\mathcal{L}_\psi + \mathcal{L}_\theta}_{\text{utility, through } z} + \beta\,\underbrace{\mathbb{E}_x\,\mathrm{KL}\big(p_\phi(z\mid x)\|\mathcal{N}(0,I)\big)}_{\text{compression}} + \lambda\,\underbrace{\mathbb{E}_{x,g}\,\mathrm{KL}\big(\pi_{\bar\omega}(\cdot\mid z,\bar C,\bar m)\|\pi_{\bar\omega}(\cdot\mid \tilde z,\bar C,\bar m)\big)}_{\mathcal{L}_{\text{inv}}(\omega,\psi,C\text{ frozen})}
-```
-
-<br>
-
-For a diagonal Gaussian the KL has a closed form: $\tfrac12\sum_j\big(\mu_j^2+\sigma_j^2-1-\log\sigma_j^2\big)$. The intent loss $\mathcal{L}_\psi$ of the utility term includes the decorrelation penalty of the intent ([6.2](#62-intent-predictor-q_psi)).
-
-**Hyperparameters (toy).** $\dim_z = 32$; $\beta = 10^{-4}$ **(changed, was $10^{-3}$)**, reached after a warm-up of 300 iterations from 0; $\lambda = 1$. With $\beta=10^{-3}$ the KL falls to about 40 and the twin accuracy (`twin_acc`: share of the expert's forced moves that the reward reproduces) drops from about 0.83 to 0.5; with $\beta=10^{-4}$ it stays near 0.8 (`docs/protocol-decisions.md`, Section 3).
-
-**Status of $\mathcal{L}_{\text{inv}}$ (kept, inactive on the toy).** On the toy, $\mathcal{L}_{\text{inv}}$ never exceeds $3\cdot10^{-7}$ and carries $0.5\\,\%$ of the encoder gradient; the policy takes the same decision on the clean and the perturbed view for $100\\,\%$ of the images. The orbits already make the encoder invariant to the background, so no effect is expected there; the ablation $\lambda=0$ is not run yet ([Section 9](#9-ablations)).
-
-**Reading the terms.**
-- **Utility $L_\psi + L_\theta$.** The gradients of the intent and expert losses flow back into $z$. This is the "retain as much information as possible" pressure: anything needed to predict the concept and to tell images apart must survive.
-- **Compression $\beta\\,\mathrm{KL}$.** Pulls every code toward the prior, i.e. makes $z$ carry as few bits about $x$ as possible. $\beta$ sets how hard it pushes; it must stay small enough that the reward is not degraded.
-- **Invariance $\lambda\\,L_{\mathrm{inv}}$.** The check on the encoder. $L_{\mathrm{pos}}$ already asks that the views of an image join the same cluster; $L_{\mathrm{inv}}$ asks that the whole distribution over clusters chosen by the policy stay the same under perturbation. $\omega$, $\psi$ and $C$ are frozen in this term (see Section 6.5); otherwise the policy could simply learn to ignore the image and satisfy it for free.
-
-### 6.2 Intent predictor $q_\psi$
-
-**Role.** Infers from $z$ a continuous intent $m$ (what the image is "about", e.g. species morphology), the counterpart of the context variable of Meta-IRL. It plays two roles. For an image, it is the nuisance-free summary of what the image expresses. For a cluster, the average of the intents of its members is the cluster's summary in the memory $C$, so the intent of a cluster is built from the intents of its images, as PEMIRL infers the context of a task from its demonstrations. The reward and the policy receive $m$ and compare it with the intents of the existing clusters.
-
-**Loss.**
-
-<br>
-
-```math
-\mathcal{L}_{\text{orbit}} = -\mathbb{E}_{i,u\in\text{orbit}_i}\,\big[\log q_\psi(m^*_i \mid z_u)\big]
-```
-
-<br>
-
-**Decorrelating the coordinates of the intent.** Alone, $\mathcal{L}_{\text{orbit}}$ lets the intent collapse to a single direction: the covariance of $\mu_\psi(z)$ over a batch has rank 1 and the classes superpose on one axis, so that the clusters the policy builds are not separable (docs 5.15 to 5.18). We add
-
-<br>
-
-```math
-\mathcal{L}_{\text{cov}}=\frac1d\sum_{i\neq j}C_{ij}^{2},\qquad C=\mathrm{Cov}_{\text{expert batch}}\big(\mu_\psi(z)\big)\in\mathbb{R}^{d\times d},\qquad d=\dim_m=16
-```
-
-<br>
-
-added to the intent loss with the weight $\lambda_{\text{cov}}=3$:
-
-<br>
-
-```math
-\mathcal{L}_\psi=\mathcal{L}_{\text{orbit}}+\lambda_{\text{cov}}\mathcal{L}_{\text{cov}}
-```
-
-<br>
-
-$\mathcal{L}_{\text{cov}}$ penalizes the off-diagonal entries of $C$ only, so it asks the coordinates of $m$ to be uncorrelated without fixing their scale. As an implementation choice (outside the first design), $\mu_\psi(z)$ goes through a BatchNorm without affine parameters, so that every coordinate has unit scale. The variance $\sigma^2_\psi$ stays learned (a fixed variance and a Cholesky whitening were tested and rejected, docs 5.15 and 5.16).
-
-**Reading the terms.**
-- **$\mathcal{L}_{\text{cov}}$.** Forces the intent to use several independent directions, so that different classes can sit at different places of $m$-space instead of on one line. It uses no label.
-- **Log-likelihood of the orbit's intent $m^{*}$.** Every view of an image must give the same concept. A concept that changes when only the background changes is penalized, so $m$ is pushed toward content.
-- **Gaussian case.** With $q_\psi(m\mid z)=\mathcal{N}\big(\mu_\psi(z),\sigma_\psi^2(z)\big)$, this is a squared error weighted by the predicted precision, plus $\log\sigma_\psi$: the model can express uncertainty but pays for it.
-- **Caveat.** $m$ is a function of $z$: it adds an invariance signal, not information. A constant $m$ would leave the memory with only counts and reduce the model to single-intention IRL. The "without $m$" ablation measures what $m$ really contributes.
-
-### 6.3 Reward model $R_\theta$
-
-**Role.** Scores every placement $(s, a)$: how well the arriving image, coded by $z$, fits the group in slot $a$ **and** how well it is told apart from the other groups in the memory $C$. It is the object that IRL recovers, the *intention of distinction*, shared by the whole dataset. It is a permutation-equivariant network over the slots, $R_\theta(z,m,C,a)=g_\theta\big(z,m,c_a,\mathrm{pool}_{k\neq a}\\,c_k\big)$: it reads the chosen slot together with a pooled view of the others, so the identity of a slot never matters, only its content (the first part measures compatibility, the second distinctness). It does **not** read the counts $n_k$, which would differ between the expert's small groups and the learner's large ones. It is trained by IRL on the expert's states $s^E$ and applied to the learner's states $s$, which is a known distribution shift ([Section 5.7](#57-failure-modes-and-what-we-monitor)); it is **not** the policy.
-
-**Loss.** Maximum-likelihood IRL of the expert's decisions (Section 5), under the choice model $q_\theta$:
-
-<br>
-
-```math
-\mathcal{L}_\theta = \mathcal{L}_{\text{pos}} + \mathcal{L}_{\text{neg}} - \rho\,\mathcal{H}\big(\mathbb{E}_s\,q_\theta(\cdot\mid s)\big), \qquad \rho = 0.1
-```
-
-<br>
-
-**Reading the terms.**
-- **$L_{\mathrm{pos}}$ (attraction, forced moves).** Raises the reward of the twin's slot, in the expert's memory, for the arriving view.
-- **$L_{\mathrm{neg}}$ (repulsion).** Lowers the reward of joining a slot that holds a different orbit in the expert's memory, with the false-negative correction $\tau^{+}$. This is the "reward that distinguishes": it exists because the softmax inside $q_\theta$ is *relative*, so lowering a cluster's reward for one image raises the others, empty slots included.
-- **$\rho\\,\mathcal{H}(\text{marginal})$ ($\rho=0.1$, **changed**: it was off, $\rho=0$, and switched on only if $K_{\mathrm{eff}}<0.7\\,K$).** Entropy of the average choice distribution over the batch, a safeguard against collapse; it is now always on, with a small weight. $K_{\mathrm{eff}}=\exp\big(\mathcal{H}(\bar p)\big)$, with $\bar{p}$ the average assignment distribution, is still monitored. We keep $\rho$ small because uniform cluster usage is wrong for imbalanced classes (e.g. Waterbirds), and because $K$ is only an upper bound.
-- **Repulsion floor $\varepsilon$ (in $L_{\mathrm{neg}}$).** The debiased repulsion has zero gradient as soon as $\bar\ell(u)\le\tau^{+}\ell^{+}$ (a dead zone: $\ell^{+}$ is measured on twins, the easy cases, so the correction subtracts too much), which switches the repulsion off exactly where the reward is too permissive and joins things that should stay apart (docs 5.9). A constant added to $L_{\mathrm{neg}}$ would have no gradient, so the floor is placed inside the maximum:
-
-<br>
-
-```math
-\mathcal{L}_{\text{neg}}=\mathbb{E}_{u}\,\max\Big\{\tfrac{1}{1-\tau^+}\big(\bar\ell(u)-\tau^+\,\ell^+(u)\big),\ \varepsilon\,\bar\ell(u)\Big\},\qquad \varepsilon=0.1,\quad \bar\ell(u)=\mathbb{E}_{v}\,\ell(u,v)
-```
-
-<br>
-
-with $\ell(u,v)$ as in [Section 5.3](#53-two-forces-attraction-and-repulsion) and [6.7](#67-all-the-objectives-in-one-place); the first branch is the debiased loss of Section 5.3 (there with a floor of $0$), the second keeps a fraction $\varepsilon$ of the raw repulsion loss. This is the only change to the debiasing; $\tau^{+}=1/K=0.1$ is unchanged. Alone, $\rho$ and the floor did not change the formation of the clusters (docs 5.10); they are kept because they belong to the configuration validated on 200 seeds together with $\mathcal{L}_{\text{cov}}$ (the effect of each of the three was not isolated).
-
-**Hyperparameters (toy).** Experts: $B=3$ orbits $\times$ $n=2$ views per episode, 2000 fixed episodes built from $30\\,\%$ of the images, maximum transformation distance $d_{\max}=2$, 32 episodes per batch, no link between the expert's and the learner's memories. Learning rate $3\cdot10^{-4}$; the reward is trained alone during the first 150 iterations; the reward is centered. Tested and not retained: 5 orbits per episode (the reward opens more clusters but the formation is worse), and removing the debiasing on free moves (docs 5.9, 5.10).
-
-### 6.4 Policy $\pi_\omega$ (separate network, trained by RL)
-
-**Role.** The agent that builds the clustering. At each step it sees the arriving code and the clusters built so far, and picks a slot: join a group, or open a new one. It is a separate network $\pi_\omega(a \mid z, m, C)$ (set-conditioned over the slots, like the reward), with a critic $V_\xi(s)$ for the return estimates. It acts on the learner's states only and never sees the expert, the orbits or the expert's actions. Its score is multiplied by a fixed **Chinese-restaurant-process prior** $\pi_0$ on the placements (below). At inference the assignment is $a=\arg\max_a\pi_\omega(a\mid s)$, prior included, with the memory $C$ frozen at the end of training.
-
-**Loss.** Entropy-regularized RL against the *frozen* reward (actor-critic, e.g. PPO with advantages from $V_\xi$):
-
-<br>
-
-```math
-\mathcal{L}_\omega = -\mathbb{E}_{\pi_\omega}\,\Big[\sum_{t}\gamma^{t}\,R_{\bar\theta}(s_t,a_t)\Big] - \alpha\,\mathbb{E}\,\big[\mathcal{H}\big(\pi_\omega(\cdot\mid s_t)\big)\big]
-```
-
-<br>
-
-**Prior over placements.** With $K=10$ slots for 5 classes, two slots can carry one class, and nothing in the reward breaks the tie between them. The policy is therefore written as
-
-<br>
-
-```math
-\pi_\omega(a\mid s)\;\propto\;\exp\big(\mathrm{score}_\omega(s,a)\big)\,\pi_0(a\mid s),\qquad \pi_0(k\mid s)=\frac{n_k}{n-1+\alpha_{\text{CRP}}}\ \ (\text{occupied slot }k),\qquad \pi_0(\text{open}\mid s)=\frac{\alpha_{\text{CRP}}}{n-1+\alpha_{\text{CRP}}}
-```
-
-<br>
-
-with $\alpha_{\text{CRP}}=1$. $\log\pi_0$ is a fixed additive offset of the logits, used in the sampling, the PPO ratio, the entropy, $\mathcal{L}_{\text{inv}}$ and the final readout; $n_k$ is the size of slot $k$ without the image being placed. It reads only the slot sizes, never a label. Where the reward is indifferent between two slots the prior alone decides, in proportion to their sizes; elsewhere the score gaps of the policy ($19$ to $70$ nats) dwarf $\log n_k$ (docs 5.23 and 5.24).
-
-**Optimizer (changed: PPO only).** The policy is trained by PPO alone, with no teacher phase: clip $0.2$, 4 PPO epochs per step, $\gamma=0.9$, GAE parameter $0.95$, entropy weight $\alpha=0.01$, critic weight $0.5$, learning rate $10^{-3}$, gradient clipping $5$, learner batch of 100 images, $K=10$ slots.
-
-**Reading the terms.**
-- **Return $\sum_t\gamma^t R_{\bar\theta}$.** The policy is judged on the *whole sequence*: each placement changes the memory $C$, hence the rewards that follow. This is what makes it a policy and not a softmax of the reward (Section 4.2).
-- **Entropy bonus $\alpha\\,\mathcal{H}$.** Keeps exploration alive, in particular the exploration of empty slots in the early phase.
-- **$\bar{\theta}$ frozen.** During the policy step the reward does not move; it is the ruler the policy is optimized against. The encoder is frozen too: $z$ and $C$ are given, so RL never reaches the pixels.
-- **$\gamma$.** $\gamma=0$ makes the policy essentially greedy on $R_\theta$; the control in Section 9 compares it with $\gamma>0$.
-- **Prior $\pi_0$.** Breaks ties between duplicate slots of one class in favour of the larger one, and makes opening a cluster cost $\alpha_{\text{CRP}}$ against the $n_k$ images already in the others.
-
-### 6.5 Joint training: the encoder is trained with the rest (alternating reward and policy steps)
-
-> **What "joint" and "sequential" mean.** Sections 6.5 and 6.6 describe two ways of training the **same architecture with the same losses**. The only thing that differs is **how the encoder $f_\phi$ is trained**. The intent predictor $\psi$, the reward $\theta$ and the policy $\omega$ keep the same losses and the same stop-gradients in both modes (gradient routing table below); what changes for them is only whether the codes $z$ they receive are still moving.
->
-> - **Joint (this section).** The encoder is trained *at the same time* as $\psi$ and $\theta$, and receives the gradient of all the reward-side losses: $L_\psi$, $L_\theta$, $\beta\\,\mathrm{KL}$ and $L_{\mathrm{inv}}$. It never receives the gradient of the RL loss $L_\omega$ (the policy step freezes it).
-> - **Sequential ([6.6](#66-sequential-training-the-encoder-is-trained-first-then-frozen)).** The encoder is trained *first and alone*, with a reward-free objective, and is then frozen; $\psi$, $\theta$ and $\omega$ are trained on its fixed codes.
-
-In the joint mode, the encoder, the intent predictor and the reward are trained together in the reward step, in alternation with the policy step. One iteration:
-
-1. **Two batches.**
-   - *Expert batch.* A minibatch of expert episodes ([Section 5.2](#52-the-key-idea-an-images-transformations-are-an-expert-demonstration)), fixed in structure: $B$ images, $n$ views each, shuffled, placed by the expert in its own memory $C^E$. The codes $z_t$, intents $m_t$ and the memory summaries are recomputed with the current encoder. The pipeline labels the steps (forced moves, repulsion pairs). The learner's policy plays no role in this batch.
-   - *Learner rollout.* The current policy $\pi_\omega$ sweeps a minibatch of training images, one view each, placing them one by one, seeing only $(z_t, m_t, C_t)$; the persistent memory $C$ is updated by each transition. No label is used.
-2. **Reward step (IRL).** Minimize the total loss on $\phi, \psi, \theta$, with $L_\psi$, $L_\theta$ computed on the expert batch and $L_{\mathrm{inv}}$ on the learner's states:
-
-<br>
-
-```math
-\mathcal{L} = \mathcal{L}_\psi + \mathcal{L}_\theta + \beta\,\mathrm{KL} + \lambda\,\mathcal{L}_{\text{inv}}
-```
-
-<br>
-
-3. **Policy step (RL).** With $\phi, \psi, \theta$ frozen, minimize $L_\omega$ (and the critic loss) on $\omega, \xi$ on learner rollouts. The reward is evaluated on the learner's states; it has never seen the learner's decisions.
-4. **End of epoch.** Recompute the summaries $c_k$ of the learner's memory from the member lists with the current encoder.
-
-This is the objective of Section 4.4, plus the RL loss of Section 6.4, which is why the training is alternating and not a single loss. Gradient routing (what each term updates, and what it treats as constant):
-
-| Term | Updates | Frozen (stop-gradient) |
-|---|---|---|
-| $L_\psi$ (intent: orbit log-likelihood and decorrelation of $m$) | $\psi$, and $\phi$ through $z$ | The orbit target $m^{*}$; the covariance is computed on the expert batch |
-| $L_\theta$ (expert likelihood) | $\theta$, and $\phi$ through $z$ | The memory $C^E$ and the intent $m$: $\psi$ gets no gradient from $L_\theta$. The intent is trained only by $L_\psi$, so the reward cannot bend it to make its own job easier, and the cluster summaries stay stable |
-| KL (compression) | $\phi$ | None |
-| $L_{\mathrm{inv}}$ (invariance) | $\phi$ only, through both $z$ and $\tilde{z}$ | $\omega$, $\psi$ (hence $m$) and $C$ |
-| $L_\omega$ (RL return + entropy) | $\omega$ (and the critic $\xi$) | $\phi$, $\psi$, $\theta$, $C$: the policy step treats the encoder and the reward as given |
-
-**What is frozen in $L_{\mathrm{inv}}$, and why.** With $\bar{\omega}$, $\bar{m}$, $\bar{C}$ frozen, the invariance term has gradient $\nabla_\omega L_{\mathrm{inv}}=0$ and $\nabla_\psi L_{\mathrm{inv}}=0$, while $\nabla_\phi L_{\mathrm{inv}}\neq 0$. This means the policy is used as a *fixed measuring stick*: if the decision it takes changes under a perturbation, the *encoder* is what gets corrected. If $\omega$ were free, the term would have a trivial minimizer: any policy that does not depend on the image,
-
-<br>
-
-```math
-\pi_\omega(\cdot\mid z,C,m) = \pi_\omega(\cdot\mid C,m) \Longrightarrow \pi_\omega(\cdot\mid z,C,m)=\pi_\omega(\cdot\mid \tilde z,C,m) \Longrightarrow \mathcal{L}_{\text{inv}} = 0 ,
-```
-
-<br>
-
-so the check would push the policy toward ignoring the image instead of pushing the encoder toward dropping the nuisance. The same holds for $m$: a free $\psi$ could make $m$ insensitive and cheat the term. Freezing is local to $L_{\mathrm{inv}}$: $\omega$ keeps being trained by RL through $L_\omega$, and $\theta$ by the experts through $L_\theta$, so the ruler still evolves, but never through the check. The ablations " $\omega$ unfrozen" and " $q_{\bar{\theta}}$ instead of $\pi_{\bar{\omega}}$ " ([Section 9](#9-ablations)) measure how much these choices matter.
-
-**What it means.** "Useless" is defined *relative to the reward and policy currently being learned*: the encoder compresses what they do not use, while they adapt to whatever the encoder keeps. This co-adaptation is the point of the method, and also its main risk: the early reward is random, so it can push the bottleneck to discard useful bits, and the early policy is random, so the memory $C$ is noisy. Mitigations: a warm-up of $\beta$ from 0, a reward warm-up on forced moves before the policy acts alone, and a reward updated more slowly than the policy. Since the expert's trajectories are fixed, the reward does not chase the policy's own memory; the only moving parts it sees are the encoder and, in Phase 2, the expert's links.
-
-### 6.6 Sequential training: the encoder is trained first, then frozen
-
-> **Only the encoder's training changes with respect to [6.5](#65-joint-training-the-encoder-is-trained-with-the-rest-alternating-reward-and-policy-steps).** The architecture and the losses $L_\psi$, $L_\theta$, $L_\omega$ are the same, and $\psi$, $\theta$, $\omega$ keep the same stop-gradients. What changes is that the encoder $f_\phi$ is trained **before** them, **alone**, with a reward-free objective, and is then **frozen**: it never sees the reward, the policy or $L_{\mathrm{inv}}$.
-
-Two stages, nothing flowing back from the second to the first.
-
-1. **Encoder alone.** No reward exists yet. The encoder is trained on the *same expert signals* (Section 5) but with a reward-free similarity head (e.g. a cosine / contrastive head on $z$), together with $\beta\\,\mathrm{KL}$ and an invariance penalty on the code itself, $\lVert z-\tilde z\rVert^{2}$.
-2. **IRL and RL modules on frozen codes.** $\phi$ is frozen. $L_\psi + L_\theta$ are minimized on $z$ and $L_\omega$ trains the policy, still in alternation (reward step, then policy step). There is no KL, no $L_{\mathrm{inv}}$, and no gradient into the encoder.
-
-| | Joint | Sequential |
-|---|---|---|
-| Optimization | One loop, all networks, alternating reward / policy steps | Encoder first, then intent / reward / policy |
-| What the encoder is trained on | $L_\psi+L_\theta+\beta\\,\mathrm{KL}+\lambda L_{\mathrm{inv}}$, at the same time as $\psi$ and $\theta$ (never $L_\omega$) | A reward-free similarity head + $\beta\\,\mathrm{KL}$ + $\lVert z-\tilde z\rVert^{2}$, alone, then frozen |
-| What $\psi$, $\theta$, $\omega$ are trained on | The same losses and stop-gradients, on codes $z$ that are still moving | The same losses and stop-gradients, on fixed codes $z$ |
-| Does the encoder see the reward? | Yes (through $L_\psi$, $L_\theta$, $L_{\mathrm{inv}}$) | No, only a similarity head |
-| Meaning of "useless" | Irrelevant to the current reward and policy | Irrelevant to the similarity objective |
-| Strengths | Matches the definition of the method; the encoder is shaped by what clustering needs | Simple, stable, modular; the IRL / RL stage can be re-run without retraining the encoder |
-| Risks | Moving targets, instability, need for warm-up | Frozen stage-1 errors; the encoder may drop cluster-relevant bits or keep spurious ones |
-
-Sequential training is the natural control for the claim that *joint* optimization matters (see [Ablations](#9-ablations)); with $\beta=0$ it reduces to the "standard multi-intention IRL" baseline.
-
-### 6.7 All the objectives in one place
-
-**Representation and state.** For an arriving view $u$:
-
-<br>
-
-```math
-z_u = \mu_\phi(u)+\sigma_\phi(u)\odot\varepsilon,\qquad m_u = \mu_\psi(z_u),\qquad s_u=(z_u,m_u,C),\qquad s^E_u=(z_u,m_u,C^E),\qquad C=\{(n_k,c_k)\}_{k=1}^{K}
-```
-
-<br>
-
-**Transition (cluster memory, for both the learner's $C$ and the expert's $C^E$).** After the assignment $a$, the chosen slot absorbs the intent of the view (an empty slot, $n_a = 0$, thereby becomes a new cluster):
-
-<br>
-
-```math
-n_a \leftarrow n_a+1,\qquad c_a \leftarrow c_a+\frac{m_u-c_a}{n_a}
-```
-
-<br>
-
-**Memory recompute (learner's memory, end of each epoch).** With $M_k$ the list of members of slot $k$ and the current encoder:
-
-<br>
-
-```math
-c_k \leftarrow \frac{1}{|M_k|}\sum_{u\in M_k}\mu_\psi\big(\mu_\phi(u)\big)
-```
-
-<br>
-
-**Intent (Section 6.2).** Every view of an orbit must give the intent of the orbit, and the coordinates of the intent must be decorrelated:
-
-<br>
-
-```math
-\mathcal{L}_{\text{orbit}}=-\mathbb{E}_{i,u\in\text{orbit}_i}\,\big[\log q_\psi(m^*_i\mid z_u)\big],\qquad m^*_i=\mathrm{sg}\Big[\tfrac{1}{|\text{orbit}_i|}\textstyle\sum_{v\in\text{orbit}_i}\mu_\psi(z_v)\Big]
-```
-
-<br>
-
-```math
-\mathcal{L}_{\text{cov}}=\frac1d\sum_{i\neq j}C_{ij}^{2},\qquad C=\mathrm{Cov}_{\text{expert batch}}\big(\mu_\psi(z)\big)
-```
-
-<br>
-
-```math
-\mathcal{L}_\psi=\mathcal{L}_{\text{orbit}}+\lambda_{\text{cov}}\mathcal{L}_{\text{cov}}
-```
-
-<br>
-
-**Reward (IRL on the experts, Sections 5.2, 5.3 and 6.3).** The choice model induced by the reward and the expert loss, evaluated in the expert's states:
-
-<br>
-
-```math
-q_\theta(a\mid s)=\frac{\exp R_\theta(s,a)}{\sum_{a'}\exp R_\theta(s,a')},\qquad
-\mathcal{L}_{\text{pos}}=-\mathbb{E}\,\big[\log q_\theta(k^+(u)\mid s^E_u)\big]
-```
-
-<br>
-
-```math
-\mathcal{L}_{\text{neg}}=\mathbb{E}_{u}\,\max\Big\{\tfrac{1}{1-\tau^+}\Big(\mathbb{E}_{v}\,\ell(u,v)-\tau^+\,\mathbb{E}_{v^+}\,\ell(u,v^+)\Big),\ \varepsilon\,\mathbb{E}_{v}\,\ell(u,v)\Big\},\quad \ell(u,v)=-\log\big(1-q_\theta(k(v)\mid s^E_u)\big)
-```
-
-<br>
-
-with $k^{+}(u)$ and $k(v)$ slots of the expert's memory $C^E$, and $\ell(u, v^{+})$ replaced by the batch average over the forced moves when $u$ has no placed twin.
-
-<br>
-
-```math
-\mathcal{L}_\theta=\mathcal{L}_{\text{pos}}+\mathcal{L}_{\text{neg}}-\rho\,\mathcal{H}\big(\mathbb{E}_s\,q_\theta(\cdot\mid s)\big),\qquad \rho=0.1,\ \varepsilon=0.1
-```
-
-<br>
-
-**Invariance (Section 4.5).** The policy is the fixed ruler; only the encoder is updated:
-
-<br>
-
-```math
-\mathcal{L}_{\text{inv}}=\mathbb{E}_{x,g\sim\mathcal{T}}\,\mathrm{KL}\Big(\pi_{\bar\omega}(\cdot\mid z,\bar m,\bar C)\Big\|\pi_{\bar\omega}(\cdot\mid \tilde z,\bar m,\bar C)\Big)
-```
-
-<br>
-
-**Reward step** (updates $\phi, \psi, \theta$):
-
-<br>
-
-```math
-\mathcal{L}=\mathcal{L}_\psi+\mathcal{L}_\theta+\beta\,\mathbb{E}_x\,\mathrm{KL}\big(p_\phi(z\mid x)\|\mathcal{N}(0,I)\big)+\lambda\,\mathcal{L}_{\text{inv}}
-```
-
-<br>
-
-**Policy step** (updates $\omega$ and the critic $\xi$; $\phi, \psi, \theta, C$ frozen). The policy $\pi_\omega\propto\exp(\mathrm{score}_\omega)\\,\pi_0$ (prior of 6.4) maximizes the return of the learned reward by PPO, and the critic regresses it:
-
-<br>
-
-```math
-\mathcal{L}_\omega=-\mathbb{E}_{\pi_\omega}\,\Big[\sum_t\gamma^t\,R_{\bar\theta}(s_t,a_t)\Big]-\alpha\,\mathbb{E}\,\big[\mathcal{H}(\pi_\omega(\cdot\mid s_t))\big],\qquad
-\mathcal{L}_\xi=\mathbb{E}\,\big[(V_\xi(s_t)-\hat G_t)^2\big]
-```
-
-<br>
-
-with $\hat G_t=\sum_{j\ge 0}\gamma^j R_{\bar\theta}(s_{t+j},a_{t+j})$.
-
-**Inference.** $C$ is frozen at the end of training and each image is assigned by $a=\arg\max_a\pi_\omega(a\mid z,m,C)$ with $m = \mu_\psi(z)$, prior $\pi_0$ included. The clusters of the output are then renamed by the clean-up of 6.8 (no re-reading of the policy).
-
-### 6.8 Stopping rule and final clean-up
-
-Both use no label and add no parameter to the training.
-
-**Stopping rule (output convergence).** Training stops when the **output** (the assignment $\arg\max_a\pi_\omega$ of every training image, memory frozen, prior included) has converged. Over a window of 10 epochs, all four conditions hold: (i) at most $1\\,\%$ of the images change cluster between two epochs (up to a renaming of the slots); (ii) the number of clusters of the output is constant; (iii) the twin accuracy stays within $\pm0.01$; (iv) the expert part of the reward loss $L_{\text{pos}}+L_{\text{neg}}$ varies by less than $2\\,\%$ (relative). A minimum of 40 epochs and a maximum of 300 apply. The model evaluated is the last epoch. A criterion on the memory (memory equal to the output) was tried and removed: the memory keeps duplicate slots that the output does not use (docs 5.25 to 5.28).
-
-**Final clean-up (mode `relabel`, no training).** At the end of training the memory often holds two slots for one class (on the toy, 7.1 occupied slots on average for 5 classes, Section 10). The output is first **read** (argmax with the frozen memory and prior), then the duplicate slots are identified and used **only to rename** the clusters of that output:
-
-1. Take the distances $\lVert c_a-c_b\rVert$ between the summaries of the non-empty slots and sort them.
-2. If the largest ratio between two consecutive sorted distances is $\ge 10$ (a guard, not tuned), every pair of distances below that jump is a *twin pair* (two slots of one cluster). Otherwise nothing is merged.
-3. Merge the twin pairs by single linkage (the largest slot is kept) and give the images of the merged slots the same cluster index.
-
-The policy is never read again on the merged memory: doing so puts it in a state it has not seen (empty slots while the memory was full) and it then prefers to "open" a cluster, which broke 3 of 100 outputs (docs 5.28, 5.29). Two other ways to close the memory (`merge`, and re-placing the images with the frozen policy) were rejected on the same 100 seeds and on 100 fresh seeds (docs 5.29, 5.30). No distance has to be chosen: on the 200 runs, distances between twin slots are at most $0.094$ and between distinct clusters at least $2.0$ (one pair at $0.12$, Section 10).
-
-### 6.9 Hyperparameters of the toy pipeline
-
-| Component | Parameter | Value | Status |
-|---|---|---|---|
-| Data | classes $\times$ images, size | $5\times300$, $16\times16\times3$ | |
-| Encoder | $\dim_z$, $\beta$, $\beta$ warm-up, $\lambda$ | $32$, $10^{-4}$, 300 iterations, $1$ | $\beta$ changed ($10^{-3}$) |
-| Intent | $\dim_m$, $\lambda_{\text{cov}}$, BatchNorm on $m$ | $16$, $3$, yes (no affine) | |
-| Reward | $\rho$, $\varepsilon$, $\tau^{+}$ | $0.1$, $0.1$, $1/K=0.1$ | $\rho$ changed (0) |
-| Reward | learning rate, warm-up, centering | $3\cdot10^{-4}$, 150 iterations, yes | |
-| Experts | orbits $\times$ views, episodes, share of images, $d_{\max}$, episodes per batch | $3\times2$, 2000, $30\\,\%$, 2, 32 | |
-| Policy | slots $K$, prior $\alpha_{\text{CRP}}$ | $10$, $1$ | |
-| Policy | PPO clip, epochs, $\gamma$, GAE, $\alpha$, critic weight, lr, grad. clip, batch | $0.2$, 4, $0.9$, $0.95$, $0.01$, $0.5$, $10^{-3}$, 5, 100 | PPO only (no teacher phase) |
-| Stopping | window, partition change, twin, loss plateau, min / max epochs | 10, $1\\,\%$, $\pm0.01$, $2\\,\%$, 40 / 300 | |
-| Clean-up | mode, jump guard | `relabel`, 10 | |
+Taken separately, the pieces are known: orbit positives and random negatives are contrastive learning (SimCLR), the debiasing is Chuang et al. 2020, the group-joining decision is close to online prototype / sequential clustering, the neighbor mining of Phase 2 is close to SCAN (mutual nearest neighbors), and relational supervision is constrained clustering. **What we test** is whether casting them as expert demonstrations for a latent reward, with an RL policy that builds the clusters, an Information Bottleneck on the encoder and a decision-level invariance check, removes spurious features better than the same pipeline with a plain classification head (see [Ablations](#10-ablations)).
 
 ---
 
@@ -805,7 +645,7 @@ Each decision is given with its reason and with what we rejected.
 | 5 | **A separate policy $\pi_\omega$, trained by RL, conditioned on the clusters built so far.** Actions are the existing clusters or an empty slot; each placement updates the memory $C$. | IRL must bring something new. The reward is the *intention of distinction* (learned from the experts) and the policy optimizes the *return* over a sequence of placements that change the state. A closed-form $\mathrm{softmax} (R)$ would only be a per-image classifier. | The policy as the softmax of the reward (kept as a control, $\gamma=0$); no cluster memory (kept as an ablation). |
 | 6 | **$K$ is an upper bound; clusters are opened progressively.** Slots start empty, choosing an empty slot opens a cluster, and the number of constructed clusters grows during training. **On the toy, $K=10$ for 5 classes.** | Consistent with the cluster memory (a cluster exists once it has members) and with the "unsupervised, built along the way" intuition. $K$ known as an upper bound is a weaker assumption than $K$ exact; with $K$ equal to the number of classes the partition in 5 clusters can be forced by capacity alone (docs 5.19). | A fixed $K$ all active from step 0; $K$ equal to the true number of classes. |
 | 7 | **Alternating training.** Reward step (IRL: encoder, intent, reward) then policy step (RL, with the others frozen). | The policy is optimized against a reward, so the reward must be a ruler that does not move during the policy step; both co-adapt across iterations. | A single end-to-end loss through the RL return. |
-| 8 | **$m$ is the intent, and the cluster memory is made of intents.** $m$ is inferred per image by $q_\psi$ (made consistent over an orbit by $\mathcal{L}_{\text{orbit}}$); the summary of a cluster is the average intent of its members; the reward and the policy receive $z$, $m$ and $C$. $\psi$ is trained only by $L_\psi$. | It is the direct counterpart of Meta-IRL: the context of a task is inferred from the set of its demonstrations. It avoids a redundant per-image latent next to the memory. | $m$ as the cluster index (duplicates the policy output); $m$ absent (kept as an ablation); $\psi$ trained by $L_\theta$ (the reward could distort the intent). |
+| 8 | **$m$ is the intent, and the cluster memory is made of intents.** $m$ is inferred per image by $q_\psi$ (made consistent over an orbit by $\mathcal L_{\text{orbit}}$); the summary of a cluster is the average intent of its members; the reward and the policy receive $z$, $m$ and $C$. $\psi$ is trained only by $L_\psi$. | It is the direct counterpart of Meta-IRL: the context of a task is inferred from the set of its demonstrations. It avoids a redundant per-image latent next to the memory. | $m$ as the cluster index (duplicates the policy output); $m$ absent (kept as an ablation); $\psi$ trained by $L_\theta$ (the reward could distort the intent). |
 | 9 | **Invariance compares policies, with $\omega$, $\psi$ and $C$ frozen.** $L_{\mathrm{inv}}$ is a KL between the policies on the clean and perturbed views, in the same cluster state. | A reward is defined only up to a per-image constant under a softmax, so policies are the comparable objects. A free policy could ignore the image and give $L_{\mathrm{inv}} = 0$ for free. | Raw reward differences; $\omega$ unfrozen (kept as ablations). |
 | 10 | **A small collapse safeguard, always on (changed).** $\rho=0.1$ (it was $0$, switched on only if $K_{\mathrm{eff}}<0.7\\,K$). | Part of the configuration validated on 200 seeds, with $\mathcal{L}_{\text{cov}}$ and the repulsion floor (decision 18). A small weight keeps the bias towards uniform usage, wrong for imbalanced classes, weak. | A large $\rho$; the conditional activation rule. |
 | 11 | **$\tau^{+}$ and $K$.** $\tau^{+} = 1/K$ with $K$ the number of slots ($0.1$ on the toy), swept on Waterbirds; $K$ is twice the true number of classes on the toy, with sensitivity in the ablations. | $1/K$ is exact for balanced classes when every slot is a class; Waterbirds is imbalanced ($\tau^{+}=\sum_c p_c^{2}$). | A single universal $\tau^{+}$. |
@@ -817,43 +657,68 @@ Each decision is given with its reason and with what we rejected.
 | 17 | **The intent loss includes a decorrelation penalty.** $\mathcal L_\psi=\mathcal L_{\text{orbit}}+\lambda_{\text{cov}}\mathcal L_{\text{cov}}$ with $\lambda_{\text{cov}}=3$, and a BatchNorm without affine parameters on $m$. | Without it $m$ has rank 1: the covariance of $\mu_\psi(z)$ has one direction and the classes superpose on one axis (docs 5.15 to 5.18). On the toy with $K=5$, ACC was $0.72\pm0.16$ before (6 seeds, none converged) and $1.00$ on 9 of 10 seeds after. | A fixed variance for $q_\psi$; a Cholesky whitening of $m$ (both tested and rejected). |
 | 18 | **A repulsion floor $\varepsilon$ inside the maximum of $\mathcal{L}_{\text{neg}}$, with $\rho=0.1$.** | The debiased repulsion has a dead zone ($\bar\ell\le\tau^+\ell^+$) where it gives no gradient (docs 5.9). | No debiasing on free moves; 5 orbits per episode (the reward opens more, the formation is worse, docs 5.10). The effect of $\varepsilon$ alone is not isolated. |
 | 19 | **A Chinese-restaurant-process prior on the placements.** $\pi_\omega\propto\exp(\mathrm score_\omega)\\,\pi_0$, $\pi_0(k)\propto n_k$, $\pi_0(\text{open})\propto\alpha_{\text{CRP}}=1$, as an additive logit offset everywhere the policy is used, readout included. | With $K=10$, two slots can carry one class and the reward cannot break the tie; without the prior 1 seed in 10 converged and the classes were split (docs 5.19 to 5.24). Where the reward is indifferent the larger slot wins. | A uniform prior (implicit in the entropy bonus); a teacher phase for the policy (not used in the final pipeline). |
-| 20 | **Convergence is that of the output; the model evaluated is the last epoch.** See 6.8. | It uses no label and no parameter of the memory; the memory keeps duplicate slots that the output does not use. | A fixed number of epochs; a criterion that the memory equals the output (tried and removed). |
-| 21 | **A final clean-up that only renames the output's clusters (mode `relabel`).** See 6.8. | Re-reading the policy on the merged memory broke outputs that were right; `relabel` loses none (docs 5.29, 5.30). | `merge` then re-read; re-placing the images with the frozen policy, with or without the "open" action (the best of them loses a right seed on fresh seeds). |
+| 20 | **Convergence is that of the output; the model evaluated is the last epoch.** See 5.7. | It uses no label and no parameter of the memory; the memory keeps duplicate slots that the output does not use. | A fixed number of epochs; a criterion that the memory equals the output (tried and removed). |
+| 21 | **A final clean-up that only renames the output's clusters (mode `relabel`).** See 5.7. | Re-reading the policy on the merged memory broke outputs that were right; `relabel` loses none (docs 5.29, 5.30). | `merge` then re-read; re-placing the images with the frozen policy, with or without the "open" action (the best of them loses a right seed on fresh seeds). |
 | 22 | **$\beta=10^{-4}$ (changed).** | With $10^{-3}$ the KL collapses and the reward degrades (twin accuracy $0.83\to0.5$; docs Section 3). | $\beta=10^{-3}$. |
 
 ### 7.2 Still open
 
 No design question is open on the toy. Points to settle by experiment:
 
-1. Whether the reward and the policy should see $z$ and $m$, or only $m$ (ablation, [Section 9](#9-ablations)).
-2. The two ablations not yet run: $\lambda=0$ and "reward + prior as the acting rule during training" (status in [Section 9](#9-ablations)), and the baselines ([Section 8.2](#82-baselines)), which have not been evaluated on the toy.
+1. Whether the reward and the policy should see $z$ and $m$, or only $m$ (ablation, [Section 10](#10-ablations)).
+2. The two ablations not yet run: $\lambda=0$ and "reward + prior as the acting rule during training" (status in [Section 10](#10-ablations)), and the baselines ([Section 9.2](#92-baselines)), which have not been evaluated on the toy.
 3. Whether the choices that made the toy work carry over to datasets where the transformation bank does not redraw the nuisance exactly: on the toy, $\mathcal{T}$ is an exact background redraw (an oracle, assumption A1), $K=2\times$ the number of classes, and the number of orbits and the share of expert images are tuned on seeds 0 to 9 only.
-4. The remaining failures on the toy (3 %): two whole classes end up in one cluster. A step that splits such a cluster is not tested ([Section 10](#10-results)).
+4. The remaining failures on the toy (3 %): two whole classes end up in one cluster. A step that splits such a cluster is not tested ([Section 11](#11-results)).
 5. The preference of the policy for "open a new cluster" in states it has not seen during training (a memory with empty slots after the memory was full, docs 5.29). The clean-up avoids it by not re-reading the policy; reading the frozen policy on the closed memory to assign new images is not solved.
 
 ### 7.3 Phase 2 parameters
 
-- **Phase 2 (progressive merging).** When to start relinking and how fast ($k$, $\gamma_c$, cap $M$, ramp-up, persistence length, EMA momentum, share of neighbors in the episodes, schedule of the effective $\tau^{+}$), given the risk of confirmation bias. These are tuned after Phase 1 is stable; Phase 1 and Phase 2 are compared as described in [Section 5.5](#55-phase-1-and-phase-2-tolerating-then-correcting-the-expert).
+- **Phase 2 (progressive merging).** When to start relinking and how fast ($k$, $\gamma_c$, cap $M$, ramp-up, persistence length, EMA momentum, share of neighbors in the episodes, schedule of the effective $\tau^{+}$), given the risk of confirmation bias. These are tuned after Phase 1 is stable; Phase 1 and Phase 2 are compared as described in [Section 6.5](#65-phase-1-and-phase-2-tolerating-then-correcting-the-expert).
 
 ---
 
-## 8. Evaluation Protocol
+## 8. Failure Modes & Monitoring
 
-### 8.1 Datasets (engineered spurious correlations)
+What can go wrong, how it shows, and which guard or monitor addresses it. The metrics and diagnostics used to monitor are in [Section 9.3](#93-metrics); the experiments that test the guards are in [Section 10](#10-ablations).
+
+| Failure | Symptom | Guard / monitor |
+|---|---|---|
+| Background shortcut | High $\mathrm{NMI}(\text{cluster},\text{background})$ | Nuisance-targeted $\mathcal{T}$ (A1), compression $\beta$; **track leakage from step 0**, not only at the end |
+| Low-level shortcut (color histogram, texture) | Clusters follow simple statistics | Diverse and strong $\mathcal{T}$, compression $\beta$ |
+| Collapse | Few clusters used (everything joins one slot) | Repulsion ([6.3](#63-two-forces-attraction-and-repulsion)); number of non-empty slots; entropy of the cluster-size histogram |
+| Fragmentation | One concept split across clusters, too many slots opened | Upper bound $K$, Phase 2 merging, over-clustering analysis |
+| Cold start of empty slots | Early on, all slots are empty and every placement looks equally good | Learned empty-slot embedding; warm-up of the reward on forced moves before the policy acts on its own; monitor the number of non-empty slots from step 0 |
+| Order dependence | Different clusters for different image orders within an episode | Random order every episode; summaries recomputed with the current encoder at each epoch; report variance across orders at test time |
+| Distribution shift, expert vs learner | The reward is trained on the expert's small single-orbit groups and applied to the learner's large mixed groups | No count $n_k$ in the reward input; memory summaries are averages; diagnostic: reward statistics on expert vs learner states; ablation with expert labels on learner states ([Section 10](#10-ablations)) |
+| Stale summaries | Summaries computed by an old encoder no longer match the intents of new images | Recompute the summaries from the member lists at each epoch; ablation against a slow EMA |
+| Expert bias (Phase 1) | Two images of the same concept are separated by the expert, so the learner fragments by orbit | Limited slots; Phase 1 vs Phase 2 comparison; same-class rate among nearest neighbors in $m$-space |
+| Non-stationary state and reward | The policy chases a reward and a memory that both move | Alternating updates with a slow reward relative to the policy; frozen reward during the policy step (Section 5.5) |
+| RL instability | Return oscillates, policy entropy collapses | Entropy bonus $\alpha$, small policy learning rate, critic target network, comparison with the closed-form $\mathrm{softmax} (R_\theta)$ control |
+| Semantic drift along chains | Views in an orbit no longer show the same object | Bound $D_{\max}$ and cumulative strength |
+| Over-strong transformations | Crops that remove the object, noisy "twin" decisions | Bound the strength of each $g \in \mathcal{T}$ |
+| Confirmation bias and chain drift (Phase 2) | Churn does not decrease, errors reinforced, distinct classes merged through a chain of links | EMA copy, mutual neighbors, confidence $\gamma_c$, rate cap $M$, persistence over several epochs, no automatic transitive closure |
+| Moving expert (Phase 2) | Reward loss oscillates | Change the expert slowly relative to reward learning (cap and ramp-up) |
+| False negatives | About $1/K$ of random pairs are the same concept | Debiasing; check for class imbalance |
+
+---
+
+## 9. Evaluation Protocol
+
+### 9.1 Datasets (engineered spurious correlations)
 
 | Dataset | Setup | What it tests |
 |---|---|---|
+| **Toy blocks** ([Section 11.1](#111-toy-environment)) | 5 classes of $4\times4$ block patterns on a random background colour, $16\times16$ images; the background is redrawn by $\mathcal{T}$. At test time: new images with random, class-aligned or class-inverted backgrounds. | Whether the pipeline finds the classes from a $K$ larger than their number, without labels, and ignores the background |
 | **Colored MNIST** | Digits are strongly correlated with background/foreground color at training time; correlation is randomized or inverted at test time. 10-class variant for clustering; the binary IRM variant as a sanity check. | Whether the model clusters by digit identity instead of color |
-| **Toy blocks** ([Section 10.1](#101-toy-environment)) | 5 classes of $4\times4$ block patterns on a random background colour, $16\times16$ images; the background is redrawn by $\mathcal{T}$. At test time: new images with random, class-aligned or class-inverted backgrounds. | Whether the pipeline finds the classes from a $K$ larger than their number, without labels, and ignores the background |
 | **Waterbirds** | Landbirds on land and waterbirds on water (strong train-time correlation); minority groups (landbird on water, waterbird on land) at test time. | Whether the model clusters by bird category instead of land/water background |
 
-### 8.2 Baselines
+### 9.2 Baselines
 
 1. **Geometric / statistical clustering:** K-Means and GMM on standard ResNet / ViT embeddings.
 2. **Pure contrastive learning:** SimCLR, MoCo v3 (and IIC) followed by clustering, to see whether contrastive augmentations alone discard backgrounds.
 3. **Standard multi-intention IRL:** a temporal IRL model adapted to single-step images **without** the causal Information Bottleneck encoder.
 
-### 8.3 Metrics
+### 9.3 Metrics
 
 - **Clustering Accuracy (ACC)** with optimal (Hungarian) cluster-to-label matching, and **Normalized Mutual Information (NMI)**, both measured strictly against the true semantic labels (bird species, digit ID), ignoring background.
 - **Out-of-distribution (OOD) robustness:** drop in performance ($\Delta\mathrm{ACC}$) between the correlated test set and the test set where the background correlation is inverted.
@@ -862,18 +727,18 @@ No design question is open on the toy. Points to settle by experiment:
 - **Number of clusters** (non-empty cluster ids of the output, and those with at least 10 images) and **open share** (share of images sent to "open a new cluster", i.e. to an empty slot, which counts as one extra cluster).
 - **Failure rate:** share of seeds whose output is not exactly right (5 clusters and ACC $=1$ on the toy), with a Clopper-Pearson $95\\,\%$ interval.
 
-Training-time diagnostics (Section 5.7): leakage from step 0, number of non-empty slots, cluster-size entropy, churn between epochs, return and policy entropy, sensitivity to the order of images, $\mathrm{NMI}(m,\text{background})$, and the **same-class rate among the nearest neighbors in $m$-space** (Phase 1: does the learner group different images of one concept although the expert does not?). Phase 1 and Phase 2 are always reported side by side ([Section 5.5](#55-phase-1-and-phase-2-tolerating-then-correcting-the-expert)).
+Training-time diagnostics (Section 8): leakage from step 0, number of non-empty slots, cluster-size entropy, churn between epochs, return and policy entropy, sensitivity to the order of images, $\mathrm{NMI}(m,\text{background})$, and the **same-class rate among the nearest neighbors in $m$-space** (Phase 1: does the learner group different images of one concept although the expert does not?). Phase 1 and Phase 2 are always reported side by side ([Section 6.5](#65-phase-1-and-phase-2-tolerating-then-correcting-the-expert)).
 
-Two further diagnostics check whether the reward, trained on the expert's states, holds on the learner's states (the distribution shift of [Section 5.7](#57-failure-modes-and-what-we-monitor)):
+Two further diagnostics check whether the reward, trained on the expert's states, holds on the learner's states (the distribution shift of [Section 8](#8-failure-modes--monitoring)):
 
 - **Twin agreement under $\mathcal{T}$.** On images with two views, with $\pi_\omega$ and the memory frozen, the fraction of pairs that receive the same $\arg\max\pi_\omega$. Close to 100% means that few twin errors remain to be corrected on the learner's side.
 - **Reward margins.** The reward of the twin's slot minus the best other slot, compared between the expert's states and the learner's states. Similar distributions mean that the reward generalizes from $C^E$ to $C$.
 
 Reporting: mean ± std over several seeds, with $K$ an upper bound (twice the number of true classes on the toy) and the number of constructed clusters reported alongside.
 
-### 8.4 Train and test partitions
+### 9.4 Train and test partitions
 
-Training clusters its own unlabeled images (**transductive**: the clusters are those of the training set, no label is used). The **test partition** is a set of images the model never saw, of the same classes (same shapes, same palette), generated with a separate random generator. The trained model is **frozen** (no training, the memory is not updated): each test image is assigned by $\arg\max_a\pi_\omega(a\mid z,m,C)$ against the memory of the end of training, prior included, and the clusters are renamed by the final clean-up ([6.8](#68-stopping-rule-and-final-clean-up)). The labels only evaluate. Three test sets:
+Training clusters its own unlabeled images (**transductive**: the clusters are those of the training set, no label is used). The **test partition** is a set of images the model never saw, of the same classes (same shapes, same palette), generated with a separate random generator. The trained model is **frozen** (no training, the memory is not updated): each test image is assigned by $\arg\max_a\pi_\omega(a\mid z,m,C)$ against the memory of the end of training, prior included, and the clusters are renamed by the final clean-up ([5.7](#57-stopping-rule-and-final-clean-up)). The labels only evaluate. Three test sets:
 
 | Test set | Background of an image | What it checks |
 |---|---|---|
@@ -885,7 +750,7 @@ As a check, reading the frozen model on its own training images reproduces the s
 
 ---
 
-## 9. Ablations
+## 10. Ablations
 
 | Ablation | Question answered |
 |---|---|
@@ -895,7 +760,7 @@ As a check, reading the frozen model on its own training images reproduces the s
 | Persistent memory vs memory reset every episode; random vs fixed image order | How much does the result depend on the way the clusters are built along the sequence? |
 | Summaries recomputed each epoch vs slow EMA only | Do stale summaries matter? |
 | Expert labels on the learner's own rollouts (DAgger-like) instead of fixed expert trajectories | Does labelling the learner's states help the reward, or does it make the signal circular? |
-| *Conditional.* Attraction-only labels on the learner's rollouts (twin views must share a slot), in addition to the fixed expert episodes; repulsion stays on the expert's states | Does it correct the distribution shift? Run only if the two diagnostics of [Section 8.3](#83-metrics) (twin agreement, reward margins) show a gap. It needs several views per image in the learner's episodes, and a memory that tells views of one image apart |
+| *Conditional.* Attraction-only labels on the learner's rollouts (twin views must share a slot), in addition to the fixed expert episodes; repulsion stays on the expert's states | Does it correct the distribution shift? Run only if the two diagnostics of [Section 9.3](#93-metrics) (twin agreement, reward margins) show a gap. It needs several views per image in the learner's episodes, and a memory that tells views of one image apart |
 | Reward reading the counts $n_k$ | Does the count create a shift between expert and learner states? |
 | $\beta=0$ (no Information Bottleneck) | Does compression alone remove the spurious features? |
 | $\lambda=0$ (no decision-consistency term; `configs/ablations/no_inv.yml`) | Is the invariance term necessary, or is the IB sufficient? |
@@ -923,13 +788,13 @@ As a check, reading the frozen model on its own training images reproduces the s
 
 ---
 
-## 10. Results
+## 11. Results
 
-Every number below comes from the final pipeline of [Section 6](#6-components--training) (configurations `configs/suites/toy_cov_k10_final_ac.yml` for seeds 0 to 99 and `configs/suites/toy_cov_k10_final_ac_val.yml` for seeds 100 to 199). No label is used in the training or in the stopping rule; the labels only evaluate. Figures and tables are regenerated by `scripts/make_report.py` and `scripts/eval_heldout.py` (commands at the end of 10.1), and they are stored in `results/toy_final_report/`.
+Every number below comes from the final pipeline of [Section 5](#5-components--training) (configurations `configs/suites/toy_cov_k10_final_ac.yml` for seeds 0 to 99 and `configs/suites/toy_cov_k10_final_ac_val.yml` for seeds 100 to 199). No label is used in the training or in the stopping rule; the labels only evaluate. Figures and tables are regenerated by `scripts/make_report.py` and `scripts/eval_heldout.py` (commands at the end of 11.1), and they are stored in `results/toy_final_report/`.
 
-### 10.1 Toy environment
+### 11.1 Toy environment
 
-#### 10.1.1 The task
+#### 11.1.1 The task
 
 Each seed draws five classes. A class is a $4\times4$ pattern of white blocks (upscaled to $16\times16$ pixels) on a background of a random colour, drawn independently for every image in $[0,0.6]^3$. There are $300$ images per class, $1500$ per seed. The shapes and the palette depend on the seed. The background is the nuisance: it carries no information on the class (no shortcut in training, `spurious=0`). The transformation bank $\mathcal{T}$ redraws the background of an image exactly (plus a little noise), which is what generates the expert's orbits; it is the prior knowledge about the nuisance of assumption A1, here an oracle.
 
@@ -937,25 +802,42 @@ Each seed draws five classes. A class is a $4\times4$ pattern of white blocks (u
 
 *Figure 1. Left: images of the five classes (one row per class) with different backgrounds. Right: an orbit, the same image under T (only the background changes).*
 
-#### 10.1.2 Why it is hard
+#### 11.1.2 Hyperparameters of the toy pipeline
+
+Values of the final pipeline. Each hyperparameter is defined in [Section 5.8](#58-hyperparameters). "Status" marks the values that differ from the first design.
+
+| Component | Parameter | Value | Status |
+|---|---|---|---|
+| Data | classes $\times$ images, size | $5\times300$, $16\times16\times3$ | |
+| Encoder | $\dim_z$, $\beta$, $\beta$ warm-up, $\lambda$ | $32$, $10^{-4}$, 300 iterations, $1$ | $\beta$ changed ($10^{-3}$) |
+| Intent | $\dim_m$, $\lambda_{\text{cov}}$, BatchNorm on $m$ | $16$, $3$, yes (no affine) | |
+| Reward | $\rho$, $\varepsilon$, $\tau^{+}$ | $0.1$, $0.1$, $1/K=0.1$ | $\rho$ changed (0) |
+| Reward | learning rate, warm-up, centering | $3\cdot10^{-4}$, 150 iterations, yes | |
+| Experts | orbits $\times$ views, episodes, share of images, $d_{\max}$, episodes per batch | $3\times2$, 2000, $30\\,\%$, 2, 32 | |
+| Policy | slots $K$, prior $\alpha_{\text{CRP}}$ | $10$, $1$ | |
+| Policy | PPO clip, epochs, $\gamma$, GAE, $\alpha$, critic weight, lr, grad. clip, batch | $0.2$, 4, $0.9$, $0.95$, $0.01$, $0.5$, $10^{-3}$, 5, 100 | PPO only (no teacher phase) |
+| Stopping | window, partition change, twin, loss plateau, min / max epochs | 10, $1\\,\%$, $\pm0.01$, $2\\,\%$, 40 / 300 | |
+| Clean-up | mode, jump guard | `relabel`, 10 | |
+
+#### 11.1.3 Why it is hard
 
 The difficulty is not that the pixels are dominated by the background. If the number of clusters is known to be 5, K-Means on the raw pixels solves this toy (ACC $=1.00$ on 200 seeds out of 200). What makes it hard is the setting the method is built for:
 
 - **The number of clusters is not given.** The model has $K=10$ slots for 5 classes and must find that 5 are needed. K-Means with $K=10$ cuts every class in two, along the brightness of the background: ACC $0.567\pm0.039$, $\mathrm{NMI}(\text{cluster},\text{class})=0.843$, and $0$ seeds out of 200 are right (reference in Table 2).
 - **No label, and a nuisance that is large.** Inside one class, the background colour changes a large share of the pixels, and nothing in the data says which part of the image is the class. The only information is the orbits: pairs of views of one image that must be placed together, and random pairs that are mostly different.
-- **The clusters are built by a policy, one image after the other.** The reward is learned from these relational signals (not a label), the policy must learn to *open* a new cluster when none fits, and the memory it writes to keeps duplicate slots when the reward cannot tell two slots of one class apart. Before the changes of [Section 6](#6-components--training), the same pipeline reached ACC $0.72\pm0.16$ with 4 clusters on average and none of 6 seeds converged (docs Section 3 and 5.17).
+- **The clusters are built by a policy, one image after the other.** The reward is learned from these relational signals (not a label), the policy must learn to *open* a new cluster when none fits, and the memory it writes to keeps duplicate slots when the reward cannot tell two slots of one class apart. Before the changes of [Section 5](#5-components--training), the same pipeline reached ACC $0.72\pm0.16$ with 4 clusters on average and none of 6 seeds converged (docs Section 3 and 5.17).
 
 ![Pixel space of one seed and K-Means with K=10](results/toy_final_report/fig2_difficulty.png)
 
 *Figure 2. Left: the first two principal components of the pixels, coloured by the brightness of the background: each class is stretched along it. Right: the 10 clusters of K-Means on pixels (one row per cluster, with the true classes in the bars): every class is split in two.*
 
-#### 10.1.3 Protocol
+#### 11.1.4 Protocol
 
 - **Seeds.** 200 independent runs (seeds 0 to 199). Hyperparameters were chosen on seeds 0 to 9 at most, and the choice between two ways of closing the memory was made on seeds 0 to 99 and confirmed on 100 to 199 (docs 5.30): seeds 100 to 199 are fresh for every choice.
-- **Train and test.** The model clusters the 1500 unlabeled images of its seed (**train**, transductive). The **test partition** is made of 1500 new images of the same classes, drawn with another generator and assigned by the frozen model against the memory of the end of training ([Section 8.4](#84-train-and-test-partitions)), under three backgrounds: `iid` (random colour as in training), `aligned` (the background of a class is its colour), `inverted` (the background of a class is the colour of another class). Reading the frozen model on its own training images reproduces the saved output in 200 runs out of 200.
-- **Metrics.** Those of [Section 8.3](#83-metrics). The worst group is a (class, coarse background colour) pair with at least 10 images; a run is *right* when its output has exactly 5 clusters and ACC $=1$.
+- **Train and test.** The model clusters the 1500 unlabeled images of its seed (**train**, transductive). The **test partition** is made of 1500 new images of the same classes, drawn with another generator and assigned by the frozen model against the memory of the end of training ([Section 9.4](#94-train-and-test-partitions)), under three backgrounds: `iid` (random colour as in training), `aligned` (the background of a class is its colour), `inverted` (the background of a class is the colour of another class). Reading the frozen model on its own training images reproduces the saved output in 200 runs out of 200.
+- **Metrics.** Those of [Section 9.3](#93-metrics). The worst group is a (class, coarse background colour) pair with at least 10 images; a run is *right* when its output has exactly 5 clusters and ACC $=1$.
 
-#### 10.1.4 Results
+#### 11.1.5 Results
 
 **Table 1. Final pipeline, 200 seeds** (mean $\pm$ standard deviation over seeds; "right" is the number of seeds with 5 clusters and ACC $=1$).
 
@@ -975,7 +857,7 @@ The difficulty is not that the pixels are dominated by the background. If the nu
 
 The four columns are identical seed by seed: on each of the 200 seeds, the ACC is exactly the same on the training images and on the three test sets, so the held-out partition adds no degradation, and a background that points to the right or to a wrong class does not change a single decision. On the seeds 100 to 199 only (fresh for every choice), 98 outputs out of 100 are right (failure rate $2\\,\%$, Clopper-Pearson 95 % interval $[0.2,7.0]\\,\%$, ACC $0.996\pm0.028$). The worst-group ACC is $1$ on every right seed and $0$ on each of the 6 failures (a class absorbed in another one), hence its mean $194/200=0.97$. The open share is $0.001$ on average: it comes from one seed (106) where a whole class ($20\\,\%$ of the images) is sent to a group of images that opened no cluster and counted as an extra cluster.
 
-**Table 2. First reference points on the same 200 seeds** (not the baselines of Section 8.2, which are not run yet).
+**Table 2. First reference points on the same 200 seeds** (not the baselines of Section 9.2, which are not run yet).
 
 | Method | Known $K$ | ACC | $\mathrm{NMI}(\text{cluster},\text{class})$ | $\mathrm{NMI}(\text{cluster},\text{background})$ | Right |
 |---|---|---|---|---|---|
@@ -994,7 +876,7 @@ On this toy the pixels are enough when the number of classes is known; the pipel
 | Merged slot pairs, and pairs merged across two classes | 431, and 0 |
 | Distance between merged slot summaries / between distinct clusters | at most $0.094$ (634 pairs) / at least $2.01$ (4067 pairs; one pair at $0.12$, seed 102) |
 
-#### 10.1.5 How the clusters improve
+#### 11.1.6 How the clusters improve
 
 Figure 3 follows one run (seed 20, replayed with a checkpoint at every epoch; the training is not bit-for-bit deterministic, so this replay is a run of the same configuration that stops at epoch 42 instead of 46, with the same final partition). The top row is the intent space $m$ (two principal components, coloured by the true class), the bottom row the clusters of the output, with the true classes in the bars.
 
@@ -1010,7 +892,7 @@ Figure 3 follows one run (seed 20, replayed with a checkpoint at every epoch; th
 
 *Figure 4. Seed 20, per epoch: number of clusters of the output and occupied slots of the memory; ACC of the output; share of images that change cluster (the stopping rule needs it below 1%, dotted line, over 10 epochs). Epoch 17 shows a transient: one class is split in two for one epoch, and the output then returns to five; this is why the rule asks for a plateau and not for a first right partition.*
 
-#### 10.1.6 Training dynamics over 200 seeds
+#### 11.1.7 Training dynamics over 200 seeds
 
 ![Mean evolution of the training metrics over 200 seeds](results/toy_final_report/fig5_dynamics_200seeds.png)
 
@@ -1022,7 +904,7 @@ Figure 3 follows one run (seed 20, replayed with a checkpoint at every epoch; th
 - **Reward.** The twin accuracy rises to $0.82$ and stays there (the expert's forced moves are reproduced in $82\\,\%$ of the cases, a plateau well below $1$ that does not prevent the output from being right), and the expert loss of the reward falls from $1.7$ to $0.5$ within 20 epochs, with a bump when the policy starts (epoch 10).
 - **Memory against output.** The share of images whose slot differs from the cluster of the output is $0.10$ on the median run at the stop (up to $0.23$ at the 90th percentile): this is the duplicate-slot effect that the clean-up renames.
 
-#### 10.1.7 Summary over 200 seeds and failures
+#### 11.1.8 Summary over 200 seeds and failures
 
 ![Summary of the results over 200 seeds](results/toy_final_report/fig6_results_200seeds.png)
 
@@ -1034,13 +916,13 @@ Figure 3 follows one run (seed 20, replayed with a checkpoint at every epoch; th
 
 *Figure 7. Class composition of the clusters of the six failed outputs (columns: true classes; rows: clusters). Each cluster is a union of whole classes.*
 
-#### 10.1.8 Limits
+#### 11.1.9 Limits
 
 - **Toy only, and an oracle.** The transformation bank redraws the background exactly; on a real dataset the bank is an approximation of the nuisance (assumption A1), which this section does not test.
 - **No shortcut in training.** `spurious=0`: the `aligned` and `inverted` test sets check that the output does not depend on a background correlated with the class at test time. A background shortcut present in training is a separate question, not measured here.
 - **Test images of the same classes.** The test partition measures the generalization to new images, with new backgrounds, of the same classes (same shapes, same palette); not to new classes.
 - **Choices on seeds 0 to 9.** Hyperparameters were set there; seeds 10 to 99 were used for the choice of the clean-up mode, and seeds 100 to 199 are fresh for every choice.
-- **Not run.** The baselines of [Section 8.2](#82-baselines), the ablation $\lambda=0$, and the ablation "reward + prior as the acting rule during training" ([Section 9](#9-ablations)). The reference points of Table 2 are not a comparison with the baselines.
+- **Not run.** The baselines of [Section 9.2](#92-baselines), the ablation $\lambda=0$, and the ablation "reward + prior as the acting rule during training" ([Section 10](#10-ablations)). The reference points of Table 2 are not a comparison with the baselines.
 - **Residual failures.** 3 % of the runs merge two classes; a step that splits such a cluster is not tested. One run (seed 102) ends with a contaminated slot and one run (seed 106) sends a whole class to the "open" group in the test.
 
 To reproduce (from the repository root):
@@ -1056,7 +938,7 @@ The evolution of one run (Figures 3 and 4) needs a replay of that run with a che
 
 ---
 
-## 11. Repository Structure
+## 12. Repository Structure
 
 ```
 cib-irl/
@@ -1066,7 +948,7 @@ cib-irl/
 │   ├── toy.yml                  # defaults of the toy environment (TrainConfig)
 │   ├── mnist.yml                # defaults of the MNIST digits
 │   ├── transforms/              # transformation banks T (toy_oracle.yml, digits.yml, generic.yml, ...)
-│   ├── ablations/               # one small YAML per ablation, applied on top of a config (README Section 9)
+│   ├── ablations/               # one small YAML per ablation, applied on top of a config (README Section 10)
 │   └── suites/                  # experiments x seeds; the final toy pipeline is toy_cov_k10_final_ac.yml (+ _val.yml)
 ├── cibirl/
 │   ├── encoder.py               # encoder f_phi (stochastic, VIB head)
@@ -1086,13 +968,13 @@ cib-irl/
 │   ├── run_experiment.py        # one run;  run_suite.py: a suite of runs in parallel (YAML)
 │   ├── toy_data.py              # toy data (make_toy) and its test partition (make_toy_test)
 │   ├── datasets.py              # dataset builders (toy, MNIST)
-│   ├── eval_heldout.py          # evaluation of trained runs on the test partition (Section 8.4)
-│   ├── make_report.py           # figures and tables of Section 10
+│   ├── eval_heldout.py          # evaluation of trained runs on the test partition (Section 9.4)
+│   ├── make_report.py           # figures and tables of Section 11
 │   ├── summarize_variants.py    # summary of the clean-up variants over a suite
 │   └── ...                      # probes and one-off analyses (probe_representation.py, readings_after_cleanup.py, ...)
 ├── tests/                       # pytest suite (python -m pytest tests -q)
 ├── results/                     # tracked; one folder per suite; checkpoint.pt files are git-ignored
-│   └── toy_final_report/        # figures, tables and per-seed test metrics of Section 10
+│   └── toy_final_report/        # figures, tables and per-seed test metrics of Section 11
 ├── docs/protocol-decisions.md   # experimental decisions, one section per experiment, with their numbers
 ├── baselines/                   # empty for now: K-Means / GMM, SimCLR, MoCo v3, IIC, temporal IRL (planned)
 └── data/                        # datasets (git-ignored)
@@ -1100,7 +982,7 @@ cib-irl/
 
 ---
 
-## 12. Status & Roadmap
+## 13. Status & Roadmap
 
 - [x] Problem statement and literature review
 - [x] Architecture and joint objective
@@ -1109,10 +991,10 @@ cib-irl/
 - [x] Design questions settled: experts, policy, $m$ ([Section 7.1](#71-decisions-taken))
 - [x] Expert trajectory generator, learner's persistent memory (member lists, recompute) and monitoring (leakage, churn, non-empty slots, cluster-size entropy)
 - [x] Stable reward / policy alternation on the toy (output convergence on 200 runs out of 200)
-- [x] Toy pipeline: intent decorrelation, repulsion floor, CRP prior, output-convergence rule, final clean-up ([Section 6](#6-components--training))
-- [x] Toy results on 200 seeds, on a held-out test partition ([Section 10](#10-results)): 194 of 200 outputs exactly right
-- [ ] Variational formulation validated (Section 4.4) and consistency term fixed (Section 4.5)
-- [ ] Baselines evaluated on the toy test partition (K-Means / GMM on pixels have a first reference in Section 10; SimCLR, IIC, standard multi-intention IRL to run)
+- [x] Toy pipeline: intent decorrelation, repulsion floor, CRP prior, output-convergence rule, final clean-up ([Section 5](#5-components--training))
+- [x] Toy results on 200 seeds, on a held-out test partition ([Section 11](#11-results)): 194 of 200 outputs exactly right
+- [ ] Variational formulation validated and consistency term fixed (Section 5.1)
+- [ ] Baselines evaluated on the toy test partition (K-Means / GMM on pixels have a first reference in Section 11; SimCLR, IIC, standard multi-intention IRL to run)
 - [ ] Ablation $\lambda=0$ (`configs/ablations/no_inv.yml`) on the 200 seeds of the toy
 - [ ] Ablation reward + prior ( $\mathrm{softmax}(R_\theta+\log\pi_0)$ ) instead of the RL policy: readout done on the 100 first final models, acting rule during training to run
 - [ ] Toy: a step for the 3 % of runs where two classes end in one cluster
@@ -1125,6 +1007,6 @@ cib-irl/
 
 ---
 
-## 13. License
+## 14. License
 
 MIT License
