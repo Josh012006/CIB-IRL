@@ -769,7 +769,7 @@ Reporting: mean ± std over several seeds, with `K` (upper bound) set to the num
 | Ablation | Question answered |
 |---|---|
 | **Plain classification head** instead of reward + policy + `m` (same experts, same encoder) | Does the IRL / RL formalism add anything over contrastive / IIC-style clustering? |
-| **Closed-form policy `softmax(R_θ)`** (or `γ = 0`) instead of the RL-trained `π_ω` | Does the separate policy and the sequential return bring anything beyond a per-image reward? |
+| **Closed-form policy `softmax(R_θ + log π_0)`** (reward plus the CRP prior `π_0` of `docs/protocol-decisions.md` 5.24, no RL; `π_0` is what breaks the ties between slots the reward cannot tell apart) or `γ = 0`, instead of the RL-trained `π_ω`. Two settings: at readout only, and as the acting rule during training | Does the separate policy and the sequential return bring anything beyond a per-image reward and the prior? |
 | **Reward per image, no cluster memory** (`R_θ(z, a)` only) | Does conditioning on the clusters built so far matter? |
 | Persistent memory vs memory reset every episode; random vs fixed image order | How much does the result depend on the way the clusters are built along the sequence? |
 | Summaries recomputed each epoch vs slow EMA only | Do stale summaries matter? |
@@ -777,7 +777,7 @@ Reporting: mean ± std over several seeds, with `K` (upper bound) set to the num
 | *Conditional.* Attraction-only labels on the learner's rollouts (twin views must share a slot), in addition to the fixed expert episodes; repulsion stays on the expert's states | Does it correct the distribution shift? Run only if the two diagnostics of [Section 8.3](#83-metrics) (twin agreement, reward margins) show a gap. It needs several views per image in the learner's episodes, and a memory that tells views of one image apart |
 | Reward reading the counts `n_k` | Does the count create a shift between expert and learner states? |
 | `β = 0` (no Information Bottleneck) | Does compression alone remove the spurious features? |
-| `λ = 0` (no decision-consistency term) | Is the invariance term necessary, or is the IB sufficient? |
+| `λ = 0` (no decision-consistency term; `configs/ablations/no_inv.yml`) | Is the invariance term necessary, or is the IB sufficient? |
 | `q_θ̄` instead of `π_ω̄` in `L_inv`; raw reward differences; `ω` and `ψ` unfrozen in `L_inv` | Does the form of the check or the freezing matter (does the policy drift toward ignoring the image)? |
 | `ρ > 0` from the start | Does an explicit anti-collapse term help, or hurt on imbalanced classes? |
 | No negatives (positives only) | Does collapse appear, as predicted? |
@@ -791,6 +791,11 @@ Reporting: mean ± std over several seeds, with `K` (upper bound) set to the num
 | `K` larger than the true number, smaller than the true number, imbalanced classes, and `τ⁺` sweep | How sensitive is the method to the upper bound `K` and to the value of `τ⁺`, and does it open the right number of clusters? |
 | Without latent context `m` | What does the intent variable contribute? |
 | Cluster summaries in `z`-space instead of `m`-space; reward and policy see only `m` (no `z`) | Where should clusters be compared, and does `z` bring more than `m` to the decisions? |
+
+**Status of two of these ablations** (toy, `K = 10`, 100 seeds, 2026-10-18; the labels only evaluate).
+
+- **`λ = 0`: not run yet.** On the existing runs `L_inv` never exceeds `3·10⁻⁷` over the 5332 epochs of the 100 runs (the other terms of the reward step are `0.03` to `0.3`); the gradient of `λ·L_inv` is `0.5 %` of the encoder gradient (median over 14 final models, `4 %` at most); and the policy takes the same decision on the clean and on the perturbed view for `100 %` of the images (14 final models). No effect is expected on the toy, where the orbits already make the encoder invariant to the background (hypothesis). To run on the 100 seeds, and on a dataset whose nuisance is not already removed by the orbits.
+- **`softmax(R_θ + log π_0)`: not run in training yet.** At readout on the 100 final models it gives the same partition as `π_ω` for `100 %` of the images (right in 96/100 for both, same four failures). On the memory closed by the final clean-up, `π_ω` is right in 93/100 and reward + prior in 96/100; the reward alone, without the prior, is right in 22/100. To run: reward + prior as the acting rule during training.
 
 ---
 
@@ -831,6 +836,8 @@ cib-irl/
 - [ ] Colored MNIST pipeline and baselines
 - [ ] Phase 2 (relinking, neighbor-enriched episodes, brakes) and Phase 1 vs Phase 2 comparison
 - [ ] Waterbirds pipeline and baselines
+- [ ] Ablation `λ = 0` (`no_inv.yml`) on the 100 seeds of the toy
+- [ ] Ablation reward + prior (`softmax(R_θ + log π_0)`) instead of the RL policy: readout done on the 100 final models, acting rule during training to run
 - [ ] Full ablation suite
 - [ ] Write-up
 
