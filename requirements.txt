@@ -1,9 +1,9 @@
 torch>=2.2
 numpy
-scipy          # Hungarian matching (eval/metrics.py)
-matplotlib     # figures (eval/visualize.py)
+scipy          # Hungarian matching (eval/metrics.py, eval/protocol.py)
+matplotlib     # figures (eval/visualize.py, scripts/make_report.py)
 pyyaml         # configs/*.yml
-scikit-learn   # optional: t-SNE of the intent space (falls back to PCA)
-pillow         # Waterbirds images (scripts/datasets.py)
-# torchvision  # optional: ImageNet-ResNet features of the baselines on Colored MNIST / Waterbirds (not tested)
+scikit-learn   # K-Means / GMM (baselines/), SimCLR clustering step, figures; the baseline tests fail without it
+pillow         # Waterbirds images (scripts/datasets.py) and its tests
 pytest         # python -m pytest tests -q
+# torchvision  # optional, not needed by the tests: ImageNet-ResNet features of the baselines on Colored MNIST / Waterbirds

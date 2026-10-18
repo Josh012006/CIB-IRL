@@ -1005,7 +1005,7 @@ pip install -r requirements.txt
 python -m pytest tests -q                    # about 3 minutes; tiny runs and fake data, nothing is downloaded
 ```
 
-`torchvision` (ResNet features of the baselines on Colored MNIST and Waterbirds) is optional and not in `requirements.txt`; `pillow` (Waterbirds images) is.
+`scikit-learn` (K-Means and GMM of the baselines) and `pillow` (Waterbirds images) are required by the tests. `torchvision` (ResNet features of the baselines on Colored MNIST and Waterbirds) is optional: it is not in `requirements.txt` and no test needs it (`pip install torchvision` to use it).
 
 ### 13.2 Data
 
