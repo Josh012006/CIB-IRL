@@ -217,7 +217,7 @@ I(z;a,m) \ge H(a,m) + \mathbb{E}\,\big[\log q_\psi(m\mid z) + \log q_\theta(a\mi
 
 <br>
 
-where $q_\theta(a\mid s)=\mathrm{softmax}_a\\,R_\theta(s,a)$ is the **choice model induced by the reward** (Section 5.2). It is used to score the experts' decisions; it is not the policy that acts. Two remarks on the second bound:
+where $q_\theta(a\mid s)=\mathrm softmax_a\\,R_\theta(s,a)$ is the **choice model induced by the reward** (Section 5.2). It is used to score the experts' decisions; it is not the policy that acts. Two remarks on the second bound:
 
 - **The targets are relational, not categorical.** Our experts say whether an image goes with a group that already exists, or whether two images go together, not which cluster is "the right" one ([Section 5](#5-where-do-the-experts-come-from)). We therefore instantiate the relevance term with the *expert likelihood*: the intent loss $L_\psi$ and the reward loss $L_\theta$ of [Section 6](#6-components--training) play the roles of $-\mathbb{E}\log q_\psi(m\mid z)$ and $-\mathbb{E}\log q_\theta(a\mid z,C,m)$. This is a surrogate for the bound, not a strict bound.
 - **The entropy $H(a,m)$** is what prevents collapse in the bound. In our setting it is supplied by the repulsion between random pairs ([Section 5.3](#53-two-forces-attraction-and-repulsion)) and by the finite number of slots.
