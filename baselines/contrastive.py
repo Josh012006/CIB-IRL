@@ -18,6 +18,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
+import sklearn
 
 from cibirl.encoder import SmallCNN
 

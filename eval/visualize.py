@@ -12,6 +12,7 @@ import matplotlib
 matplotlib.use("Agg")                      # no display needed (cluster, CI)
 import matplotlib.pyplot as plt            # noqa: E402
 import numpy as np                         # noqa: E402
+import sklearn
 
 from .metrics import cluster_purity, confusion  # noqa: E402
 

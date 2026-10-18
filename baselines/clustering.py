@@ -7,6 +7,7 @@ most probable component, so the baseline is evaluated on the same held-out parti
 from __future__ import annotations
 
 import numpy as np
+import sklearn
 from torch import Tensor
 
 from .config import BaselineConfig
