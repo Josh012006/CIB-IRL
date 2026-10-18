@@ -432,12 +432,12 @@ The architecture has four trained components: the **encoder**, the **intent pred
 
 - For a view $u$: $z_u = f_\phi(u)$ and $m_u = \mu_\psi(z_u)$ (mean of the inferred intent).
 - $C=\\{(n_k,c_k)\\}$ is the learner's cluster memory (Section 4.2): $c_k$ is the average of the intents $m_v$ of the members of cluster $k$, recomputed with the current encoder at each epoch. $s_u = (z_u, m_u, C)$ is the state in which $u$ arrives. In an expert episode the memory is the expert's own, $C^E$, and the state is written $s^E_u = (z_u, m_u, C^E)$. Memories are always treated as constants. States and summaries always use the **single-view** intent $m_u$, as at test time; the orbit mean $m^{*}$ below is only a training target for $q_\psi$.
-- $R_\theta(s, a)$ is the reward of placing the arriving image in slot $a$. $q_\theta(a\mid s)=\mathrm{softmax}_a\\,R_\theta(s,a)$ is the choice model it induces, used to score the experts (Section 5.2).
+- $R_\theta(s, a)$ is the reward of placing the arriving image in slot $a$. $q_\theta(a\mid s)=\mathrm softmax_a \\, R_\theta(s,a)$ is the choice model it induces, used to score the experts (Section 5.2).
 - $\pi_\omega(a \mid s)$ is the **policy**, a network of its own, trained by RL against $R_\theta$. It is not $q_\theta$.
 - A bar ($\bar{\theta}$, $\bar{\omega}$, $\bar{m}$, $\bar{C}$) means **stop-gradient**: the value is used in the computation but not updated by that loss.
 - Expert signals (Section 5), always in the expert's states $s^E$: forced moves (twin already placed in the expert's memory), random previously placed views (repulsion), with $\tau^{+} = 1/K$. The expert never acts on the learner: only $L_\theta$ reads them.
 - $K$ is the number of slots, an upper bound on the number of clusters. A slot is **empty** until an image is placed in it; the action "open a new cluster" is the choice of the first empty slot. During a pass over the training images, $n$ is the number of images placed so far and $n_k$ the size of slot $k$. The reward and the policy network never read $n_k$; only the prior $\pi_0$ of [6.4](#64-policy-pi_omega-separate-network-trained-by-rl) does.
-- Intent target of an image $i$: $m^{*}_i=\mathrm{sg}\Big[\tfrac{1}{|\text{orbit}_i|}\sum_{v\in\text{orbit}_i}\mu_\psi(z_v)\Big]$, where $\mathrm{sg}[\cdot]$ is stop-gradient. The intent is a property of the orbit, not of a single view.
+- Intent target of an image $i$: $m^{*}_i=\mathrm{sg}\Big[\tfrac{1}{|\text orbit_i|}\sum_{v\in\text orbit_i}\mu_\psi(z_v)\Big]$, where $\mathrm{sg}[\cdot]$ is stop-gradient. The intent is a property of the orbit, not of a single view.
 
 ### 6.1 Encoder $f_\phi$
 
@@ -455,7 +455,7 @@ The architecture has four trained components: the **encoder**, the **intent pred
 
 For a diagonal Gaussian the KL has a closed form: $\tfrac12\sum_j\big(\mu_j^2+\sigma_j^2-1-\log\sigma_j^2\big)$. The form of the loss is unchanged; $\mathcal{L}_{\text{cov}}$ (new, [6.2](#62-intent-predictor-q_psi)) is part of the utility term because its gradient flows through $z$.
 
-**Hyperparameters (toy).** $\dim z = 32$; $\beta = 10^{-4}$ **(changed, was $10^{-3}$)**, reached after a warm-up of 300 iterations from 0; $\lambda = 1$. With $\beta=10^{-3}$ the KL falls to about 40 and the twin accuracy (`twin_acc`: share of the expert's forced moves that the reward reproduces) drops from about 0.83 to 0.5; with $\beta=10^{-4}$ it stays near 0.8 (`docs/protocol-decisions.md`, Section 3).
+**Hyperparameters (toy).** $\dim_z = 32$; $\beta = 10^{-4}$ **(changed, was $10^{-3}$)**, reached after a warm-up of 300 iterations from 0; $\lambda = 1$. With $\beta=10^{-3}$ the KL falls to about 40 and the twin accuracy (`twin_acc`: share of the expert's forced moves that the reward reproduces) drops from about 0.83 to 0.5; with $\beta=10^{-4}$ it stays near 0.8 (`docs/protocol-decisions.md`, Section 3).
 
 **Status of $\mathcal{L}_{\text{inv}}$ (kept, inactive on the toy).** On the toy, $\mathcal{L}_{\text{inv}}$ never exceeds $3\cdot10^{-7}$ and carries $0.5\\,\%$ of the encoder gradient; the policy takes the same decision on the clean and the perturbed view for $100\\,\%$ of the images. The orbits already make the encoder invariant to the background, so no effect is expected there; the ablation $\lambda=0$ is not run yet ([Section 9](#9-ablations)).
 
@@ -483,7 +483,7 @@ For a diagonal Gaussian the KL has a closed form: $\tfrac12\sum_j\big(\mu_j^2+\s
 <br>
 
 ```math
-\mathcal{L}_{\text{cov}}=\frac1d\sum_{i\neq j}C_{ij}^{2},\qquad C=\mathrm{Cov}_{\text{expert batch}}\big(\mu_\psi(z)\big)\in\mathbb{R}^{d\times d},\qquad d=\dim m=16
+\mathcal{L}_{\text{cov}}=\frac1d\sum_{i\neq j}C_{ij}^{2},\qquad C=\mathrm{Cov}_{\text{expert batch}}\big(\mu_\psi(z)\big)\in\mathbb{R}^{d\times d},\qquad d=\dim_m=16
 ```
 
 <br>
@@ -763,8 +763,8 @@ The policy is never read again on the merged memory: doing so puts it in a state
 | Component | Parameter | Value | Status |
 |---|---|---|---|
 | Data | classes $\times$ images, size | $5\times300$, $16\times16\times3$ | |
-| Encoder | $\dim z$, $\beta$, $\beta$ warm-up, $\lambda$ | $32$, $10^{-4}$, 300 iterations, $1$ | $\beta$ changed ($10^{-3}$) |
-| Intent | $\dim m$, $\lambda_{\text{cov}}$, BatchNorm on $m$ | $16$, $3$, yes (no affine) | new |
+| Encoder | $\dim_z$, $\beta$, $\beta$ warm-up, $\lambda$ | $32$, $10^{-4}$, 300 iterations, $1$ | $\beta$ changed ($10^{-3}$) |
+| Intent | $\dim_m$, $\lambda_{\text{cov}}$, BatchNorm on $m$ | $16$, $3$, yes (no affine) | new |
 | Reward | $\rho$, $\varepsilon$, $\tau^{+}$ | $0.1$, $0.1$, $1/K=0.1$ | $\rho$ changed (0), $\varepsilon$ new |
 | Reward | learning rate, warm-up, centering | $3\cdot10^{-4}$, 150 iterations, yes | |
 | Experts | orbits $\times$ views, episodes, share of images, $d_{\max}$, episodes per batch | $3\times2$, 2000, $30\\,\%$, 2, 32 | |
