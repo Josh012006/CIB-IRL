@@ -1,0 +1,32 @@
+runs finis: 100
+convergées (règle de sortie): 100/100 ; epoch: min 40 médiane 47 max 100
+
+                            juste     échecs  borne 95% sup mém=sortie  slots (moy)  mémoire juste
+sortie à l'arrêt (pre)       98/100          2          0.070      21/100         7.16           19/100
+merge                        98/100          2          0.070      97/100         5.02           91/100
+relabel                      98/100          2          0.070      97/100         5.02           91/100
+reintroduce                  95/100          5          0.113     100/100         5.07           95/100
+reintroduce_no_open          97/100          3          0.085     100/100         4.97           97/100
+
+slots de la mémoire: pre 4-10 ; merge 4-7 ; relabel 4-7 ; reintroduce 4-10 ; reintroduce_no_open 4-5
+
+par rapport à la sortie à l'arrêt, run par run:
+  merge                perdus (juste -> faux): [] ; gagnés (faux -> juste): []
+  relabel              perdus (juste -> faux): [] ; gagnés (faux -> juste): []
+  reintroduce          perdus (juste -> faux): [102, 106, 181] ; gagnés (faux -> juste): []
+  reintroduce_no_open  perdus (juste -> faux): [102] ; gagnés (faux -> juste): []
+
+sorties fausses à l'arrêt: [122, 152]
+sorties fausses, merge:               [122, 152]
+sorties fausses, relabel:             [122, 152]
+sorties fausses, reintroduce:         [102, 106, 122, 152, 181]
+sorties fausses, reintroduce_no_open: [102, 122, 152]
+
+runs dont la mémoire était pleine à l'arrêt: 14 ; sorties fausses parmi eux: merge 0 ; relabel 0 ; reintroduce 1 ; reintroduce_no_open 0
+fusions entre classes différentes (éval.): 0 sur 214 fusions
+
+reintroduce: balayages moy 2.2 max 20 ; plafond atteint (20 balayages, une image bouge encore): 2/100 ; images déplacées au 1er balayage: médiane 129
+   la politique relue sur cette mémoire (predict): juste 97/100
+
+reintroduce_no_open: balayages moy 1.8 max 3 ; plafond atteint (20 balayages, une image bouge encore): 0/100 ; images déplacées au 1er balayage: médiane 129
+   la politique relue sur cette mémoire (predict): juste 97/100

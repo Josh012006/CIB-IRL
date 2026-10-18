@@ -1,0 +1,110 @@
+{
+  "name": "final_seed176",
+  "seed": 176,
+  "data": "toy",
+  "n_classes": 5,
+  "n_per_class": 300,
+  "size": 16,
+  "spurious": 0.0,
+  "transform": "toy_oracle",
+  "epochs_run": 40,
+  "converged": true,
+  "stop_reason": "converged",
+  "output_converged_epoch": 40,
+  "memory_converged_epoch": null,
+  "mem_gap": 0.0,
+  "memory_clusters": 5,
+  "acc": 1.0,
+  "nmi_class": 1.0,
+  "before_cleanup": {
+    "acc": 1.0,
+    "clusters": 5,
+    "clusters_ge10": 5,
+    "memory_clusters": 6,
+    "memory_acc": 0.9133333333333333,
+    "mem_gap": 0.08666666666666667
+  },
+  "cleanup": {
+    "mode": "relabel",
+    "merged_slots": 1,
+    "jump": 6896.122139280689,
+    "threshold": 0.000651777139864862,
+    "slot_distances": [
+      0.000651777139864862,
+      4.494734764099121,
+      4.494868278503418,
+      4.702855110168457,
+      4.716939926147461,
+      4.749311447143555,
+      4.749495506286621,
+      4.755720138549805,
+      4.7560529708862305,
+      4.81502628326416,
+      4.845148086547852,
+      4.9252142906188965,
+      4.925262928009033,
+      5.020566940307617,
+      5.064034461975098
+    ],
+    "merges_across_classes": 0,
+    "after": {
+      "acc": 1.0,
+      "clusters": 5,
+      "clusters_ge10": 5,
+      "memory_clusters": 5,
+      "memory_acc": 1.0,
+      "mem_gap": 0.0
+    },
+    "variants": {
+      "merge": {
+        "acc": 1.0,
+        "clusters": 5,
+        "clusters_ge10": 5,
+        "memory_clusters": 5,
+        "memory_acc": 1.0,
+        "mem_gap": 0.0
+      },
+      "relabel": {
+        "acc": 1.0,
+        "clusters": 5,
+        "clusters_ge10": 5,
+        "memory_clusters": 5,
+        "memory_acc": 1.0,
+        "mem_gap": 0.0
+      },
+      "reintroduce": {
+        "acc": 1.0,
+        "clusters": 5,
+        "clusters_ge10": 5,
+        "memory_clusters": 5,
+        "memory_acc": 1.0,
+        "mem_gap": 0.0,
+        "sweeps": 2,
+        "moved": [
+          130,
+          0
+        ],
+        "predict_acc": 1.0,
+        "predict_clusters": 5
+      },
+      "reintroduce_no_open": {
+        "acc": 1.0,
+        "clusters": 5,
+        "clusters_ge10": 5,
+        "memory_clusters": 5,
+        "memory_acc": 1.0,
+        "mem_gap": 0.0,
+        "sweeps": 2,
+        "moved": [
+          130,
+          0
+        ],
+        "predict_acc": 1.0,
+        "predict_clusters": 5
+      }
+    }
+  },
+  "nmi_background": 0.004545757681573722,
+  "nmi_class_background_in_data": 0.004545757681573697,
+  "clusters_used": 5
+}

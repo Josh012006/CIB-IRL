@@ -635,5 +635,24 @@ Point de départ : les 3 sorties cassées par le nettoyage en 5.28 (graines 19, 
 * **Ce que A et C ne corrigent pas.** La politique relue (`predict`) sur la mémoire fermée échoue encore dans 7 runs (4 + 19, 80, 81) pour `reintroduce_no_open` : la préférence pour « ouvrir » dès que des slots sont vides est une faiblesse de la politique hors des états vus à l'entraînement (mémoire pleine), que A et C contournent sans la corriger. Pour assigner des images NOUVELLES avec `predict` sur la mémoire fermée, ce défaut serait à traiter ; non testé.
 * **Limites.** Jouet, $\alpha=1$, une graine = un run, mêmes graines (0 à 99) que 5.28. Les quatre lectures étaient prévues avant le lancement des 100 runs, mais `reintroduce_no_open` vient d'un pilote sur 5 graines (0, 12, 19, 80, 81) et de la lecture sans « ouvrir » de 5.28, faite après avoir vu ces mêmes graines : son avantage sur A (mémoire juste 96 contre 82) est à confirmer sur des graines neuves (100 à 199). Ordre aléatoire des balayages : une seule graine d'ordre par run (`cfg.seed`).
 
+### 5.30 Validation sur 100 graines neuves : A est retenu (2026-10-18)
+Règle fixée avant le lancement (en-tête de `configs/suites/toy_cov_k10_final_ac_val.yml`) : C (`reintroduce_no_open`) est retenu si sa sortie est juste dans au moins autant de runs que A **et** si sa mémoire est juste dans plus de runs que A ; sinon A. Suite `toy_cov_k10_final_ac_val` : graines 100 à 199, mêmes réglages, même code que 5.29 (aucun réglage touché). Résumé : `results/toy_cov_k10_final_ac_val/summary_variants.txt`.
+
+| graines 100 à 199 | sortie juste | mémoire = sortie | slots (moy.) | mémoire juste | perdus par rapport à l'arrêt |
+|---|---|---|---|---|---|
+| à l'arrêt | 98 | 21 | 7,16 | 19 | |
+| `merge` | 98 | 97 | 5,02 | 91 | aucun |
+| **A `relabel`** | **98** | 97 | 5,02 | 91 | aucun |
+| C `reintroduce` | 95 | 100 | 5,07 | 95 | 102, 106, 181 |
+| C `reintroduce_no_open` | 97 | 100 | 4,97 | 97 | 102 |
+
+* **Décision : A.** C sans « ouvrir » a la mémoire la plus juste (97 contre 91) mais perd une sortie juste (97 contre 98) : la condition « au moins autant de sorties justes » n'est pas remplie.
+* **Cumul des 200 graines (0 à 199)**, sortie juste / mémoire juste : A 194 / 173 ; C sans « ouvrir » 193 / 193 ; `merge` 191 / 173 ; C avec « ouvrir » 187 / 187. A et C sans « ouvrir » sont à 1 run l'un de l'autre sur la sortie (194 et 193 sur 200) ; la différence nette est sur la mémoire (193 contre 173), qui n'est pas ce qu'on évalue.
+* **Échecs de A** : 12, 30, 59, 94 (5.29) et 122, 152 (4 clusters, ACC 0,80, déjà faux à l'arrêt), soit 6 sur 200. Aucune fusion entre classes différentes (0 sur 214 fusions dans cette suite).
+* **Graine 102** (juste à l'arrêt, perdue par C) : à l'arrêt la mémoire a 9 slots et une partition juste à 0,68 seulement ; après la fusion, 7 slots, mémoire juste à 0,82 ; les balayages de C descendent à 4 clusters (ACC 0,80) en 3 balayages. C relit la mémoire, A ne lit que la sortie : C hérite des défauts de la mémoire, A non.
+* **Convergence** : 100/100 selon la règle de sortie (epoch min 40, médiane 47, max 100). C avec « ouvrir » atteint le plafond de 20 balayages dans 2 runs, C sans « ouvrir » dans aucun (au plus 3 balayages).
+* **Défaut de la politique relue** : `predict` sur la mémoire fermée par C : 97/100 (comme la sortie de C ici).
+* **Limites.** Jouet, $\alpha=1$, un run par graine, un seul ordre de balayage par run. La règle départage sur la sortie ; elle ne dit rien de l'usage de la mémoire fermée pour assigner des images nouvelles.
+
 ## 4. Données de suivi
 `results/` est versionné dans git (pour documenter les résultats). Suites : `configs/suites/*.yml`, lancées par `scripts/run_suite.py`.

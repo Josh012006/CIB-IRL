@@ -1,0 +1,18 @@
+# VALIDATION of the choice between A (relabel) and C (reintroduce_no_open) on FRESH seeds 100-199 (docs/protocol-decisions.md, 5.29).
+# Same code, same settings and same four readings as toy_cov_k10_final_ac (seeds 0-99); nothing was changed after seeing those results.
+# Decision rule, fixed before the runs: C (reintroduce_no_open) is kept if its output is right in at least as many runs as A's AND its memory
+# is right in more runs than A's; otherwise A. The labels only evaluate. Summary: python scripts/summarize_variants.py results/toy_cov_k10_final_ac_val
+#
+#   python scripts/run_suite.py configs/suites/toy_cov_k10_final_ac_val.yml --cpu-count 2 --skip-existing
+name: toy_cov_k10_final_ac_val
+description: validation on fresh seeds 100-199 of the choice between relabel (A) and reintroduce_no_open (C); same settings as toy_cov_k10_final_ac
+seeds: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199]
+common:
+  data: toy
+  data_params: {spurious: 0.0}
+  transform: toy_oracle
+  configs: [configs/toy.yml]
+  stop: {max_epochs: 300, min_epochs: 40}
+experiments:
+  - name: final
+    set: {num_slots: 10, intent_decorrelate: cov, intent_cov_weight: 3.0, rho: 0.1, neg_floor: 0.1, slot_prior: crp, crp_alpha: 1.0, final_cleanup: true, cleanup_mode: relabel}
