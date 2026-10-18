@@ -721,7 +721,7 @@ Every baseline is fit on the same unlabeled training images as our model and sco
 2. **Pure contrastive learning** (`baselines/contrastive.py`): SimCLR (NT-Xent loss between two views; the representation is then clustered by K-Means) and IIC (mutual information between the cluster probabilities of two views). They receive exactly what our experts receive, the same transformation bank applied twice to an image and the same convolutional backbone, so the question is whether contrastive augmentations *alone* discard the background, with no reward, policy or bottleneck. MoCo v3 is not implemented (it differs from SimCLR by a momentum encoder and a queue). They are trained for a fixed number of epochs: they have no label-free stopping rule.
 3. **Standard multi-intention IRL** (`configs/baselines/irl_noib.yml`): our pipeline without the causal Information Bottleneck, that is $\beta=0$ (no compression) and $\lambda=0$ (no invariance check). Everything else is the same code and the same configuration (experts, intent predictor, reward, policy, CRP prior, stopping rule, clean-up), so the comparison with the model isolates the bottleneck. It stands for the single-step-image version of the temporal IRL model; the sequential training of [Section 5.6](#56-sequential-training-the-encoder-is-trained-first-then-frozen) is not implemented.
 
-The baselines of items 1 and 2 need a number of clusters $K$. Each is run with $K=10$, the upper bound given to our model (which does not know the number of classes), and with the true number of classes ($K=5$ on the toy) as a reference, an advantage that our model does not have. Item 3 has $K=10$ slots like the model.
+The baselines of items 1 and 2 need a number of clusters $K$. Each is run with $K=10$, the upper bound given to our model, which does not know the number of classes: giving the true number would be an advantage that the model does not have, and it is rarely known in practice. Item 3 has $K=10$ slots like the model.
 
 ### 9.3 Metrics
 
@@ -845,8 +845,8 @@ The difficulty is not that the pixels are dominated by the background. If the nu
 - **Seeds.** 200 independent runs (seeds 0 to 199). Hyperparameters were chosen on seeds 0 to 9 at most, and the choice between two ways of closing the memory was made on seeds 0 to 99 and confirmed on 100 to 199 (docs 5.30): seeds 100 to 199 are fresh for every choice.
 - **Train and test.** The model clusters the 1500 unlabeled images of its seed (**train**, transductive). The **test partition** is made of 1500 new images of the same classes, drawn with another generator and assigned by the frozen model against the memory of the end of training ([Section 9.4](#94-train-and-test-partitions)), under three backgrounds: `iid` (random colour as in training), `aligned` (the background of a class is its colour), `inverted` (the background of a class is the colour of another class). Reading the frozen model on its own training images reproduces the saved output in 200 runs out of 200.
 - **Metrics.** Those of [Section 9.3](#93-metrics). The worst group is a (class, coarse background colour) pair with at least 10 images; a run is *right* when its output has exactly 5 clusters and ACC $=1$.
-- **Methods and training regimes.** CIB-IRL and the three baselines of [Section 9.2](#92-baselines) are scored on these partitions: K-Means and GMM on pixels, SimCLR and IIC trained with the transformation bank of the model, and the pipeline with $\beta=\lambda=0$. Each is trained twice, on the benchmark as it is ($s=0$) and with a colour shortcut in training ($s=0.9$, [Section 9.4](#94-train-and-test-partitions)); the baselines that need $K$ are run with $K=10$ and $K=5$. Table 1 and the filled cells of Table 2 are the only measurements so far.
-- **What the oracle bank implies.** Every view of a method that learns from views is made by redrawing the background independently of the class, so SimCLR, IIC, the pipeline with $\beta=\lambda=0$ and CIB-IRL are expected to ignore the shortcut by construction; K-Means and GMM, which see no views, are the methods that can follow it. What separates the bottleneck from the other methods that use views needs a bank that does not know the nuisance (`generic`). Which bank the comparison uses is to be decided before it is run.
+- **Methods and training regimes.** CIB-IRL and the three baselines of [Section 9.2](#92-baselines) are scored on these partitions: K-Means and GMM on pixels, SimCLR and IIC trained with the transformation bank of the model, and the pipeline with $\beta=\lambda=0$. Each is trained twice, on the benchmark as it is ($s=0$) and with a colour shortcut in training ($s=0.9$, the highest level, [Section 9.4](#94-train-and-test-partitions)); the baselines that need $K$ are run with $K=10$. For an exact comparison, all of them are run on the same 200 seeds (0 to 199, hence the same 200 datasets), SimCLR and IIC for a fixed 300 epochs (the maximum given to our model, which stops earlier by its own rule), and the baseline with $\beta=\lambda=0$ with the same stopping rule as the model. Table 1 and the filled cells of Table 2 are the only measurements so far.
+- **What the oracle bank implies.** Every view of a method that learns from views is made by redrawing the background independently of the class, so SimCLR, IIC, the pipeline with $\beta=\lambda=0$ and CIB-IRL are expected to ignore the shortcut by construction; K-Means and GMM, which see no views, are the methods that can follow it. What would separate the bottleneck from the other methods that use views is a bank that does not know the nuisance (`generic`); it is not part of this comparison. SimCLR, IIC and the baseline with $\beta=\lambda=0$ use the same oracle bank as the model, since it is the same dataset and the comparison is meant to be exact.
 
 #### 11.1.5 Results
 
@@ -870,9 +870,8 @@ The four columns are identical seed by seed: on each of the 200 seeds, the ACC i
 
 **Table 2. Comparison with the baselines** (toy, seeds 0 to 199, mean $\pm$ standard deviation; "right" = 5 clusters and ACC $=1$). "Not run" cells are defined by the protocol above and filled by `configs/suites/toy_compare.yml`.
 
-| Method | $K$ given | Clean ($s=0$): right (train) | Clean: ACC (train) | Clean: $\Delta\mathrm{ACC}$ | Shortcut ($s=0.9$): right (train) | Shortcut: ACC (train) | Shortcut: $\Delta\mathrm{ACC}$ |
+| Method | $K$ | Clean ($s=0$): right (train) | Clean: ACC (train) | Clean: $\Delta\mathrm{ACC}$ | Shortcut ($s=0.9$): right (train) | Shortcut: ACC (train) | Shortcut: $\Delta\mathrm{ACC}$ |
 |---|---|---|---|---|---|---|---|
-| K-Means on pixels | 5 | 200 / 200 | $1.000\pm0.000$ | not run | not run | not run | not run |
 | K-Means on pixels | 10 | 0 / 200 | $0.567\pm0.039$ | not run | not run | not run | not run |
 | GMM on pixels | 10 | not run | not run | not run | not run | not run | not run |
 | SimCLR + K-Means | 10 | not run | not run | not run | not run | not run | not run |
@@ -880,9 +879,9 @@ The four columns are identical seed by seed: on each of the 200 seeds, the ACC i
 | Standard IRL ($\beta=\lambda=0$) | 10 slots | not run | not run | not run | not run | not run | not run |
 | **CIB-IRL** | 10 slots | 194 / 200 | $0.993\pm0.042$ | $0.000\pm0.000$ | not run | not run | not run |
 
-ACC (train) is measured on the training images; for CIB-IRL it equals the ACC on the three test sets (Table 1). $\Delta\mathrm{ACC}$ needs the three test sets, on which the K-Means rows have not been scored yet. For K-Means on the clean training images, $\mathrm{NMI}(\text{cluster},\text{class})$ is $1.000$ at $K=5$ and $0.843$ at $K=10$, and $\mathrm{NMI}(\text{cluster},\text{background})$ is $0.0039$ and $0.159$. The $K=5$ runs of GMM, SimCLR and IIC are in the suite and join the table once the comparison is decided.
+ACC (train) is measured on the training images; for CIB-IRL it equals the ACC on the three test sets (Table 1). $\Delta\mathrm{ACC}$ needs the three test sets, on which the K-Means rows have not been scored yet. For K-Means with $K=10$ on the clean training images, $\mathrm{NMI}(\text{cluster},\text{class})$ is $0.843$ and $\mathrm{NMI}(\text{cluster},\text{background})$ is $0.159$. With the true number of clusters ($K=5$) K-Means solves the toy (Section 11.1.3); that case is not in the table.
 
-On this toy the pixels are enough when the number of classes is known; the pipeline gets the same partition from an upper bound of twice the number of classes, with no label and at no cost in leakage.
+The CIB-IRL clean cells are the 200 runs of Table 1. The pipeline gets the right partition from an upper bound of twice the number of classes, with no label and at no cost in leakage.
 
 **Table 3. What the clean-up and the stopping rule do** (200 seeds).
 
@@ -1057,7 +1056,7 @@ Not run yet: the experiments are to be discussed first. Everything below is wire
 ```
 # baseline 1 and 2, one seed (the contrastive baselines need the transformation bank)
 python scripts/run_baseline.py --method kmeans --data toy --set num_clusters=10
-python scripts/run_baseline.py --method simclr --data toy --transform toy_oracle --set num_clusters=10 epochs=100
+python scripts/run_baseline.py --method simclr --data toy --transform toy_oracle --set num_clusters=10 epochs=300
 python scripts/run_baseline.py --method iic    --data toy --transform toy_oracle --data-set spurious=0.9 --set seed=3
 
 # baseline 3: our trainer without the bottleneck
@@ -1065,17 +1064,18 @@ python scripts/run_experiment.py --data toy --transform toy_oracle --config conf
        --stop-set max_epochs=300 min_epochs=40
 ```
 
-The comparison of Table 2 is one suite of 20 experiments (10 methods $\times$ $s\in\\{0,0.9\\}$). List a part of it before launching:
+The comparison of Table 2 is one suite of 11 experiments (6 methods $\times$ $s\in\\{0,0.9\\}$, minus CIB-IRL at $s=0$, whose 200 runs exist): $K=10$, seeds 0 to 199 everywhere, 300 epochs for SimCLR and IIC. List a part of it before launching:
 
 ```
-python scripts/run_suite.py configs/suites/toy_compare.yml --only kmeans_k5_clean kmeans_k10_clean --seeds 0 1 2 --dry-run
-python scripts/run_suite.py configs/suites/toy_compare.yml --only kmeans_k5_clean kmeans_k10_clean --cpu-count 2
+python scripts/run_suite.py configs/suites/toy_compare.yml --only kmeans_k10_clean simclr_k10_clean --seeds 0 1 2 --dry-run
+python scripts/run_suite.py configs/suites/toy_compare.yml --only kmeans_k10_clean gmm_k10_clean kmeans_k10_spur90 gmm_k10_spur90 --cpu-count 2
 
 # our model and baseline 3 are scored on the test sets afterwards; the baselines score themselves
-for e in final_clean final_spur90 irl_noib_clean irl_noib_spur90; do
+for e in final_spur90 irl_noib_clean irl_noib_spur90; do
   python scripts/eval_heldout.py results/toy_compare --experiment $e --out results/toy_compare/heldout_$e
 done
-python scripts/compare_methods.py results/toy_compare results/toy_compare/heldout_*/heldout_metrics.json --out results/toy_compare/table.md
+python scripts/compare_methods.py results/toy_compare results/toy_compare/heldout_*/heldout_metrics.json \
+       results/toy_final_report/heldout_metrics.json --out results/toy_compare/table.md
 ```
 
 ### 13.5 Other benchmarks

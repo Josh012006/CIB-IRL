@@ -1,50 +1,52 @@
-# THE COMPARISON on the toy benchmark (README Section 11.1.5): our model and the three baselines of README Section 9.2, each trained
-# twice, on the benchmark as it is (spurious 0) and with a colour shortcut (spurious 0.9: in 90 % of the training images the
+# THE COMPARISON on the toy benchmark (README Section 11.1.5, Table 2): CIB-IRL and the three baselines of README Section 9.2, each
+# trained on the benchmark as it is (spurious 0) and with a colour shortcut (spurious 0.9: in 90 % of the training images the
 # background is the colour of the class), and scored on the same partitions: the train images and the three test sets
 # iid / aligned / inverted (eval/protocol.py).
 #
-# NOT RUN YET: the experiments are to be discussed first (which K, which transformation bank, how many seeds). The suite is a
-# starting point; launch a part of it with --only and a few seeds:
+# Decisions (2026-10-18):
+#   - K = 10 for every baseline (the upper bound given to our model): the number of classes is not given. No K = 5 runs.
+#   - the methods that use views (simclr, iic, irl_noib) use toy_oracle, the bank of our model: same dataset, exact comparison.
+#   - spurious 0.9 only (the highest level), plus the benchmark as it is.
+#   - seeds 0-199 for every experiment: the same 200 datasets and the same seeds everywhere.
+#   - simclr and iic: 300 epochs, fixed (they have no label-free stopping rule); irl_noib: same stopping rule as our model, max 300.
+#
+# CIB-IRL at spurious 0 is NOT in this suite: its 200 runs already exist (results/toy_cov_k10_final_ac*, held-out evaluation in
+# results/toy_final_report/heldout_metrics.json), same seeds 0-199 and same configuration. It enters the table as a file.
+#
+# NOT RUN YET (2026-10-18). Launch a part of it with --only and a few seeds, then everything:
 #
 #   python scripts/run_suite.py configs/suites/toy_compare.yml --only kmeans_k10_clean simclr_k10_clean --seeds 0 1 2 --dry-run
-#   python scripts/run_suite.py configs/suites/toy_compare.yml --only kmeans_k5_clean kmeans_k10_clean --cpu-count 2     # cheap
-#   python scripts/eval_heldout.py results/toy_compare --experiment final_spur90 --out results/toy_compare/heldout_final_spur90
-#   python scripts/compare_methods.py results/toy_compare --out results/toy_compare/table.md
+#   python scripts/run_suite.py configs/suites/toy_compare.yml --only kmeans_k10_clean gmm_k10_clean kmeans_k10_spur90 gmm_k10_spur90 --cpu-count 2   # cheap
+#   for e in final_spur90 irl_noib_clean irl_noib_spur90; do
+#     python scripts/eval_heldout.py results/toy_compare --experiment $e --out results/toy_compare/heldout_$e
+#   done
+#   python scripts/compare_methods.py results/toy_compare results/toy_compare/heldout_*/heldout_metrics.json \
+#          results/toy_final_report/heldout_metrics.json --out results/toy_compare/table.md
 #
 # Names: <method>_k<K given to the method>_<training regime>; "clean" = spurious 0, "spur90" = spurious 0.9.
-#   baseline 1   kmeans, gmm        fixed features (pixels), K = 5 (the true number: a reference) and K = 10 (our upper bound)
-#   baseline 2   simclr, iic        trained with the same transformation bank as our model's experts, then clustered
+#   baseline 1   kmeans, gmm        fixed features (pixels), K = 10
+#   baseline 2   simclr, iic        trained with the same transformation bank as our model's experts, then clustered; K = 10
 #   baseline 3   irl_noib           our trainer with beta = 0 and lam = 0 (configs/baselines/irl_noib.yml), through run_experiment.py
-#   ours         final              configs/benchmarks/toy.yml
-# Our model and baseline 3 are the heavy runs (minutes each); the others take seconds to a minute.
+#   ours         final_spur90       configs/benchmarks/toy.yml with the colour shortcut
+# Our model and baseline 3 are the heavy runs (about 3 to 4 minutes each), then iic and simclr (4 to 10 minutes); kmeans and gmm take seconds.
 name: toy_compare
-description: toy benchmark, our model and the three baselines, trained without and with a colour shortcut
+description: toy benchmark, our model and the three baselines (K = 10), trained without and with a colour shortcut
 seeds: "0-199"
 common:
   data: toy
 experiments:
   # ---- trained on the benchmark as it is ----------------------------------------------------------------------------------
-  - {name: kmeans_k5_clean,  method: kmeans, set: {num_clusters: 5},  data_params: {spurious: 0.0}}
   - {name: kmeans_k10_clean, method: kmeans, set: {num_clusters: 10}, data_params: {spurious: 0.0}}
-  - {name: gmm_k5_clean,     method: gmm,    set: {num_clusters: 5},  data_params: {spurious: 0.0}}
   - {name: gmm_k10_clean,    method: gmm,    set: {num_clusters: 10}, data_params: {spurious: 0.0}}
-  - {name: simclr_k5_clean,  method: simclr, transform: toy_oracle, set: {num_clusters: 5},  data_params: {spurious: 0.0}}
-  - {name: simclr_k10_clean, method: simclr, transform: toy_oracle, set: {num_clusters: 10}, data_params: {spurious: 0.0}}
-  - {name: iic_k5_clean,     method: iic,    transform: toy_oracle, set: {num_clusters: 5},  data_params: {spurious: 0.0}}
-  - {name: iic_k10_clean,    method: iic,    transform: toy_oracle, set: {num_clusters: 10}, data_params: {spurious: 0.0}}
+  - {name: simclr_k10_clean, method: simclr, transform: toy_oracle, set: {num_clusters: 10, epochs: 300}, data_params: {spurious: 0.0}}
+  - {name: iic_k10_clean,    method: iic,    transform: toy_oracle, set: {num_clusters: 10, epochs: 300}, data_params: {spurious: 0.0}}
   - {name: irl_noib_clean,   transform: toy_oracle, data_params: {spurious: 0.0},
      configs: [configs/benchmarks/toy.yml, configs/baselines/irl_noib.yml], stop: {max_epochs: 300, min_epochs: 40}}
-  - {name: final_clean,      transform: toy_oracle, data_params: {spurious: 0.0},
-     configs: [configs/benchmarks/toy.yml], stop: {max_epochs: 300, min_epochs: 40}}
   # ---- trained with a colour shortcut (spurious 0.9) ----------------------------------------------------------------------
-  - {name: kmeans_k5_spur90,  method: kmeans, set: {num_clusters: 5},  data_params: {spurious: 0.9}}
   - {name: kmeans_k10_spur90, method: kmeans, set: {num_clusters: 10}, data_params: {spurious: 0.9}}
-  - {name: gmm_k5_spur90,     method: gmm,    set: {num_clusters: 5},  data_params: {spurious: 0.9}}
   - {name: gmm_k10_spur90,    method: gmm,    set: {num_clusters: 10}, data_params: {spurious: 0.9}}
-  - {name: simclr_k5_spur90,  method: simclr, transform: toy_oracle, set: {num_clusters: 5},  data_params: {spurious: 0.9}}
-  - {name: simclr_k10_spur90, method: simclr, transform: toy_oracle, set: {num_clusters: 10}, data_params: {spurious: 0.9}}
-  - {name: iic_k5_spur90,     method: iic,    transform: toy_oracle, set: {num_clusters: 5},  data_params: {spurious: 0.9}}
-  - {name: iic_k10_spur90,    method: iic,    transform: toy_oracle, set: {num_clusters: 10}, data_params: {spurious: 0.9}}
+  - {name: simclr_k10_spur90, method: simclr, transform: toy_oracle, set: {num_clusters: 10, epochs: 300}, data_params: {spurious: 0.9}}
+  - {name: iic_k10_spur90,    method: iic,    transform: toy_oracle, set: {num_clusters: 10, epochs: 300}, data_params: {spurious: 0.9}}
   - {name: irl_noib_spur90,   transform: toy_oracle, data_params: {spurious: 0.9},
      configs: [configs/benchmarks/toy.yml, configs/baselines/irl_noib.yml], stop: {max_epochs: 300, min_epochs: 40}}
   - {name: final_spur90,      transform: toy_oracle, data_params: {spurious: 0.9},

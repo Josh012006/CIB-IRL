@@ -2,7 +2,7 @@
 
     python scripts/run_baseline.py --method kmeans --data toy --set num_clusters=5
     python scripts/run_baseline.py --method kmeans --data toy --set num_clusters=10
-    python scripts/run_baseline.py --method simclr --data toy --transform toy_oracle --set num_clusters=10 epochs=100
+    python scripts/run_baseline.py --method simclr --data toy --transform toy_oracle --set num_clusters=10 epochs=300
     python scripts/run_baseline.py --method iic    --data toy --transform toy_oracle --data-set spurious=0.9 --set seed=3
     python scripts/run_baseline.py --method kmeans --data colored_mnist --set features=resnet18 num_clusters=10
 

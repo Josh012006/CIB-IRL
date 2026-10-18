@@ -209,23 +209,39 @@ def test_baseline_3_changes_only_beta_and_lambda():
 
 
 # ---- the comparison suite and the table --------------------------------------------------------------------
-def test_comparison_suite_covers_four_methods_in_two_regimes():
+def test_comparison_suite_follows_the_decisions_of_2026_10_18():
     suite = run_suite.load_suite(ROOT / "configs" / "suites" / "toy_compare.yml")
     exps = {e["name"]: e for e in suite["experiments"]}
-    assert len(exps) == 20 and len(suite["seeds"]) == 200
+    assert suite["seeds"] == list(range(200)) and all("seeds" not in e for e in exps.values())     # the same seeds everywhere
+    assert len(exps) == 11 and not any("k5" in n for n in exps)                                    # K = 10 only
+    assert all(e["set"]["num_clusters"] == 10 for e in exps.values() if e.get("method") in run_suite.BASELINES)
     for regime, s in (("clean", 0.0), ("spur90", 0.9)):
-        for stem in ("kmeans_k5", "kmeans_k10", "gmm_k5", "gmm_k10", "simclr_k5", "simclr_k10", "iic_k5", "iic_k10", "irl_noib", "final"):
+        for stem in ("kmeans_k10", "gmm_k10", "simclr_k10", "iic_k10", "irl_noib"):
             assert exps[f"{stem}_{regime}"]["data_params"]["spurious"] == s
-    assert exps["final_clean"]["configs"] == ["configs/benchmarks/toy.yml"]
+    assert "final_clean" not in exps and exps["final_spur90"]["data_params"]["spurious"] == 0.9    # final_clean = the 200 existing runs
+    assert exps["final_spur90"]["configs"] == ["configs/benchmarks/toy.yml"]
     assert exps["irl_noib_spur90"]["configs"][-1] == "configs/baselines/irl_noib.yml"
-    assert exps["simclr_k10_clean"]["transform"] == "toy_oracle" and "transform" not in exps["kmeans_k5_clean"]
+    for n in ("simclr_k10_clean", "iic_k10_spur90"):
+        assert exps[n]["transform"] == "toy_oracle" and exps[n]["set"]["epochs"] == 300             # the bank of the model, 300 epochs
+    assert "transform" not in exps["kmeans_k10_clean"]
+    assert exps["irl_noib_clean"]["transform"] == exps["final_spur90"]["transform"] == "toy_oracle"
+    assert exps["irl_noib_clean"]["stop"] == exps["final_spur90"]["stop"] == {"max_epochs": 300, "min_epochs": 40}
 
 
 def test_comparison_suite_dry_run_builds_the_right_commands():
-    res = run_suite_dry("configs/suites/toy_compare.yml", "--only", "kmeans_k5_clean", "iic_k10_spur90", "irl_noib_clean", "--seeds", "0", "1")
+    res = run_suite_dry("configs/suites/toy_compare.yml", "--only", "kmeans_k10_clean", "iic_k10_spur90", "irl_noib_clean", "--seeds", "0", "1")
     assert "6 runs would be launched" in res.stdout, res.stdout + res.stderr
     assert "run_baseline.py --method kmeans" in res.stdout and "run_baseline.py --method iic" in res.stdout
     assert "run_experiment.py" in res.stdout and "configs/baselines/irl_noib.yml" in res.stdout
+    assert "epochs=300" in res.stdout
+
+
+def test_the_existing_report_enters_the_table_as_the_clean_row_of_our_model():
+    report = ROOT / "results" / "toy_final_report" / "heldout_metrics.json"
+    if not report.exists():
+        pytest.skip("results/toy_final_report is not in this checkout")
+    row = compare_methods.summarize(compare_methods.collect_rows([report]))[0]
+    assert row["method"] == "final" and row["runs"] == 200 and row["train"]["right"] == 194
 
 
 def run_suite_dry(*args):

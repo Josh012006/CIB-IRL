@@ -36,7 +36,7 @@ class BaselineConfig:
     embed_dim: int = 128            # size of the representation (output of the CNN) that is clustered
     proj_dim: int = 64              # SimCLR projection head
     temperature: float = 0.5        # SimCLR
-    epochs: int = 100               # fixed number of epochs: there is no label-free stopping rule for these methods
+    epochs: int = 300               # fixed number of epochs: there is no label-free stopping rule for these methods
     batch_size: int = 256
     lr: float = 1e-3
     weight_decay: float = 1e-5
