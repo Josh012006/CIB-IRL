@@ -5,7 +5,7 @@
     python scripts/compare_methods.py results/toy_compare --out results/toy_compare/table.md --csv results/toy_compare/table.csv
 
 Each input is either a folder (every <run>/heldout.json under it, written by scripts/run_baseline.py) or a JSON file holding a
-list of such rows (heldout_metrics.json, written by scripts/eval_heldout.py for our model and for baseline 3). Rows are grouped by
+list of such rows (heldout_metrics.json, written by scripts/eval_heldout.py for our model and, later, its ablations). Rows are grouped by
 run name without the `_seed<k>` suffix: that name is the row label (see the names in configs/suites/toy_compare.yml).
 
 Columns: runs, then for the train images and each test mode the number of RIGHT outputs (exactly the true number of clusters

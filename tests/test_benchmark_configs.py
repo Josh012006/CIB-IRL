@@ -58,6 +58,6 @@ def test_every_dataset_default_config_exists_and_every_benchmark_has_one():
     assert set(datasets.BENCHMARKS) <= set(datasets.DEFAULT_CONFIG)
 
 
-def test_baseline_3_overlay_is_a_partial_config():
+def test_no_bottleneck_overlay_is_a_partial_config():
     raw = yaml.safe_load((ROOT / "configs" / "baselines" / "irl_noib.yml").read_text(encoding="utf-8"))
     assert raw == {"beta": 0.0, "lam": 0.0}

@@ -6,8 +6,8 @@
     python scripts/run_baseline.py --method iic    --data toy --transform toy_oracle --data-set spurious=0.9 --set seed=3
     python scripts/run_baseline.py --method kmeans --data colored_mnist --set features=resnet18 num_clusters=10
 
-Baseline 3 (standard multi-intention IRL) is OUR trainer without the Information Bottleneck: it runs through
-scripts/run_experiment.py with configs/baselines/irl_noib.yml. Only items 1 and 2 are here.
+Our own model runs through scripts/run_experiment.py (the no-bottleneck ablation too, with configs/baselines/irl_noib.yml).
+Only the two baselines of README Section 9.2 are here.
 
 The method is fit on the unlabeled TRAIN images of the benchmark (`--data-set` gives the shortcut level: spurious=0.9), then each
 partition is scored with eval/protocol.py: the train images and every test mode of the benchmark (iid, aligned, inverted).

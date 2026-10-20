@@ -220,8 +220,8 @@ def test_run_baseline_rejects_unknown_benchmark_and_keys(tmp_path):
         run(tmp_path, "--method", "kmeans", "--set", "clusters=3")
 
 
-# ---- baseline 3 = our trainer without the bottleneck ------------------------------------------------------
-def test_baseline_3_changes_only_beta_and_lambda():
+# ---- ablation: our trainer without the bottleneck --------------------------------------------------------
+def test_no_bottleneck_ablation_changes_only_beta_and_lambda():
     base = TrainConfig.from_yaml(ROOT / "configs" / "benchmarks" / "toy.yml")
     noib = TrainConfig.from_yaml(ROOT / "configs" / "benchmarks" / "toy.yml", ROOT / "configs" / "baselines" / "irl_noib.yml")
     diff = {k for k in vars(base) if getattr(base, k) != getattr(noib, k)}
@@ -229,30 +229,28 @@ def test_baseline_3_changes_only_beta_and_lambda():
 
 
 # ---- the comparison suite and the table --------------------------------------------------------------------
-def test_comparison_suite_follows_the_decisions_of_2026_10_18():
+def test_comparison_suite_follows_the_decisions_of_2026_10_18_and_20():
     suite = run_suite.load_suite(ROOT / "configs" / "suites" / "toy_compare.yml")
     exps = {e["name"]: e for e in suite["experiments"]}
     assert suite["seeds"] == list(range(200)) and all("seeds" not in e for e in exps.values())     # the same seeds everywhere
-    assert len(exps) == 11 and not any("k5" in n for n in exps)                                    # K = 10 only
+    assert len(exps) == 9 and not any("k5" in n or "irl_noib" in n for n in exps)                    # K = 10 only, two baselines
     assert all(e["set"]["num_clusters"] == 10 for e in exps.values() if e.get("method") in run_suite.BASELINES)
     for regime, s in (("clean", 0.0), ("spur90", 0.9)):
-        for stem in ("kmeans_k10", "gmm_k10", "simclr_k10", "iic_k10", "irl_noib"):
+        for stem in ("kmeans_k10", "gmm_k10", "simclr_k10", "iic_k10"):
             assert exps[f"{stem}_{regime}"]["data_params"]["spurious"] == s
     assert "final_clean" not in exps and exps["final_spur90"]["data_params"]["spurious"] == 0.9    # final_clean = the 200 existing runs
     assert exps["final_spur90"]["configs"] == ["configs/benchmarks/toy.yml"]
-    assert exps["irl_noib_spur90"]["configs"][-1] == "configs/baselines/irl_noib.yml"
     for n in ("simclr_k10_clean", "iic_k10_spur90"):
         assert exps[n]["transform"] == "toy_oracle" and exps[n]["set"]["epochs"] == 300             # the bank of the model, 300 epochs
     assert "transform" not in exps["kmeans_k10_clean"]
-    assert exps["irl_noib_clean"]["transform"] == exps["final_spur90"]["transform"] == "toy_oracle"
-    assert exps["irl_noib_clean"]["stop"] == exps["final_spur90"]["stop"] == {"max_epochs": 300, "min_epochs": 40}
+    assert exps["final_spur90"]["transform"] == "toy_oracle" and exps["final_spur90"]["stop"] == {"max_epochs": 300, "min_epochs": 40}
 
 
 def test_comparison_suite_dry_run_builds_the_right_commands():
-    res = run_suite_dry("configs/suites/toy_compare.yml", "--only", "kmeans_k10_clean", "iic_k10_spur90", "irl_noib_clean", "--seeds", "0", "1")
+    res = run_suite_dry("configs/suites/toy_compare.yml", "--only", "kmeans_k10_clean", "iic_k10_spur90", "final_spur90", "--seeds", "0", "1")
     assert "6 runs would be launched" in res.stdout, res.stdout + res.stderr
     assert "run_baseline.py --method kmeans" in res.stdout and "run_baseline.py --method iic" in res.stdout
-    assert "run_experiment.py" in res.stdout and "configs/baselines/irl_noib.yml" in res.stdout
+    assert "run_experiment.py" in res.stdout
     assert "epochs=300" in res.stdout
 
 
@@ -326,7 +324,7 @@ def test_fewer_clusters_than_classes_is_scored_not_a_crash():
     assert not is_right(m, 5)
 
 
-# ---- our model and baseline 3 through the same held-out evaluation, then the table ----------------------------
+# ---- our model and its no-bottleneck variant through the same held-out evaluation, then the table ----------------------------
 def tiny_cibirl_run(out_root, experiment, extra_configs=()):
     import subprocess
     cmd = [sys.executable, str(ROOT / "scripts" / "run_experiment.py"), "--data", "toy", "--data-set", "n_per_class=40", "spurious=0.0",
@@ -336,7 +334,7 @@ def tiny_cibirl_run(out_root, experiment, extra_configs=()):
     assert res.returncode == 0, res.stderr[-2000:]
 
 
-def test_ours_and_baseline_3_and_baseline_1_end_to_end_into_one_table(tmp_path):
+def test_ours_its_ablation_and_a_baseline_end_to_end_into_one_table(tmp_path):
     import eval_heldout
     suite = tmp_path / "suite"
     tiny_cibirl_run(suite, "final")

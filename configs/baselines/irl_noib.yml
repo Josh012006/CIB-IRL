@@ -1,4 +1,4 @@
-# BASELINE 3 (README Section 9.2): standard multi-intention IRL, i.e. the pipeline WITHOUT the causal Information Bottleneck.
+# ABLATION (README Section 10): the pipeline WITHOUT the causal Information Bottleneck (beta = 0, lam = 0).
 # Applied on top of a benchmark config: nothing else changes (same experts, intent, reward, policy, CRP prior, stopping rule and
 # final clean-up), so the comparison isolates the contribution of the bottleneck encoder.
 #

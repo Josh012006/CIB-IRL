@@ -85,6 +85,7 @@ Image datasets are full of spurious cues (background, texture, style) that are e
 | Geometric / statistical clustering | K-Means, GMM | Simple, fast | Depends entirely on the embedding geometry |
 | Self-supervised learning | SimCLR, MoCo v3, CLIP | Strong, structured latent spaces | Augmentations alone do not guarantee that backgrounds are discarded |
 | Multi-intention / meta IRL | Babeş-Vroman et al. 2011, PEMIRL | Separates unlabeled demonstrations by inferring several reward functions | Designed for **temporal trajectories** of real experts, not static images |
+| IRL for grouping images | He et al. 2018 (face grouping) | Learns a merge / not-merge policy and its reward on photo albums | The expert is built from ground-truth identity partitions: **supervised at training time**; an existing clustering algorithm proposes the candidate merges |
 
 ### 2.2 The gap
 
@@ -96,7 +97,17 @@ Image datasets are full of spurious cues (background, texture, style) that are e
 
 ## 3. Background & Reading List
 
-Six papers cover the theoretical foundations of the framework:
+Six papers cover the theoretical foundations of the framework and its closest work:
+
+- [ ] He, Y., Cao, K., Li, C., & Loy, C. C. (2018).
+  *Merge or Not? Learning to Group Faces via Imitation Learning*. AAAI 2018.
+  [PDF](https://arxiv.org/pdf/1707.03986.pdf)
+  Closest idea — the only work found that uses inverse reinforcement learning to group images:
+  sequential merge / not-merge decisions with a reward learned from an expert. The expert is built
+  from ground-truth identity partitions of the training albums, so it is supervised at training time
+  (no label is needed at test time), and the candidate merges come from an existing clustering
+  algorithm (K-Means, hierarchical, GDL). We build the experts from transformations with no label and
+  let the policy build the clusters.
 
 - [x] Yu, L., Yu, T., Finn, C., & Ermon, S. (2019).
   *Meta-Inverse Reinforcement Learning with Probabilistic Context Variables*. NeurIPS 2019.
@@ -451,7 +462,7 @@ Two stages, nothing flowing back from the second to the first.
 | Strengths | Matches the definition of the method; the encoder is shaped by what clustering needs | Simple, stable, modular; the IRL / RL stage can be re-run without retraining the encoder |
 | Risks | Moving targets, instability, need for warm-up | Frozen stage-1 errors; the encoder may drop cluster-relevant bits or keep spurious ones |
 
-Sequential training is the natural control for the claim that *joint* optimization matters (see [Ablations](#10-ablations)); with $\beta=0$ it reduces to the "standard multi-intention IRL" baseline.
+Sequential training is the natural control for the claim that *joint* optimization matters (see [Ablations](#10-ablations)).
 
 ### 5.7 Stopping rule and final clean-up
 
@@ -717,18 +728,20 @@ What can go wrong, how it shows, and which guard or monitor addresses it. The me
 
 ### 9.2 Baselines
 
-Every baseline is fit on the same unlabeled training images as our model and scored on the same partitions by the same code (`eval/protocol.py`, [Section 9.4](#94-train-and-test-partitions)). No label reaches them.
+Every baseline is fit on the same unlabeled training images as our model and scored on the same partitions by the same code (`eval/protocol.py`, [Section 9.4](#94-train-and-test-partitions)). No label reaches them. There are two groups.
 
 1. **Geometric / statistical clustering** (`baselines/clustering.py`): K-Means and a diagonal GMM on fixed features: the raw pixels (toy), or the features of an ImageNet ResNet (Colored MNIST, Waterbirds; written, not run). ViT embeddings are not implemented. Nothing is trained and no transformation is used.
 2. **Pure contrastive learning** (`baselines/contrastive.py`): SimCLR (NT-Xent loss between two views; the representation is then clustered by K-Means) and IIC (mutual information between the cluster probabilities of two views). They receive exactly what our experts receive, the same transformation bank applied twice to an image and the same convolutional backbone, so the question is whether contrastive augmentations *alone* discard the background, with no reward, policy or bottleneck. MoCo v3 is not implemented (it differs from SimCLR by a momentum encoder and a queue). They are trained for a fixed number of epochs: they have no label-free stopping rule.
-3. **Standard multi-intention IRL** (`configs/baselines/irl_noib.yml`): our pipeline without the causal Information Bottleneck, that is $\beta=0$ (no compression) and $\lambda=0$ (no invariance check). Everything else is the same code and the same configuration (experts, intent predictor, reward, policy, CRP prior, stopping rule, clean-up), so the comparison with the model isolates the bottleneck. It stands for the single-step-image version of the temporal IRL model; the sequential training of [Section 5.6](#56-sequential-training-the-encoder-is-trained-first-then-frozen) is not implemented.
+Both groups need a number of clusters $K$. Each is run with $K=10$, the upper bound given to our model, which does not know the number of classes: giving the true number would be an advantage that the model does not have, and it is rarely known in practice.
 
-The baselines of items 1 and 2 need a number of clusters $K$. Each is run with $K=10$, the upper bound given to our model, which does not know the number of classes: giving the true number would be an advantage that the model does not have, and it is rarely known in practice. Item 3 has $K=10$ slots like the model.
+**Prior knowledge.** SimCLR and IIC need a transformation bank, as our model does, and receive the same one (the bank of the toy redraws its background, Section 11.1). The choice of the transformations is part of these methods: it is how one tells them which part of the image is a nuisance (SimCLR composes crops with colour distortion; IIC uses Sobel filtering to discourage clustering by colour). K-Means and GMM use no transformation. Among the methods that learn from views, the prior is therefore the same; K-Means and GMM, which see no views, show what the images alone give.
+
+**No multi-intention IRL baseline.** The existing methods (Babeş-Vroman et al. 2011, PEMIRL, InfoGAIL and their successors) cluster trajectories of states and actions, in control tasks, and none clusters static images without labels. The only IRL method that groups images, He et al. 2018 ([Section 3](#3-background--reading-list)), learns its reward from ground-truth identity partitions. None is a baseline for the problem of this project; the ablations of [Section 10](#10-ablations) measure the contribution of each component of the model instead.
 
 ### 9.3 Metrics
 
 - **Clustering Accuracy (ACC)** with optimal (Hungarian) cluster-to-label matching, and **Normalized Mutual Information (NMI)**, both measured strictly against the true semantic labels (bird species, digit ID), ignoring background.
-- **Out-of-distribution (OOD) robustness:** drop in performance ($\Delta\mathrm{ACC}$) between the correlated test set and the test set where the background correlation is inverted.
+- **Out-of-distribution (OOD) robustness:** drop in performance ($\Delta\mathrm{ACC}$) between the correlated test set and the test set where the background correlation is inverted, with the cluster-to-class matching of the training partition ([Section 9.4](#94-train-and-test-partitions)).
 - **Worst-group ACC** (Waterbirds): accuracy on the least-represented (class, background) group.
 - **Spurious leakage:** $\mathrm{NMI}(\text{cluster},\text{background})$. Lower is better; a model that clusters by background scores high. It is read on the test set whose background is independent of the class (`iid`, below): where background and class are tied (aligned, inverted), a perfect partition by class has a high $\mathrm{NMI}$ with the background by construction.
 - **Number of clusters** (non-empty cluster ids of the output, and those with at least 10 images) and **open share** (share of images sent to "open a new cluster", i.e. to an empty slot, which counts as one extra cluster).
@@ -753,7 +766,7 @@ Training clusters its own unlabeled images (**transductive**: the clusters are t
 | `aligned` | the palette colour of its class (the shortcut points to the right class) | |
 | `inverted` | the palette colour of another class (the shortcut points to a wrong class) | the drop $\Delta\mathrm{ACC}=\mathrm{ACC}_\text{fixed}(\text{aligned})-\mathrm{ACC}_\text{fixed}(\text{inverted})$ |
 
-**Fixed matching.** $\mathrm{ACC}$ is computed with the optimal one-to-one matching between clusters and classes, recomputed on each partition. In `aligned` and `inverted` the background colour is a one-to-one function of the class, so a method that clusters by colour alone would have $\mathrm{ACC}=1$ in both and $\Delta\mathrm{ACC}=0$: the matching absorbs the permutation. $\mathrm{ACC}_\text{fixed}$ therefore uses the matching of the **training** partition on every test set (the share of test images sent to the cluster of their class under that matching; for the training partition it equals $\mathrm{ACC}$). A method that clusters by colour then scores $1$ on `aligned` and about $0$ on `inverted`, hence $\Delta\mathrm{ACC}\approx1$. The recomputed-matching version stays in the tables as a diagnostic.
+**Cluster-to-class matching.** The optimal one-to-one matching between clusters and classes (Hungarian) is computed once, on the **training** partition, and kept unchanged on every test set. $\mathrm{ACC}_\text{fixed}$ is the share of test images sent to the cluster that this matching assigns to their class; on the training partition it is the usual $\mathrm{ACC}$. The matching has to be fixed because in `aligned` and `inverted` the background colour is a one-to-one function of the class: with a matching recomputed on each set, a method that clusters by colour alone would reach $\mathrm{ACC}=1$ on both and $\Delta\mathrm{ACC}=0$. With the matching of the training partition, such a method scores $1$ on `aligned` and about $0$ on `inverted`, hence $\Delta\mathrm{ACC}\approx1$, while a method that ignores the background keeps the same $\mathrm{ACC}_\text{fixed}$ on both sets and has $\Delta\mathrm{ACC}\approx0$. Every $\Delta\mathrm{ACC}$ of this document is computed this way.
 
 As a check, reading the frozen model on its own training images reproduces the saved output exactly (200 runs out of 200). Hyperparameters were chosen on seeds 0 to 9 at most; seeds 100 to 199 are fresh for every choice.
 
@@ -775,7 +788,7 @@ The baselines go through the same protocol: a baseline is fit on the training im
 | Expert labels on the learner's own rollouts (DAgger-like) instead of fixed expert trajectories | Does labelling the learner's states help the reward, or does it make the signal circular? |
 | *Conditional.* Attraction-only labels on the learner's rollouts (twin views must share a slot), in addition to the fixed expert episodes; repulsion stays on the expert's states | Does it correct the distribution shift? Run only if the two diagnostics of [Section 9.3](#93-metrics) (twin agreement, reward margins) show a gap. It needs several views per image in the learner's episodes, and a memory that tells views of one image apart |
 | Reward reading the counts $n_k$ | Does the count create a shift between expert and learner states? |
-| $\beta=0$ (no Information Bottleneck) | Does compression alone remove the spurious features? |
+| $\beta=0$ (no Information Bottleneck; with $\lambda=0$ as well in `configs/baselines/irl_noib.yml`) | Does compression alone remove the spurious features? |
 | $\lambda=0$ (no decision-consistency term; `configs/ablations/no_inv.yml`) | Is the invariance term necessary, or is the IB sufficient? |
 | $q_{\bar{\theta}}$ instead of $\pi_{\bar{\omega}}$ in $L_{\mathrm{inv}}$; raw reward differences; $\omega$ and $\psi$ unfrozen in $L_{\mathrm{inv}}$ | Does the form of the check or the freezing matter (does the policy drift toward ignoring the image)? |
 | $\rho=0$ (no anti-collapse term; the final pipeline uses $\rho=0.1$), and a large $\rho$ | Does the explicit anti-collapse term help, or hurt on imbalanced classes? |
@@ -849,8 +862,8 @@ The difficulty is not that the pixels are dominated by the background. If the nu
 - **Seeds.** 200 independent runs (seeds 0 to 199). Hyperparameters were chosen on seeds 0 to 9 at most, and the choice between two ways of closing the memory was made on seeds 0 to 99 and confirmed on 100 to 199 (docs 5.30): seeds 100 to 199 are fresh for every choice.
 - **Train and test.** The model clusters the 1500 unlabeled images of its seed (**train**, transductive). The **test partition** is made of 1500 new images of the same classes, drawn with another generator and assigned by the frozen model against the memory of the end of training ([Section 9.4](#94-train-and-test-partitions)), under three backgrounds: `iid` (random colour as in training), `aligned` (the background of a class is its colour), `inverted` (the background of a class is the colour of another class). Reading the frozen model on its own training images reproduces the saved output in 200 runs out of 200.
 - **Metrics.** Those of [Section 9.3](#93-metrics). The worst group is a (class, coarse background colour) pair with at least 10 images; a run is *right* when its output has exactly 5 clusters and ACC $=1$.
-- **Methods and training regimes.** CIB-IRL and the three baselines of [Section 9.2](#92-baselines) are scored on these partitions: K-Means and GMM on pixels, SimCLR and IIC trained with the transformation bank of the model, and the pipeline with $\beta=\lambda=0$. Each is trained twice, on the benchmark as it is ($s=0$) and with a colour shortcut in training ($s=0.9$, the highest level, [Section 9.4](#94-train-and-test-partitions)); the baselines that need $K$ are run with $K=10$. For an exact comparison, all of them are run on the same 200 seeds (0 to 199, hence the same 200 datasets), SimCLR and IIC for a fixed 300 epochs (the maximum given to our model, which stops earlier by its own rule), and the baseline with $\beta=\lambda=0$ with the same stopping rule as the model. Table 1 and the filled cells of Table 2 are the only measurements so far.
-- **What the oracle bank implies.** Every view of a method that learns from views is made by redrawing the background independently of the class, so SimCLR, IIC, the pipeline with $\beta=\lambda=0$ and CIB-IRL are expected to ignore the shortcut by construction; K-Means and GMM, which see no views, are the methods that can follow it. What would separate the bottleneck from the other methods that use views is a bank that does not know the nuisance (`generic`); it is not part of this comparison. SimCLR, IIC and the baseline with $\beta=\lambda=0$ use the same oracle bank as the model, since it is the same dataset and the comparison is meant to be exact.
+- **Methods and training regimes.** CIB-IRL and the two baselines of [Section 9.2](#92-baselines) are scored on these partitions: K-Means and GMM on pixels, and SimCLR and IIC trained with the transformation bank of the model. Each is trained twice, on the benchmark as it is ($s=0$) and with a colour shortcut in training ($s=0.9$, the highest level, [Section 9.4](#94-train-and-test-partitions)); the baselines are run with $K=10$. For an exact comparison, all of them are run on the same 200 seeds (0 to 199, hence the same 200 datasets), SimCLR and IIC for a fixed 300 epochs (the maximum given to our model, which stops earlier by its own rule). Table 1 and the filled cells of Table 2 are the only measurements so far.
+- **The transformation bank.** The toy bank (`toy_oracle`) redraws the background of an image independently of its class. Every view of a method that learns from views is made this way, so SimCLR, IIC and CIB-IRL are expected to ignore the shortcut by construction; K-Means and GMM, which see no views, are the methods that can follow it. SimCLR, IIC and the model use the same bank, since it is the same dataset and the comparison is meant to be exact.
 
 #### 11.1.5 Results
 
@@ -863,7 +876,7 @@ The difficulty is not that the pixels are dominated by the background. If the nu
 | ACC $\uparrow$ | $0.993\pm0.042$ | $0.993\pm0.042$ | $0.993\pm0.042$ | $0.993\pm0.042$ |
 | $\mathrm{NMI}(\text{cluster},\text{class})$ $\uparrow$ | $0.9968\pm0.0193$ | $0.9968\pm0.0193$ | $0.9968\pm0.0193$ | $0.9968\pm0.0193$ |
 | $\mathrm{NMI}(\text{cluster},\text{background})$ $\downarrow$ | $0.0039\pm0.0014$ | $0.0039\pm0.0012$ | $0.714\pm0.110$ (a) | $0.712\pm0.114$ (a) |
-| $\Delta\mathrm{ACC}=\mathrm{ACC}(\text{aligned})-\mathrm{ACC}(\text{inverted})$ | | | $0.000\pm0.000$ | |
+| $\Delta\mathrm{ACC}=\mathrm{ACC}_\text{fixed}(\text{aligned})-\mathrm{ACC}_\text{fixed}(\text{inverted})$ | | | $0.000\pm0.000$ | |
 | Worst-group ACC $\uparrow$ | $0.970\pm0.171$ | $0.970\pm0.171$ | $0.970\pm0.171$ | $0.970\pm0.171$ |
 | Clusters (target 5) | $4.965\pm0.209$ | $4.965\pm0.209$ | $4.965\pm0.209$ | $4.965\pm0.209$ |
 | Open share | $0.001\pm0.014$ | $0.001\pm0.014$ | $0.001\pm0.014$ | $0.001\pm0.014$ |
@@ -880,7 +893,6 @@ The four columns are identical seed by seed: on each of the 200 seeds, the ACC i
 | GMM on pixels | 10 | not run | not run | not run | not run | not run | not run |
 | SimCLR + K-Means | 10 | not run | not run | not run | not run | not run | not run |
 | IIC | 10 | not run | not run | not run | not run | not run | not run |
-| Standard IRL ($\beta=\lambda=0$) | 10 slots | not run | not run | not run | not run | not run | not run |
 | **CIB-IRL** | 10 slots | 194 / 200 | $0.993\pm0.042$ | $0.000\pm0.000$ | not run | not run | not run |
 
 ACC (train) is measured on the training images; for CIB-IRL it equals the ACC on the three test sets (Table 1). $\Delta\mathrm{ACC}$ needs the three test sets, on which the K-Means rows have not been scored yet. For K-Means with $K=10$ on the clean training images, $\mathrm{NMI}(\text{cluster},\text{class})$ is $0.843$ and $\mathrm{NMI}(\text{cluster},\text{background})$ is $0.159$. With the true number of clusters ($K=5$) K-Means solves the toy (Section 11.1.3); that case is not in the table.
@@ -951,7 +963,7 @@ cib-irl/
 ├── configs/
 │   ├── toy.yml, mnist.yml, colored_mnist.yml, waterbirds.yml   # first design of each dataset: shape of the data, sizes (TrainConfig)
 │   ├── benchmarks/              # the RETAINED configuration of each benchmark, every value written out (toy.yml)
-│   ├── baselines/               # irl_noib.yml: baseline 3, standard multi-intention IRL (beta = lambda = 0)
+│   ├── baselines/               # irl_noib.yml: the pipeline without the bottleneck (beta = lambda = 0), for the ablations
 │   ├── transforms/              # transformation banks T (toy_oracle.yml, digits.yml, generic.yml, ...)
 │   ├── ablations/               # one small YAML per ablation, applied on top of a config (README Section 10)
 │   └── suites/                  # experiments x seeds: toy_final.yml (the benchmark), toy_compare.yml (benchmark + baselines), earlier steps
@@ -968,7 +980,7 @@ cib-irl/
 │   ├── convergence.py           # output-convergence stopping rule (no label)
 │   ├── cleanup.py               # final clean-up: twin slots, relabel (and the variants that were rejected)
 │   └── diagnostics.py           # monitoring quantities logged during training
-├── baselines/                   # baselines 1 and 2 behind one interface (baseline 3 is cibirl/ with irl_noib.yml)
+├── baselines/                   # K-Means / GMM and SimCLR / IIC behind one interface
 │   ├── clustering.py            # K-Means / GMM on pixels or ResNet features
 │   ├── contrastive.py           # SimCLR and IIC with the transformation bank of the model
 │   ├── features.py              # pixel and ImageNet-ResNet feature extractors
@@ -1055,29 +1067,22 @@ python scripts/make_report.py  results/toy_cov_k10_final_ac results/toy_cov_k10_
 
 ### 13.4 Baselines and comparison
 
-Not run yet: the experiments are to be discussed first. Everything below is wired and tested on tiny runs.
-
 ```
-# baseline 1 and 2, one seed (the contrastive baselines need the transformation bank)
+# one seed of each baseline (the contrastive baselines need the transformation bank)
 python scripts/run_baseline.py --method kmeans --data toy --set num_clusters=10
 python scripts/run_baseline.py --method simclr --data toy --transform toy_oracle --set num_clusters=10 epochs=300
 python scripts/run_baseline.py --method iic    --data toy --transform toy_oracle --data-set spurious=0.9 --set seed=3
-
-# baseline 3: our trainer without the bottleneck
-python scripts/run_experiment.py --data toy --transform toy_oracle --config configs/benchmarks/toy.yml configs/baselines/irl_noib.yml \
-       --stop-set max_epochs=300 min_epochs=40
 ```
 
-The comparison of Table 2 is one suite of 11 experiments (6 methods $\times$ $s\in\\{0,0.9\\}$, minus CIB-IRL at $s=0$, whose 200 runs exist): $K=10$, seeds 0 to 199 everywhere, 300 epochs for SimCLR and IIC. List a part of it before launching:
+The comparison of Table 2 is one suite of 9 experiments (K-Means, GMM, SimCLR and IIC $\times$ $s\in\\{0,0.9\\}$, plus CIB-IRL at $s=0.9$; CIB-IRL at $s=0$ is the 200 runs of [Section 13.3](#133-reproduce-the-toy-results)): $K=10$, seeds 0 to 199 everywhere, 300 epochs for SimCLR and IIC. A part of it can be listed before launching:
 
 ```
 python scripts/run_suite.py configs/suites/toy_compare.yml --only kmeans_k10_clean simclr_k10_clean --seeds 0 1 2 --dry-run
-python scripts/run_suite.py configs/suites/toy_compare.yml --only kmeans_k10_clean gmm_k10_clean kmeans_k10_spur90 gmm_k10_spur90 --cpu-count 2
+python scripts/run_suite.py configs/suites/toy_compare.yml --cpu-count 5 --threads-per-run 1 --skip-existing
 
-# our model and baseline 3 are scored on the test sets afterwards; the baselines score themselves
-for e in final_spur90 irl_noib_clean irl_noib_spur90; do
-  python scripts/eval_heldout.py results/toy_compare --experiment $e --out results/toy_compare/heldout_$e
-done
+# our model is scored on the test sets afterwards (the baselines score themselves), with the matching of its training partition
+python scripts/eval_heldout.py results/toy_compare --experiment final_spur90 --out results/toy_compare/heldout_final_spur90
+python scripts/eval_heldout.py results/toy_cov_k10_final_ac results/toy_cov_k10_final_ac_val --experiment final --out results/toy_final_report
 python scripts/compare_methods.py results/toy_compare results/toy_compare/heldout_*/heldout_metrics.json \
        results/toy_final_report/heldout_metrics.json --out results/toy_compare/table.md
 ```
@@ -1108,8 +1113,8 @@ python scripts/run_baseline.py   --method kmeans --data waterbirds --set feature
 - [x] Toy results on 200 seeds, on a held-out test partition ([Section 11](#11-results)): 194 of 200 outputs exactly right
 - [ ] Variational formulation validated and consistency term fixed (Section 5.1)
 - [x] Toy dataset stored as files (`data/toy/`) with a loader; benchmark abstraction (train builder, test builder, `iid` / `aligned` / `inverted`) for the toy, Colored MNIST and Waterbirds; retained toy configuration in `configs/benchmarks/toy.yml`
-- [x] Baselines 1 to 3 implemented behind the shared evaluation protocol ([Section 9.2](#92-baselines)); comparison suite `configs/suites/toy_compare.yml` written and tested on tiny runs, not run
-- [ ] Toy comparison: four methods $\times$ `iid` / `aligned` / `inverted` $\times$ $s\in\\{0,0.9\\}$ (Table 2)
+- [x] The two baselines (K-Means / GMM, SimCLR / IIC) implemented behind the shared evaluation protocol ([Section 9.2](#92-baselines)); comparison suite `configs/suites/toy_compare.yml` written and tested on tiny runs
+- [ ] Toy comparison: CIB-IRL, K-Means, GMM, SimCLR and IIC $\times$ `iid` / `aligned` / `inverted` $\times$ $s\in\\{0,0.9\\}$ (Table 2)
 - [ ] Ablation $\lambda=0$ (`configs/ablations/no_inv.yml`) on the 200 seeds of the toy
 - [ ] Ablation reward + prior ( $\mathrm{softmax}(R_\theta+\log\pi_0)$ ) instead of the RL policy: readout done on the 100 first final models, acting rule during training to run
 - [ ] Toy: a step for the 3 % of runs where two classes end in one cluster
