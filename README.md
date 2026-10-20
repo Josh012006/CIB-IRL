@@ -1,3 +1,5 @@
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/Josh012006/badge.svg)](https://hub.xerj.org/contributors/Josh012006)
+
 # CIB-IRL: Causal Information Bottleneck Inverse Reinforcement Learning
 
 **Unsupervised image clustering that groups images by *what they are*, not by *where they appear*, by learning a causal representation (Information Bottleneck) together with a latent reward (multi-intention Inverse RL) from experts built out of image transformations, and a policy that builds the clusters by reinforcement learning.**
