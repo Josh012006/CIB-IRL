@@ -41,7 +41,7 @@ def summary_rows(groups: dict[str, list[dict]]) -> list[dict]:
         for k in KEYS:
             v = _values(runs, k)
             row[k] = (float(v.mean()), float(v.std())) if len(v) else None
-        flags = [r["converged"] for r in runs if "converged" in r]
+        flags = [r["converged"] for r in runs if r.get("converged") is not None]
         row["converged"] = (sum(flags), len(flags)) if flags else None
         rows.append(row)
     return rows

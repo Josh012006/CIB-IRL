@@ -22,7 +22,7 @@ from baselines.contrastive import iic_loss, nt_xent        # noqa: E402
 from cibirl import transforms                              # noqa: E402
 from cibirl.train import TrainConfig                       # noqa: E402
 from eval import aggregate                                 # noqa: E402
-from eval.protocol import TEST_MODES, delta_acc, is_right, partition_metrics   # noqa: E402
+from eval.protocol import TEST_MODES, class_to_slot, delta_acc, delta_acc_rematched, is_right, partition_metrics   # noqa: E402
 
 BANK = ROOT / "configs" / "transforms" / "toy_oracle.yml"
 
@@ -49,7 +49,27 @@ def test_open_share_counts_images_outside_the_kept_slots():
 
 def test_delta_acc_and_modes():
     assert TEST_MODES == ("iid", "aligned", "inverted")
-    assert delta_acc({"aligned": {"acc": 0.9}, "inverted": {"acc": 0.4}}) == pytest.approx(0.5)
+    row = {"aligned": {"acc": 0.9, "acc_fixed": 0.8}, "inverted": {"acc": 0.4, "acc_fixed": 0.1}}
+    assert delta_acc(row) == pytest.approx(0.7) and delta_acc_rematched(row) == pytest.approx(0.5)
+    with pytest.raises(KeyError):                                      # a row from before docs 5.33 is not silently re-read
+        delta_acc({"aligned": {"acc": 0.9}, "inverted": {"acc": 0.4}})
+
+
+def test_fixed_matching_sees_a_method_that_clusters_by_background_colour():
+    """docs 5.33. Aligned: colour = class. Inverted: colour = class + 1. A method that clusters by colour alone is the
+    permutation of the classes in the second case: the matching recomputed on each partition hides it, the fixed one does not."""
+    n_classes, per = 4, 30
+    y = np.repeat(np.arange(n_classes), per)
+    train_pred = y.copy()                                              # train: colour = class (spurious = 1) -> slot = class
+    matching = class_to_slot(train_pred, y, n_classes)
+    by_colour = {"aligned": y, "inverted": (y + 1) % n_classes}        # the slot of a test image is its background colour
+    row = {m: partition_metrics(by_colour[m], y, None, None, n_classes, slot_of_class=matching) for m in by_colour}
+    assert row["aligned"]["acc"] == 1 and row["inverted"]["acc"] == 1 and delta_acc_rematched(row) == 0   # blind
+    assert row["aligned"]["acc_fixed"] == 1 and row["inverted"]["acc_fixed"] == 0 and delta_acc(row) == 1
+    own = {m: partition_metrics(y, y, None, None, n_classes, slot_of_class=matching) for m in by_colour}    # follows the classes
+    assert delta_acc(own) == 0
+    train = partition_metrics(train_pred, y, None, None, n_classes)
+    assert train["acc_fixed"] == train["acc"]                           # no matching given: the one of the partition itself
 
 
 def test_eval_heldout_uses_the_shared_protocol():
@@ -265,7 +285,7 @@ def test_suite_rejects_a_bank_less_contrastive_baseline_and_unknown_method(tmp_p
 def fake_row(run_name, accs, **extra):
     row = {"run": run_name}
     for part, (acc, clusters_ge10) in accs.items():
-        row[part] = {"acc": acc, "clusters": clusters_ge10, "clusters_ge10": clusters_ge10, "nmi_background": 0.01}
+        row[part] = {"acc": acc, "acc_fixed": acc, "clusters": clusters_ge10, "clusters_ge10": clusters_ge10, "nmi_background": 0.01}
     return {**row, **extra}
 
 
@@ -332,3 +352,13 @@ def test_ours_and_baseline_3_and_baseline_1_end_to_end_into_one_table(tmp_path):
         [tmp_path / "held_final" / "heldout_metrics.json", tmp_path / "held_irl_noib" / "heldout_metrics.json", tmp_path / "base"]))}
     assert set(got) == {"final", "irl_noib", "kmeans_k5_clean"}
     assert all(set(s["parts"]) == {"train", *TEST_MODES} and "delta_acc" in s for s in got.values())             # the same columns for every method
+
+
+def test_aggregate_ignores_runs_without_convergence_flag():
+    """Baselines (k-means, SimCLR, ...) write `converged: null`; the summary must not crash on it."""
+    from eval.aggregate import summary_rows
+
+    rows = summary_rows({"kmeans": [{"acc": 0.5, "converged": None}, {"acc": 0.6, "converged": None}],
+                         "ours": [{"acc": 0.9, "converged": True}, {"acc": 0.8, "converged": None}]})
+    assert rows[0]["converged"] is None
+    assert rows[1]["converged"] == (1, 1)

@@ -42,7 +42,7 @@ import datasets                                                     # noqa: E402
 from cibirl import transforms                                       # noqa: E402
 from cibirl.cleanup import find_twins, relabel                      # noqa: E402
 from cibirl.train import TrainConfig, Trainer                       # noqa: E402
-from eval.protocol import TEST_MODES as MODES, is_right, partition_metrics   # noqa: E402,F401  (partition_metrics: kept importable from here)
+from eval.protocol import TEST_MODES as MODES, class_to_slot, is_right, partition_metrics   # noqa: E402,F401  (partition_metrics: kept importable from here)
 
 
 def evaluate_run(run_dir: str) -> dict:
@@ -76,10 +76,12 @@ def evaluate_run(run_dir: str) -> dict:
            "n_classes": int(len(np.unique(y))), "spurious": params.get("spurious"),
            "train_reproduces_preds": bool((pred_train == official).all())}
     row["train"] = partition_metrics(pred_train, y, bg, kept, cfg.num_slots)
+    matching = class_to_slot(pred_train, y, cfg.num_slots)          # fixed on the train partition, applied to the tests (docs 5.33)
     for mode in datasets.BENCHMARKS[name].modes:
         test = datasets.build_test(name, cfg.seed, mode, **params)
         row[mode] = partition_metrics(read(test.images), test.labels.numpy(),
-                                      test.background.numpy() if test.background is not None else None, kept, cfg.num_slots)
+                                      test.background.numpy() if test.background is not None else None, kept, cfg.num_slots,
+                                      slot_of_class=matching)
     return row
 
 
@@ -105,7 +107,7 @@ def main(argv=None) -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "heldout_metrics.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
-    cols = ["acc", "nmi_class", "nmi_background", "clusters", "clusters_ge10", "open_share", "worst_group_acc"]
+    cols = ["acc", "acc_fixed", "nmi_class", "nmi_background", "clusters", "clusters_ge10", "open_share", "worst_group_acc"]
     with open(out / "heldout_metrics.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["suite", "seed", "train_reproduces_preds"] + [f"{p}_{c}" for p in ("train",) + MODES for c in cols])

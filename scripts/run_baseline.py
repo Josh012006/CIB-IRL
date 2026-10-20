@@ -35,7 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import datasets                                                     # noqa: E402
 from baselines import BaselineConfig, build_clusterer, METHODS      # noqa: E402
 from cibirl import transforms                                       # noqa: E402
-from eval.protocol import partition_metrics                         # noqa: E402
+from eval.protocol import class_to_slot, partition_metrics                         # noqa: E402
 from run_experiment import parse_kv, resolve_bank, resolve_file     # noqa: E402
 
 
@@ -96,10 +96,12 @@ def main(argv=None) -> dict:
     held = {"run": name, "suite": out.parent.name, "seed": cfg.seed, "method": cfg.method,
             "train": partition_metrics(pred, y, bg, None, K)}
     if not args.no_test:
+        matching = class_to_slot(pred, y, K)                         # fixed on the train partition, applied to the tests (docs 5.33)
         for mode in bench.modes:
             test = datasets.build_test(args.data, cfg.seed, mode, **train.info)
             held[mode] = partition_metrics(clusterer.predict(test.images), test.labels.numpy(),
-                                           test.background.numpy() if test.background is not None else None, None, K)
+                                           test.background.numpy() if test.background is not None else None, None, K,
+                                           slot_of_class=matching)
     final = {"name": name, "seed": cfg.seed, "data": args.data, **train.info, "method": cfg.method, "num_clusters": K,
              "features": cfg.features if cfg.method in ("kmeans", "gmm") else None,
              "transform": bank.name if bank else None, "epochs_run": len(clusterer.history) or None, "converged": None,

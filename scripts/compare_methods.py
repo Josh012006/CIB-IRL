@@ -68,8 +68,11 @@ def summarize(rows: list[dict]) -> list[dict]:
                     "nmi_background": (float(np.mean([r[p]["nmi_background"] for r in rs]))
                                        if all(r[p].get("nmi_background") is not None for r in rs) else None)}
         if "aligned" in parts and "inverted" in parts:
-            d = np.array([r["aligned"]["acc"] - r["inverted"]["acc"] for r in rs])
-            s["delta_acc"] = {"mean": float(d.mean()), "std": float(d.std())}
+            d = np.array([r["aligned"]["acc"] - r["inverted"]["acc"] for r in rs])               # matching recomputed on each partition
+            s["delta_acc_rematched"] = {"mean": float(d.mean()), "std": float(d.std())}
+            if all("acc_fixed" in r[p] for r in rs for p in ("aligned", "inverted")):            # matching fixed on the train partition
+                d = np.array([r["aligned"]["acc_fixed"] - r["inverted"]["acc_fixed"] for r in rs])
+                s["delta_acc"] = {"mean": float(d.mean()), "std": float(d.std())}
         out.append(s)
     return sorted(out, key=lambda s: s["method"])
 
@@ -79,13 +82,14 @@ def fmt(x, nd=3):
 
 
 def to_markdown(summary: list[dict]) -> str:
-    head = ["Method", "Runs"] + [f"{p}: right / ACC" for p in PARTS] + ["$\\Delta$ACC", "NMI(cluster, nuisance), iid", "Clusters (train)"]
+    head = ["Method", "Runs"] + [f"{p}: right / ACC" for p in PARTS] + ["$\\Delta$ACC (fixed matching)", "$\\Delta$ACC (re-matched, diagnostic)", "NMI(cluster, nuisance), iid", "Clusters (train)"]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for s in summary:
         cells = [f"`{s['method']}`", str(s["runs"])]
         for p in PARTS:
             cells.append(f"{s[p]['right']} / {s['runs']}, {s[p]['acc_mean']:.3f} $\\pm$ {s[p]['acc_std']:.3f}" if p in s else "-")
-        cells.append(f"{s['delta_acc']['mean']:.3f} $\\pm$ {s['delta_acc']['std']:.3f}" if "delta_acc" in s else "-")
+        for key in ("delta_acc", "delta_acc_rematched"):
+            cells.append(f"{s[key]['mean']:.3f} $\\pm$ {s[key]['std']:.3f}" if key in s else "-")
         cells.append(fmt(s["iid"]["nmi_background"], 4) if "iid" in s else "-")
         cells.append(fmt(s["train"]["clusters"], 2) if "train" in s else "-")
         lines.append("| " + " | ".join(cells) + " |")
@@ -94,7 +98,7 @@ def to_markdown(summary: list[dict]) -> str:
 
 def to_csv(summary: list[dict], path: Path) -> None:
     cols = ["method", "runs"] + [f"{p}_{k}" for p in PARTS for k in ("right", "acc_mean", "acc_std", "clusters", "nmi_background")] \
-        + ["delta_acc_mean", "delta_acc_std"]
+        + ["delta_acc_mean", "delta_acc_std", "delta_acc_rematched_mean", "delta_acc_rematched_std"]
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(cols)
@@ -102,7 +106,8 @@ def to_csv(summary: list[dict], path: Path) -> None:
             row = [s["method"], s["runs"]]
             for p in PARTS:
                 row += [s[p][k] if p in s else "" for k in ("right", "acc_mean", "acc_std", "clusters", "nmi_background")]
-            row += [s["delta_acc"]["mean"], s["delta_acc"]["std"]] if "delta_acc" in s else ["", ""]
+            for key in ("delta_acc", "delta_acc_rematched"):
+                row += [s[key]["mean"], s[key]["std"]] if key in s else ["", ""]
             w.writerow(row)
 
 

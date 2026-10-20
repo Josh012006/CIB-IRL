@@ -518,8 +518,11 @@ def tables(runs, held, out: Path, kmeans: dict | None) -> dict:
             block[p] = {"right": n_right, "n": len(rows), "failure_ci95": [lo, hi]}
             for k in ("acc", "nmi_class", "nmi_background", "clusters", "open_share", "worst_group_acc"):
                 block[p][k] = stat(rows, p, k)
-        d = np.array([h["aligned"]["acc"] - h["inverted"]["acc"] for h in rows])
-        block["delta_acc"] = [float(d.mean()), float(d.std())]
+        d = np.array([h["aligned"]["acc"] - h["inverted"]["acc"] for h in rows])           # matching recomputed on each partition
+        block["delta_acc_rematched"] = [float(d.mean()), float(d.std())]
+        if all("acc_fixed" in h[m] for h in rows for m in ("aligned", "inverted")):        # matching fixed on the train partition (docs 5.33)
+            d = np.array([h["aligned"]["acc_fixed"] - h["inverted"]["acc_fixed"] for h in rows])
+            block["delta_acc"] = [float(d.mean()), float(d.std())]
         res[tag] = block
     ep = np.array([r["final"]["epochs_run"] for r in runs])
     res["epochs"] = {"min": int(ep.min()), "median": float(np.median(ep)), "mean": float(ep.mean()), "max": int(ep.max()),

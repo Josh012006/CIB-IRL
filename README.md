@@ -749,7 +749,9 @@ Training clusters its own unlabeled images (**transductive**: the clusters are t
 |---|---|---|
 | `iid` | random colour, as in training | generalization to new images; the leakage $\mathrm{NMI}(\text{cluster},\text{background})$ |
 | `aligned` | the palette colour of its class (the shortcut points to the right class) | |
-| `inverted` | the palette colour of another class (the shortcut points to a wrong class) | the drop $\Delta\mathrm{ACC}=\mathrm{ACC}(\text{aligned})-\mathrm{ACC}(\text{inverted})$ |
+| `inverted` | the palette colour of another class (the shortcut points to a wrong class) | the drop $\Delta\mathrm{ACC}=\mathrm{ACC}_\text{fixed}(\text{aligned})-\mathrm{ACC}_\text{fixed}(\text{inverted})$ |
+
+**Fixed matching.** $\mathrm{ACC}$ is computed with the optimal one-to-one matching between clusters and classes, recomputed on each partition. In `aligned` and `inverted` the background colour is a one-to-one function of the class, so a method that clusters by colour alone would have $\mathrm{ACC}=1$ in both and $\Delta\mathrm{ACC}=0$: the matching absorbs the permutation. $\mathrm{ACC}_\text{fixed}$ therefore uses the matching of the **training** partition on every test set (the share of test images sent to the cluster of their class under that matching; for the training partition it equals $\mathrm{ACC}$). A method that clusters by colour then scores $1$ on `aligned` and about $0$ on `inverted`, hence $\Delta\mathrm{ACC}\approx1$. The recomputed-matching version stays in the tables as a diagnostic.
 
 As a check, reading the frozen model on its own training images reproduces the saved output exactly (200 runs out of 200). Hyperparameters were chosen on seeds 0 to 9 at most; seeds 100 to 199 are fresh for every choice.
 
