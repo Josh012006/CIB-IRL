@@ -1133,7 +1133,7 @@ python scripts/run_baseline.py   --method kmeans --data waterbirds --set feature
 - [x] The two baselines (K-Means / GMM, SimCLR / IIC) implemented behind the shared evaluation protocol ([Section 9.2](#92-baselines)); comparison suite `configs/suites/toy_compare.yml` written and tested on tiny runs
 - [ ] Toy comparison: CIB-IRL, K-Means, GMM, SimCLR and IIC $\times$ `iid` / `aligned` / `inverted` $\times$ $s\in\\{0,0.9\\}$ (SimCLR and IIC at $s=0$ only) (Table 2)
 - [ ] Ablation $\lambda=0$ (`configs/ablations/no_inv.yml`) on the 200 seeds of the toy
-- [ ] Ablation reward + prior ( $\mathrm{softmax}(R_\theta+\log\pi_0)$ ) instead of the RL policy: readout done on the 100 first final models, acting rule during training to run
+- [ ] Ablation reward + prior ( $`\mathrm{softmax}(R_\theta+\log\pi_0)`$ ) instead of the RL policy: readout done on the 100 first final models, acting rule during training to run
 - [ ] Toy: a step for the 3 % of runs where two classes end in one cluster
 - [ ] Colored MNIST pipeline and baselines (loader and first-design configuration written, not run; MNIST digits: the representation work is in `docs/protocol-decisions.md`, 5.11 to 5.16)
 - [ ] Phase 1 on Colored MNIST (expert tolerated as is), with the same-class rate among neighbors in $m$-space
