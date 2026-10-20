@@ -849,7 +849,7 @@ Values of the final pipeline. Each hyperparameter is defined in [Section 5.8](#5
 
 The difficulty is not that the pixels are dominated by the background. If the number of clusters is known to be 5, K-Means on the raw pixels solves this toy (ACC $=1.00$ on 200 seeds out of 200). What makes it hard is the setting the method is built for:
 
-- **The number of clusters is not given.** The model has $K=10$ slots for 5 classes and must find that 5 are needed. K-Means with $K=10$ cuts every class in two, along the brightness of the background: ACC $0.567\pm0.039$, $\mathrm{NMI}(\text{cluster},\text{class})=0.843$, and $0$ seeds out of 200 are right (reference in Table 2).
+- **The number of clusters is not given.** The model has $K=10$ slots for 5 classes and must find that 5 are needed. K-Means with $K=10$ cuts every class in two, along the brightness of the background: ACC $0.560\pm0.037$, $\mathrm{NMI}(\text{cluster},\text{class})=0.842$, and $0$ seeds out of 200 are right (reference in Table 2a).
 - **No label, and a nuisance that is large.** Inside one class, the background colour changes a large share of the pixels, and nothing in the data says which part of the image is the class. The only information is the orbits: pairs of views of one image that must be placed together, and random pairs that are mostly different.
 - **The clusters are built by a policy, one image after the other.** The reward is learned from these relational signals (not a label), the policy must learn to *open* a new cluster when none fits, and the memory it writes to keeps duplicate slots when the reward cannot tell two slots of one class apart. Before the changes of [Section 5](#5-components--training), the same pipeline reached ACC $0.72\pm0.16$ with 4 clusters on average and none of 6 seeds converged (docs Section 3 and 5.17).
 
@@ -862,8 +862,8 @@ The difficulty is not that the pixels are dominated by the background. If the nu
 - **Seeds.** 200 independent runs (seeds 0 to 199). Hyperparameters were chosen on seeds 0 to 9 at most, and the choice between two ways of closing the memory was made on seeds 0 to 99 and confirmed on 100 to 199 (docs 5.30): seeds 100 to 199 are fresh for every choice.
 - **Train and test.** The model clusters the 1500 unlabeled images of its seed (**train**, transductive). The **test partition** is made of 1500 new images of the same classes, drawn with another generator and assigned by the frozen model against the memory of the end of training ([Section 9.4](#94-train-and-test-partitions)), under three backgrounds: `iid` (random colour as in training), `aligned` (the background of a class is its colour), `inverted` (the background of a class is the colour of another class). Reading the frozen model on its own training images reproduces the saved output in 200 runs out of 200.
 - **Metrics.** Those of [Section 9.3](#93-metrics). The worst group is a (class, coarse background colour) pair with at least 10 images; a run is *right* when its output has exactly 5 clusters and ACC $=1$.
-- **Methods and training regimes.** CIB-IRL and the two baselines of [Section 9.2](#92-baselines) are scored on these partitions: K-Means and GMM on pixels, and SimCLR and IIC trained with the transformation bank of the model. Each is trained twice, on the benchmark as it is ($s=0$) and with a colour shortcut in training ($s=0.9$, the highest level, [Section 9.4](#94-train-and-test-partitions)); the baselines are run with $K=10$. For an exact comparison, all of them are run on the same 200 seeds (0 to 199, hence the same 200 datasets), SimCLR and IIC for a fixed 300 epochs (the maximum given to our model, which stops earlier by its own rule). Table 1 and the filled cells of Table 2 are the only measurements so far.
-- **The transformation bank.** The toy bank (`toy_oracle`) redraws the background of an image independently of its class. Every view of a method that learns from views is made this way, so SimCLR, IIC and CIB-IRL are expected to ignore the shortcut by construction; K-Means and GMM, which see no views, are the methods that can follow it. SimCLR, IIC and the model use the same bank, since it is the same dataset and the comparison is meant to be exact.
+- **Methods and training regimes.** CIB-IRL and the two baselines of [Section 9.2](#92-baselines) are scored on these partitions: K-Means and GMM on pixels, and SimCLR and IIC trained with the transformation bank of the model. CIB-IRL, K-Means and GMM are trained twice, on the benchmark as it is ($s=0$) and with a colour shortcut in training ($s=0.9$, the highest level, [Section 9.4](#94-train-and-test-partitions)); SimCLR and IIC only on the benchmark as it is, because the bank repaints the background of every view and their training does not depend on $s$ (below). The baselines are run with $K=10$. For an exact comparison, all of them are run on the same 200 seeds (0 to 199, hence the same 200 datasets), SimCLR and IIC for a fixed 300 epochs (the maximum given to our model, which stops earlier by its own rule). Table 1 and the filled cells of Table 2 are the only measurements so far.
+- **The transformation bank.** The toy bank (`toy_oracle`) redraws the background of an image independently of its class. The views of SimCLR and IIC are made this way and are the only images they learn from, so a colour shortcut in the training set cannot reach them: IIC trained at $s=0$ and at $s=0.9$ gives the same loss curve and the same partition, which is why they have no $s=0.9$ run. CIB-IRL also reads the training images as they are, so its two regimes are both run. K-Means and GMM, which see no views, are the methods that can follow the shortcut. SimCLR, IIC and the model use the same bank, since it is the same dataset and the comparison is meant to be exact.
 
 #### 11.1.5 Results
 
@@ -883,21 +883,36 @@ The difficulty is not that the pixels are dominated by the background. If the nu
 
 (a) In the `aligned` and `inverted` sets the background is tied to the class, so a partition by class has a high $\mathrm{NMI}$ with the background by construction: this is not leakage. The leakage is the `iid` column ($0.004$), and the check against a background shortcut is $\Delta\mathrm{ACC}$ and the equality of the four columns.
 
-The four columns are identical seed by seed: on each of the 200 seeds, the ACC is exactly the same on the training images and on the three test sets, so the held-out partition adds no degradation, and a background that points to the right or to a wrong class does not change a single decision. On the seeds 100 to 199 only (fresh for every choice), 98 outputs out of 100 are right (failure rate $2\\,\%$, Clopper-Pearson 95 % interval $[0.2,7.0]\\,\%$, ACC $0.996\pm0.028$). The worst-group ACC is $1$ on every right seed and $0$ on each of the 6 failures (a class absorbed in another one), hence its mean $194/200=0.97$. The open share is $0.001$ on average: it comes from one seed (106) where a whole class ($20\\,\%$ of the images) is sent to a group of images that opened no cluster and counted as an extra cluster.
+The four columns are identical seed by seed: on each of the 200 seeds, the ACC (with the matching of the training partition) is exactly the same on the training images and on the three test sets, so the held-out partition adds no degradation, and a background that points to the right or to a wrong class does not change a single decision. On the seeds 100 to 199 only (fresh for every choice), 98 outputs out of 100 are right (failure rate $2\\,\%$, Clopper-Pearson 95 % interval $[0.2,7.0]\\,\%$, ACC $0.996\pm0.028$). The worst-group ACC is $1$ on every right seed and $0$ on each of the 6 failures (a class absorbed in another one), hence its mean $194/200=0.97$. The open share is $0.001$ on average: it comes from one seed (106) where a whole class ($20\\,\%$ of the images) is sent to a group of images that opened no cluster and counted as an extra cluster.
 
-**Table 2. Comparison with the baselines** (toy, seeds 0 to 199, mean $\pm$ standard deviation; "right" = 5 clusters and ACC $=1$). "Not run" cells are defined by the protocol above and filled by `configs/suites/toy_compare.yml`.
+**Table 2. Comparison with the baselines** (toy, seeds 0 to 199, mean $\pm$ standard deviation; "right" = 5 clusters and ACC $=1$). Table 2a: trained on the benchmark as it is ($s=0$). Table 2b: trained with a colour shortcut ($s=0.9$). "Not run" cells are defined by the protocol above and filled by `configs/suites/toy_compare.yml`.
 
-| Method | $K$ | Clean ($s=0$): right (train) | Clean: ACC (train) | Clean: $\Delta\mathrm{ACC}$ | Shortcut ($s=0.9$): right (train) | Shortcut: ACC (train) | Shortcut: $\Delta\mathrm{ACC}$ |
+**Table 2a. Clean training ($s=0$)**
+
+| Method | $K$ | Right (train) | ACC (train) | $\mathrm{NMI}(\text{cluster},\text{class})$ (train) | $\mathrm{NMI}(\text{cluster},\text{background})$ (`iid`) | $\Delta\mathrm{ACC}$ | Mean $\lvert\Delta\mathrm{ACC}\rvert$ |
 |---|---|---|---|---|---|---|---|
-| K-Means on pixels | 10 | 0 / 200 | $0.567\pm0.039$ | not run | not run | not run | not run |
-| GMM on pixels | 10 | not run | not run | not run | not run | not run | not run |
+| K-Means on pixels | 10 | 0 / 200 | $0.560\pm0.037$ | $0.842\pm0.006$ | $0.152\pm0.009$ | $-0.010\pm0.292$ | $0.238$ |
+| GMM on pixels | 10 | 0 / 200 | $0.596\pm0.036$ | $0.848\pm0.006$ | $0.141\pm0.009$ | $0.008\pm0.263$ | $0.212$ |
 | SimCLR + K-Means | 10 | not run | not run | not run | not run | not run | not run |
 | IIC | 10 | not run | not run | not run | not run | not run | not run |
-| **CIB-IRL** | 10 slots | 194 / 200 | $0.993\pm0.042$ | $0.000\pm0.000$ | not run | not run | not run |
+| **CIB-IRL** | 10 slots | 194 / 200 | $0.993\pm0.042$ | $0.997\pm0.019$ | $0.004\pm0.001$ | $0.000\pm0.000$ | $0.000$ |
 
-ACC (train) is measured on the training images; for CIB-IRL it equals the ACC on the three test sets (Table 1). $\Delta\mathrm{ACC}$ needs the three test sets, on which the K-Means rows have not been scored yet. For K-Means with $K=10$ on the clean training images, $\mathrm{NMI}(\text{cluster},\text{class})$ is $0.843$ and $\mathrm{NMI}(\text{cluster},\text{background})$ is $0.159$. With the true number of clusters ($K=5$) K-Means solves the toy (Section 11.1.3); that case is not in the table.
+**Table 2b. Training with a colour shortcut ($s=0.9$)**
 
-The CIB-IRL clean cells are the 200 runs of Table 1. The pipeline gets the right partition from an upper bound of twice the number of classes, with no label and at no cost in leakage.
+| Method | $K$ | Right (train) | ACC (train) | $\mathrm{NMI}(\text{cluster},\text{class})$ (train) | $\mathrm{NMI}(\text{cluster},\text{background})$ (`iid`) | $\Delta\mathrm{ACC}$ | Mean $\lvert\Delta\mathrm{ACC}\rvert$ |
+|---|---|---|---|---|---|---|---|
+| K-Means on pixels | 10 | 0 / 200 | $0.935\pm0.009$ | $0.934\pm0.006$ | $0.129\pm0.015$ | $0.635\pm0.181$ | $0.635$ |
+| GMM on pixels | 10 | 0 / 200 | $0.912\pm0.028$ | $0.923\pm0.011$ | $0.056\pm0.016$ | $0.752\pm0.147$ | $0.752$ |
+| **CIB-IRL** | 10 slots | 195 / 200 | $0.994\pm0.040$ | $0.997\pm0.021$ | $0.004\pm0.001$ | $0.000\pm0.000$ | $0.000$ |
+
+SimCLR and IIC have no $s=0.9$ run: they learn only from views whose background is repainted, so $s$ does not reach them ([Section 11.1.4](#1114-protocol)). ACC and $\mathrm{NMI}(\text{cluster},\text{class})$ are measured on the training images (transductive); for CIB-IRL at $s=0$ the ACC equals the ACC on the three test sets (Table 1). $\mathrm{NMI}(\text{cluster},\text{background})$ is read on the `iid` test set, where the background is independent of the class: it is the leakage ([Section 9.3](#93-metrics)). $\Delta\mathrm{ACC}$ is computed with the matching of the training partition ([Section 9.4](#94-train-and-test-partitions)); the last column is the mean over the seeds of its absolute value, because a signed mean can cancel runs that are sensitive to the background in opposite directions. With the true number of clusters ($K=5$) K-Means solves the toy (Section 11.1.3); that case is not in the table.
+
+- **With $K=10$, K-Means and GMM cut the classes.** $\mathrm{NMI}(\text{cluster},\text{class})$ is $0.84$ to $0.85$ while the ACC is $0.56$ to $0.60$ and no seed is right: the clusters are pure but several of them share a class.
+- **K-Means and GMM follow the shortcut.** Trained at $s=0.9$, they send `aligned` images to the right cluster and `inverted` images to the wrong one: ACC with the fixed matching is $1.000$ against $0.365$ for K-Means, $0.987$ against $0.235$ for GMM, hence $\Delta\mathrm{ACC}=0.635$ and $0.752$, above $0.2$ on all 200 seeds. The higher ACC (train) at $s=0.9$ ($0.560\to0.935$, $0.596\to0.912$) is this colour: it ties the images of a class together. CIB-IRL has $\Delta\mathrm{ACC}=0.000\pm0.000$.
+- **At $s=0$ the mean $\Delta\mathrm{ACC}$ of K-Means and GMM is near $0$ but the runs are not insensitive.** The standard deviation is $0.29$ and $0.26$ and the mean absolute value $0.24$ and $0.21$: a run is moved by the test background in one direction or the other, which is consistent with the classes being split along the brightness of their background (Figure 2).
+- **Leakage and class information.** CIB-IRL has the highest $\mathrm{NMI}(\text{cluster},\text{class})$ ($0.997$) and a leakage of $0.004$, against $0.06$ to $0.15$ for K-Means and GMM, and $\Delta\mathrm{ACC}=0.000$ on each of its 200 seeds at both $s=0$ and $s=0.9$.
+
+The CIB-IRL cells at $s=0$ are the 200 runs of Table 1. The pipeline gets the right partition from an upper bound of twice the number of classes, with no label and at no cost in leakage.
 
 **Table 3. What the clean-up and the stopping rule do** (200 seeds).
 
@@ -950,7 +965,7 @@ Figure 3 follows one run (seed 20, replayed with a checkpoint at every epoch; th
 
 #### 11.1.9 Limits
 
-One thing is missing inside the toy: **a background shortcut in training**. All 200 runs use $s=0$. The `aligned` and `inverted` test sets show that the output does not depend on a background correlated with the class at test time, but no run had the opportunity to learn such a correlation. Training with $s=0.9$, for CIB-IRL and for the baselines, is the next step (Table 2; [Section 13.4](#134-baselines-and-comparison)), before the other datasets.
+The 200 runs of Table 1 use $s=0$: nothing in the training data ties the background to the class, so the `aligned` and `inverted` sets check robustness at test time only. The shortcut regime is Table 2b: trained at $s=0.9$, CIB-IRL gets 195 outputs out of 200 right and $\Delta\mathrm{ACC}=0.000\pm0.000$, where K-Means and GMM reach $0.635$ and $0.752$. This regime is run with the transformation bank of the toy, which redraws the background of every view: it shows that the model is not drawn to the shortcut when its views know the background, and does not test a bank that does not. The other datasets ([Section 9.1](#91-datasets-engineered-spurious-correlations)) come next.
 
 ---
 
@@ -1074,7 +1089,7 @@ python scripts/run_baseline.py --method simclr --data toy --transform toy_oracle
 python scripts/run_baseline.py --method iic    --data toy --transform toy_oracle --data-set spurious=0.9 --set seed=3
 ```
 
-The comparison of Table 2 is one suite of 9 experiments (K-Means, GMM, SimCLR and IIC $\times$ $s\in\\{0,0.9\\}$, plus CIB-IRL at $s=0.9$; CIB-IRL at $s=0$ is the 200 runs of [Section 13.3](#133-reproduce-the-toy-results)): $K=10$, seeds 0 to 199 everywhere, 300 epochs for SimCLR and IIC. A part of it can be listed before launching:
+The comparison of Table 2 is one suite of 7 experiments (K-Means and GMM $\times$ $s\in\\{0,0.9\\}$, SimCLR and IIC at $s=0$, plus CIB-IRL at $s=0.9$; CIB-IRL at $s=0$ is the 200 runs of [Section 13.3](#133-reproduce-the-toy-results)): $K=10$, seeds 0 to 199 everywhere, 300 epochs for SimCLR and IIC. A part of it can be listed before launching:
 
 ```
 python scripts/run_suite.py configs/suites/toy_compare.yml --only kmeans_k10_clean simclr_k10_clean --seeds 0 1 2 --dry-run
@@ -1086,6 +1101,8 @@ python scripts/eval_heldout.py results/toy_cov_k10_final_ac results/toy_cov_k10_
 python scripts/compare_methods.py results/toy_compare results/toy_compare/heldout_*/heldout_metrics.json \
        results/toy_final_report/heldout_metrics.json --out results/toy_compare/table.md
 ```
+
+`scripts/eval_heldout.py` runs `--workers 2` processes by default, each with its own copy of torch (about 650 MB); with `--workers 1` it evaluates in the main process, for a machine with little memory.
 
 ### 13.5 Other benchmarks
 
@@ -1114,7 +1131,7 @@ python scripts/run_baseline.py   --method kmeans --data waterbirds --set feature
 - [ ] Variational formulation validated and consistency term fixed (Section 5.1)
 - [x] Toy dataset stored as files (`data/toy/`) with a loader; benchmark abstraction (train builder, test builder, `iid` / `aligned` / `inverted`) for the toy, Colored MNIST and Waterbirds; retained toy configuration in `configs/benchmarks/toy.yml`
 - [x] The two baselines (K-Means / GMM, SimCLR / IIC) implemented behind the shared evaluation protocol ([Section 9.2](#92-baselines)); comparison suite `configs/suites/toy_compare.yml` written and tested on tiny runs
-- [ ] Toy comparison: CIB-IRL, K-Means, GMM, SimCLR and IIC $\times$ `iid` / `aligned` / `inverted` $\times$ $s\in\\{0,0.9\\}$ (Table 2)
+- [ ] Toy comparison: CIB-IRL, K-Means, GMM, SimCLR and IIC $\times$ `iid` / `aligned` / `inverted` $\times$ $s\in\\{0,0.9\\}$ (SimCLR and IIC at $s=0$ only) (Table 2)
 - [ ] Ablation $\lambda=0$ (`configs/ablations/no_inv.yml`) on the 200 seeds of the toy
 - [ ] Ablation reward + prior ( $\mathrm{softmax}(R_\theta+\log\pi_0)$ ) instead of the RL policy: readout done on the 100 first final models, acting rule during training to run
 - [ ] Toy: a step for the 3 % of runs where two classes end in one cluster

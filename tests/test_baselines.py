@@ -233,21 +233,23 @@ def test_comparison_suite_follows_the_decisions_of_2026_10_18_and_20():
     suite = run_suite.load_suite(ROOT / "configs" / "suites" / "toy_compare.yml")
     exps = {e["name"]: e for e in suite["experiments"]}
     assert suite["seeds"] == list(range(200)) and all("seeds" not in e for e in exps.values())     # the same seeds everywhere
-    assert len(exps) == 9 and not any("k5" in n or "irl_noib" in n for n in exps)                    # K = 10 only, two baselines
+    assert len(exps) == 7 and not any("k5" in n or "irl_noib" in n for n in exps)                    # K = 10 only, two baselines
     assert all(e["set"]["num_clusters"] == 10 for e in exps.values() if e.get("method") in run_suite.BASELINES)
     for regime, s in (("clean", 0.0), ("spur90", 0.9)):
-        for stem in ("kmeans_k10", "gmm_k10", "simclr_k10", "iic_k10"):
+        for stem in ("kmeans_k10", "gmm_k10"):
             assert exps[f"{stem}_{regime}"]["data_params"]["spurious"] == s
+    for stem in ("simclr_k10", "iic_k10"):                  # the bank repaints the background: spurious 0 only
+        assert exps[f"{stem}_clean"]["data_params"]["spurious"] == 0.0 and f"{stem}_spur90" not in exps
     assert "final_clean" not in exps and exps["final_spur90"]["data_params"]["spurious"] == 0.9    # final_clean = the 200 existing runs
     assert exps["final_spur90"]["configs"] == ["configs/benchmarks/toy.yml"]
-    for n in ("simclr_k10_clean", "iic_k10_spur90"):
+    for n in ("simclr_k10_clean", "iic_k10_clean"):
         assert exps[n]["transform"] == "toy_oracle" and exps[n]["set"]["epochs"] == 300             # the bank of the model, 300 epochs
     assert "transform" not in exps["kmeans_k10_clean"]
     assert exps["final_spur90"]["transform"] == "toy_oracle" and exps["final_spur90"]["stop"] == {"max_epochs": 300, "min_epochs": 40}
 
 
 def test_comparison_suite_dry_run_builds_the_right_commands():
-    res = run_suite_dry("configs/suites/toy_compare.yml", "--only", "kmeans_k10_clean", "iic_k10_spur90", "final_spur90", "--seeds", "0", "1")
+    res = run_suite_dry("configs/suites/toy_compare.yml", "--only", "kmeans_k10_clean", "iic_k10_clean", "final_spur90", "--seeds", "0", "1")
     assert "6 runs would be launched" in res.stdout, res.stdout + res.stderr
     assert "run_baseline.py --method kmeans" in res.stdout and "run_baseline.py --method iic" in res.stdout
     assert "run_experiment.py" in res.stdout

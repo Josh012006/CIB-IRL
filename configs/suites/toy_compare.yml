@@ -6,7 +6,9 @@
 # Decisions (2026-10-18):
 #   - K = 10 for every baseline (the upper bound given to our model): the number of classes is not given. No K = 5 runs.
 #   - the methods that use views (simclr, iic) use toy_oracle, the bank of our model: same dataset, exact comparison.
-#   - spurious 0.9 only (the highest level), plus the benchmark as it is.
+#   - spurious 0.9 only (the highest level), plus the benchmark as it is, for kmeans, gmm and our model. simclr and iic are run at
+#     spurious 0 only (user, 2026-10-20): the bank repaints the whole background of every view, so their training does not depend on
+#     spurious (IIC: identical loss curves and partitions at 0 and 0.9, seeds 0 and 1).
 #   - seeds 0-199 for every experiment: the same 200 datasets and the same seeds everywhere.
 #   - simclr and iic: 300 epochs, fixed (they have no label-free stopping rule).
 #   - no multi-intention IRL baseline (2026-10-20): the existing methods do not cluster static images; the no-bottleneck variant
@@ -27,7 +29,7 @@
 #   baseline 1   kmeans, gmm        fixed features (pixels), K = 10
 #   baseline 2   simclr, iic        trained with the same transformation bank as our model's experts, then clustered; K = 10
 #   ours         final_spur90       configs/benchmarks/toy.yml with the colour shortcut
-# Our model is the heavy run (about 3 to 4 minutes each), then iic and simclr (4 to 25 minutes); kmeans and gmm take seconds.
+# Our model is the heavy run (about 3 to 4 minutes each), then iic and simclr (4 to 25 minutes, 200 runs each); kmeans and gmm take seconds.
 name: toy_compare
 description: toy benchmark, our model and the two baselines (K = 10), trained without and with a colour shortcut
 seeds: "0-199"
@@ -42,7 +44,5 @@ experiments:
   # ---- trained with a colour shortcut (spurious 0.9) ----------------------------------------------------------------------
   - {name: kmeans_k10_spur90, method: kmeans, set: {num_clusters: 10}, data_params: {spurious: 0.9}}
   - {name: gmm_k10_spur90,    method: gmm,    set: {num_clusters: 10}, data_params: {spurious: 0.9}}
-  - {name: simclr_k10_spur90, method: simclr, transform: toy_oracle, set: {num_clusters: 10, epochs: 300}, data_params: {spurious: 0.9}}
-  - {name: iic_k10_spur90,    method: iic,    transform: toy_oracle, set: {num_clusters: 10, epochs: 300}, data_params: {spurious: 0.9}}
   - {name: final_spur90,      transform: toy_oracle, data_params: {spurious: 0.9},
      configs: [configs/benchmarks/toy.yml], stop: {max_epochs: 300, min_epochs: 40}}

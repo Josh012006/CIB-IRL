@@ -97,12 +97,18 @@ def main(argv=None) -> None:
     for s in args.suites:
         runs += sorted(glob.glob(os.path.join(s, f"{args.experiment}_seed*")), key=lambda p: int(p.rsplit("seed", 1)[1]))
     runs = runs[:args.limit] if args.limit else runs
-    with mp.Pool(args.workers) as pool:
-        rows = []
-        for i, r in enumerate(pool.imap(evaluate_run, runs), 1):
-            rows.append(r)
+    rows = []
+    if args.workers <= 1:      # in this process: no worker, so a single copy of torch in memory (machines with little RAM)
+        for i, run in enumerate(runs, 1):
+            rows.append(evaluate_run(run))
             if i % 20 == 0 or i == len(runs):
                 print(f"{i}/{len(runs)} runs", flush=True)
+    else:
+        with mp.Pool(args.workers) as pool:
+            for i, r in enumerate(pool.imap(evaluate_run, runs), 1):
+                rows.append(r)
+                if i % 20 == 0 or i == len(runs):
+                    print(f"{i}/{len(runs)} runs", flush=True)
     rows.sort(key=lambda r: r["seed"])
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
