@@ -27,13 +27,13 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
-      accent: indigo
+      primary: deep orange     # avant : indigo
+      accent: orange           # avant : indigo
       toggle: {icon: material/weather-night, name: Switch to dark mode}
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
-      accent: indigo
+      primary: deep orange     # avant : indigo
+      accent: orange           # avant : indigo
       toggle: {icon: material/weather-sunny, name: Switch to light mode}
 
 # The Markdown files are written for GitHub too; this hook turns their GitHub-flavoured formulas into plain LaTeX for MathJax and
