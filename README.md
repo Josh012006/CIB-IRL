@@ -222,7 +222,7 @@ The only component that sees pixels. It maps an image to a stochastic code $z=\m
 
 <br>
 
-As in the Deep VIB, the two mutual-information terms of the objective are replaced by variational bounds (with the fixed prior $r(z)=\mathcal N(0,I)$):
+As in the Deep VIB, the two mutual-information terms of the objective are replaced by variational bounds (with the fixed prior $r(z)=\mathcal N(0,I)$ ):
 
 <br>
 
@@ -262,7 +262,7 @@ Infers from $z$ a continuous intent $m$ (what the image is about), the counterpa
 
 <br>
 
-$m^*_i$ is the mean intent over the orbit of image $i$ (a stop-gradient target): all the views of an image must give the same concept. $C_{ij}$ is the covariance matrix of $\mu_\psi(z)$ over an expert batch (not the cluster memory), $d=\dim_m=16$ and $\lambda_{\text{cov}}=3$: without the decorrelation penalty the intent collapses to a single direction and the classes superpose.
+$m_i^*$ is the mean intent over the orbit of image $i$ (a stop-gradient target): all the views of an image must give the same concept. $C_{ij}$ is the covariance matrix of $\mu_\psi(z)$ over an expert batch (not the cluster memory), $d=\dim_m=16$ and $\lambda_{\text{cov}}=3$: without the decorrelation penalty the intent collapses to a single direction and the classes superpose.
 
 **Full version:** [Section 5.2](https://josh012006.github.io/CIB-IRL/#52-intent-predictor-q_psi) on the documentation site.
 
