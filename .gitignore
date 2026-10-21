@@ -7,3 +7,5 @@ data/*
 !data/toy/
 results/**/checkpoint.pt
 thinking-process.txt
+# documentation build
+site/

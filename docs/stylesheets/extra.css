@@ -1,0 +1,5 @@
+/* A wider page: the documentation holds large tables and long formulas. */
+.md-grid { max-width: 82rem; }
+.md-typeset table:not([class]) { font-size: 0.72rem; }
+.md-typeset .arithmatex { overflow-x: auto; overflow-y: hidden; }
+.md-typeset img { display: block; margin: 0.8rem auto; }

@@ -1,0 +1,77 @@
+# Documentation site of CIB-IRL, built with MkDocs + Material and published by GitHub Pages
+# (.github/workflows/docs.yml). Preview locally:  pip install -r requirements-docs.txt && mkdocs serve
+site_name: CIB-IRL
+site_description: Unsupervised image clustering by simultaneous Information-Bottleneck representation learning and multi-intention Inverse Reinforcement Learning
+site_url: https://josh012006.github.io/CIB-IRL/
+repo_url: https://github.com/Josh012006/CIB-IRL
+repo_name: Josh012006/CIB-IRL
+edit_uri: edit/main/docs/
+docs_dir: docs
+
+nav:
+  - Documentation: index.md
+  - Protocol decisions: protocol-decisions.md
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.top
+    - toc.integrate          # the table of contents of the page in the left sidebar
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle: {icon: material/weather-night, name: Switch to dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle: {icon: material/weather-sunny, name: Switch to light mode}
+
+# The Markdown files are written for GitHub too; this hook turns their GitHub-flavoured formulas into plain LaTeX for MathJax and
+# serves the figures of results/toy_final_report/ (scripts/docs_hooks.py).
+hooks:
+  - scripts/docs_hooks.py
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+      slugify: !!python/object/apply:pymdownx.slugs.slugify {kwds: {case: lower}}     # the same anchors as GitHub
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js
+extra_css:
+  - stylesheets/extra.css
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
