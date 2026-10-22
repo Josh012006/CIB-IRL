@@ -379,7 +379,7 @@ Toy environment, 200 seeds (0 to 199), the final pipeline of Section 5. No label
 
 (a) In the `aligned` and `inverted` sets the background is tied to the class, so a partition by class has a high $\mathrm{NMI}$ with the background by construction: this is not leakage. The leakage is the `iid` column ($0.004$), and the check against a background shortcut is $\Delta\mathrm{ACC}$ and the equality of the four columns.
 
-**Table 2. Comparison with the baselines** (toy, seeds 0 to 199, mean $\pm$ standard deviation; "right" = 5 clusters and ACC $=1$). Table 2a: trained on the benchmark as it is ($s=0$). Table 2b: trained with a colour shortcut ($s=0.9$). "Not run" cells are defined by the protocol above and filled by `configs/suites/toy_compare.yml`.
+**Table 2. Comparison with the baselines** (toy, seeds 0 to 199, mean $\pm$ standard deviation; "right" = 5 clusters and ACC $=1$). Table 2a: trained on the benchmark as it is ($s=0$). Table 2b: trained with a colour shortcut ($s=0.9$).
 
 **Table 2a. Clean training ($s=0$)**
 
@@ -387,7 +387,7 @@ Toy environment, 200 seeds (0 to 199), the final pipeline of Section 5. No label
 |---|---|---|---|---|---|---|---|
 | K-Means on pixels | 10 | 0 / 200 | $0.560\pm0.037$ | $0.842\pm0.006$ | $0.152\pm0.009$ | $-0.010\pm0.292$ | $0.238$ |
 | GMM on pixels | 10 | 0 / 200 | $0.596\pm0.036$ | $0.848\pm0.006$ | $0.141\pm0.009$ | $0.008\pm0.263$ | $0.212$ |
-| SimCLR + K-Means | 10 | not run | not run | not run | not run | not run | not run |
+| SimCLR + K-Means | 10 | 0 / 200 | $0.720\pm0.049$ | $0.863\pm0.011$ | $0.118\pm0.018$ | $0.008\pm0.172$ | $0.131$ |
 | IIC | 10 | 4 / 200 | $0.613\pm0.142$ | $0.791\pm0.097$ | $0.002\pm0.001$ | $0.000\pm0.000$ | $0.000$ |
 | **CIB-IRL** | 10 slots | 194 / 200 | $0.993\pm0.042$ | $0.997\pm0.019$ | $0.004\pm0.001$ | $0.000\pm0.000$ | $0.000$ |
 
@@ -404,8 +404,9 @@ SimCLR and IIC have no $s=0.9$ run: they learn only from views whose background 
 - **With $K=10$, K-Means and GMM cut the classes.** $\mathrm{NMI}(\text{cluster},\text{class})$ is $0.84$ to $0.85$ while the ACC is $0.56$ to $0.60$ and no seed is right: the clusters are pure but several of them share a class.
 - **K-Means and GMM follow the shortcut.** Trained at $s=0.9$, they send `aligned` images to the right cluster and `inverted` images to the wrong one: ACC with the fixed matching is $1.000$ against $0.365$ for K-Means, $0.987$ against $0.235$ for GMM, hence $\Delta\mathrm{ACC}=0.635$ and $0.752$, above $0.2$ on all 200 seeds. The higher ACC (train) at $s=0.9$ ($0.560\to0.935$, $0.596\to0.912$) is this colour: it ties the images of a class together. CIB-IRL has $\Delta\mathrm{ACC}=0.000\pm0.000$.
 - **At $s=0$ the mean $\Delta\mathrm{ACC}$ of K-Means and GMM is near $0$ but the runs are not insensitive.** The standard deviation is $0.29$ and $0.26$ and the mean absolute value $0.24$ and $0.21$: a run is moved by the test background in one direction or the other, which is consistent with the classes being split along the brightness of their background ([Figure 2](https://josh012006.github.io/CIB-IRL/#1113-why-it-is-hard)).
+- **SimCLR + K-Means behaves like K-Means on the pixels, with a slightly better ACC.** With $K=10$ the final K-Means cuts every class in two: 0 seeds out of 200 are right, ACC $0.720\pm0.049$ (against $0.560$ on the pixels), 10 clusters in each run, $\mathrm{NMI}(\text{cluster},\text{class})=0.863$. The mean $\Delta\mathrm{ACC}$ is near $0$ ($0.008$) but its standard deviation is $0.17$ and the mean absolute value $0.131$ ($\lvert\Delta\mathrm{ACC}\rvert>0.2$ for $18.5\,\%$ of the seeds): as for K-Means and GMM at $s=0$, a run is moved by the test background in one direction or the other. The leakage is $0.118$ (K-Means $0.152$): the backbone is trained on views whose background is repainted, but the features of the real training images that the K-Means reads still carry part of it.
 - **IIC ignores the background but merges classes.** The bank repaints the background of every view, so IIC is insensitive to it: $\Delta\mathrm{ACC}=0.000$ on 200 seeds, the same ACC on the three test sets, a leakage of $0.002$. But with $K=10$ it collapses to $3.06\pm0.71$ clusters on average (2 for 40 seeds, 3 for 111, 4 for 45, 5 for 4), hence ACC $0.613\pm0.142$ (median $0.6$) and 4 seeds right out of 200: it gets the invariance without the number of classes.
-- **Leakage and class information.** CIB-IRL has the highest $\mathrm{NMI}(\text{cluster},\text{class})$ ($0.997$) and a leakage of $0.004$, against $0.06$ to $0.15$ for K-Means and GMM (and $0.002$ for IIC, which merges classes), and $\Delta\mathrm{ACC}=0.000$ on each of its 200 seeds at both $s=0$ and $s=0.9$.
+- **Leakage and class information.** CIB-IRL has the highest $\mathrm{NMI}(\text{cluster},\text{class})$ ($0.997$) and a leakage of $0.004$, against $0.06$ to $0.15$ for K-Means, GMM and SimCLR (and $0.002$ for IIC, which merges classes), and $\Delta\mathrm{ACC}=0.000$ on each of its 200 seeds at both $s=0$ and $s=0.9$.
 
 The CIB-IRL cells at $s=0$ are the 200 runs of Table 1. The pipeline gets the right partition from an upper bound of twice the number of classes, with no label and at no cost in leakage.
 
@@ -530,7 +531,7 @@ mkdocs build --strict             # what the workflow runs: a broken link or anc
 - [ ] Variational formulation validated and consistency term fixed (Section 5.1)
 - [x] Toy dataset stored as files (`data/toy/`) with a loader; benchmark abstraction (train builder, test builder, `iid` / `aligned` / `inverted`) for the toy, Colored MNIST and Waterbirds; retained toy configuration in `configs/benchmarks/toy.yml`
 - [x] The two baselines (K-Means / GMM, SimCLR / IIC) implemented behind the shared evaluation protocol ([Section 9.2](https://josh012006.github.io/CIB-IRL/#92-baselines)); comparison suite `configs/suites/toy_compare.yml` written and tested on tiny runs
-- [ ] Toy comparison: CIB-IRL, K-Means, GMM, SimCLR and IIC $\times$ `iid` / `aligned` / `inverted` $\times$ $s\in\lbrace 0,0.9\rbrace$ (SimCLR and IIC at $s=0$ only) (Table 2)
+- [x] Toy comparison: CIB-IRL, K-Means, GMM, SimCLR and IIC $\times$ `iid` / `aligned` / `inverted` $\times$ $s\in\lbrace 0,0.9\rbrace$ (SimCLR and IIC at $s=0$ only) (Table 2)
 - [ ] Ablation $\lambda=0$ (`configs/ablations/no_inv.yml`) on the 200 seeds of the toy
 - [ ] Ablation reward + prior ( $`\mathrm{softmax}(R_\theta+\log\pi_0)`$ ) instead of the RL policy: readout done on the 100 first final models, acting rule during training to run
 - [ ] Toy: a step for the 3 % of runs where two classes end in one cluster
