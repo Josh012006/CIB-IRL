@@ -15,6 +15,8 @@ whatever it preserves is identity. A bank is therefore a written, versioned obje
 | `digits_affine_stroke.yml` | `digits_affine` + random stroke thickness | variant of `digits` for handwriting (docs 5.37) |
 | `digits_zoomshift.yml` | no crop, no jitter: rotation and shear 8 degrees, zoom 0.9 to 1.1, shift 1.4 pixels, per step | variant 3 of `digits` for handwriting (docs 5.37) |
 | `digits_zoomshift_stroke.yml` | `digits_zoomshift` + random stroke thickness | variant 4 of `digits`: isolates the stroke width on the zoomshift base (docs 5.37) |
+| `digits_full.yml` | `digits_zoomshift_stroke` + elastic distortion, light blur, noise, 4 x 4 erasing | variant 5: every augmentation that keeps the digit, all at once (docs 5.39); worse than variant 4 on seed 0 |
+| `digits_zoomshift_stroke_elastic.yml` | `digits_zoomshift_stroke` + elastic distortion alone | variant 6: says whether the elastic distortion is what hurt `digits_full` (docs 5.40) |
 | `digits_strong.yml` | `digits` with a stronger crop (area >= 0.5), rotation up to 30 degrees, jitter 0.3 | sensitivity step of `digits`, not a replacement |
 
 Reading the two regimes on a dataset with a colour shortcut (Colored MNIST, toy with `spurious: 0.9`):

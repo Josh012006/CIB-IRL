@@ -149,16 +149,17 @@ def fig_task(out: Path, seed: int = 100) -> None:
 # Figure 2: why it is hard (pixels are organised by the background, not by the class)
 # ---------------------------------------------------------------------------------------------------------------------
 def fig_difficulty(out: Path, seed: int) -> dict:
-    """Left: in pixel space every class is a long segment, stretched by the background luminance (the nuisance).
+    """Left: t-SNE of the pixels, coloured by the background luminance (the nuisance); five groups, one per class (the PCA of the
+    first version showed every class as a long segment stretched by the luminance, which t-SNE does not preserve).
     Right: K-means on pixels with K = 10 (our upper bound) cuts the classes along that luminance."""
     from matplotlib.colors import LinearSegmentedColormap
     from sklearn.cluster import KMeans
-    from sklearn.decomposition import PCA
+    from sklearn.manifold import TSNE
     x, y, bgid = make_toy(seed=seed)
     xs = x.numpy()
     flat = x.reshape(len(x), -1).numpy()
     y, bgid = y.numpy(), bgid.numpy()
-    pca = PCA(2, random_state=0).fit_transform(flat)
+    pca = TSNE(2, perplexity=40, init="pca", random_state=0, n_jobs=1).fit_transform(flat)      # t-SNE (name kept: it is the 2-D embedding)
     km10 = KMeans(10, n_init=10, random_state=0).fit_predict(flat)
     lum = np.array([img[:, 0, 0].mean() for img in xs])                    # luminance of the background (corner pixel)
     cmap = LinearSegmentedColormap.from_list("blue", ["#cde2fb", "#3987e5", "#0d366b"])
@@ -173,9 +174,8 @@ def fig_difficulty(out: Path, seed: int) -> dict:
     ax.set_xticks([])
     ax.set_yticks([])
     ax.grid(False)
-    ax.set_xlabel("1st principal component of the pixels")
-    ax.set_ylabel("2nd principal component")
-    ax.set_title("Pixels: each class is stretched\nalong the brightness of its background", pad=10)
+    ax.set_xlabel("t-SNE of the pixels")
+    ax.set_title("Pixels (t-SNE): one group per class,\nshaded by the brightness of its background", pad=10)
     cb = fig.colorbar(sc, ax=ax, fraction=0.045, pad=0.02)
     cb.set_label("background brightness", color=INK2)
     cb.outline.set_visible(False)
@@ -207,9 +207,12 @@ def pixel_kmeans_all(seeds) -> dict:
 # ---------------------------------------------------------------------------------------------------------------------
 # Trace of one run (clusters at the start and at the end)
 # ---------------------------------------------------------------------------------------------------------------------
+STAGE_EPOCHS = (12, 13, 14)              # epochs whose intent space m is drawn in figure 3 (t-SNE), besides the final output
+
+
 def extract_trace(trace_dir: str, out: Path) -> None:
     """Reads the per-epoch checkpoints of a replayed run and stores, for every epoch, the output partition and the memory
-    partition (small arrays: this is what the figure needs)."""
+    partition (small arrays: this is what the figure needs), and the t-SNE of the intent space m at STAGE_EPOCHS and at the end."""
     import torch
     from cibirl import transforms
     from cibirl.train import TrainConfig, Trainer
@@ -222,7 +225,9 @@ def extract_trace(trace_dir: str, out: Path) -> None:
     tr = Trainer(cfg, data.images, bank, device="cpu", eval_labels=data.labels)
     files = sorted((d / "ckpts").glob("ep*.pt"))
     from sklearn.decomposition import PCA
-    preds, mems, pcs = [], [], []
+    from sklearn.manifold import TSNE
+    tsne = lambda m: TSNE(2, perplexity=40, init="pca", random_state=0, n_jobs=1).fit_transform(m).astype(np.float32)   # noqa: E731
+    preds, mems, pcs, tsnes = [], [], [], []
     for f in files:
         ck = torch.load(f, map_location="cpu", weights_only=False)
         for k in ("encoder", "intent", "reward", "policy", "value"):
@@ -231,12 +236,16 @@ def extract_trace(trace_dir: str, out: Path) -> None:
         tr.memory.assign, tr.memory.member_m, tr.memory.counts, tr.memory.summaries = ck["assign"], ck["member_m"], ck["counts"], ck["summaries"]
         preds.append(tr.predict().numpy().astype(np.int16))
         mems.append(tr.memory.assign.numpy().astype(np.int16))
-        pcs.append(PCA(2, random_state=0).fit_transform(tr.intents().numpy()).astype(np.float32))
+        m_ep = tr.intents().numpy()
+        pcs.append(PCA(2, random_state=0).fit_transform(m_ep).astype(np.float32))
+        if len(preds) in STAGE_EPOCHS:                                   # the epoch number is the index of the checkpoint + 1
+            tsnes.append(tsne(m_ep))
     fm = json.load(open(d / "final_metrics.json", encoding="utf-8"))
     (out / f"trace_seed{cfg.seed}_metrics.jsonl").write_text((d / "metrics.jsonl").read_text(encoding="utf-8"), encoding="utf-8")
     m_final = np.load(d / "intents.npy")
     np.savez_compressed(out / f"trace_seed{cfg.seed}.npz", pred=np.stack(preds), memory=np.stack(mems), m_pca=np.stack(pcs),
                         m_pca_final=PCA(2, random_state=0).fit_transform(m_final).astype(np.float32), epochs=np.arange(1, len(files) + 1),
+                        m_tsne=np.stack(tsnes), m_tsne_epochs=np.array(STAGE_EPOCHS), m_tsne_final=tsne(m_final),
                         final=np.load(d / "preds.npy").astype(np.int16), mem_pre=np.load(d / "variants.npz")["mem_pre"].astype(np.int16),
                         epochs_run=fm["epochs_run"], seed=cfg.seed)
     print("wrote trace for seed", cfg.seed, "epochs", len(files))
@@ -284,11 +293,11 @@ def fig_trace(out: Path, seed: int, stages, name: str, headline: str) -> None:
     tz = np.load(out / f"trace_seed{seed}.npz")
     x, y, _ = make_toy(seed=seed)
     x, y = x.numpy(), y.numpy()
-    fig = plt.figure(figsize=(5.2 * len(stages), 5.6))
+    fig = plt.figure(figsize=(4.7 * len(stages), 5.6))
     gs = fig.add_gridspec(2, len(stages), wspace=0.08, hspace=0.12, height_ratios=[1.0, 1.25])
     for j, (kind, ep, label) in enumerate(stages):
         part = tz["final"].astype(int) if kind == "final" else tz["pred"][ep - 1].astype(int)
-        pc = tz["m_pca_final"] if kind == "final" else tz["m_pca"][ep - 1]
+        pc = tz["m_tsne_final"] if kind == "final" else tz["m_tsne"][list(tz["m_tsne_epochs"]).index(ep)]
         acc = cluster_acc(part, y, 16) if part.max() < 16 else float("nan")
         n_cl = len(np.unique(part))
         ax0 = fig.add_subplot(gs[0, j])
@@ -300,7 +309,7 @@ def fig_trace(out: Path, seed: int, stages, name: str, headline: str) -> None:
         plural = "s" if n_cl > 1 else ""
         ax0.set_title(f"{label}\n{n_cl} cluster{plural}, ACC {acc:.2f}", fontsize=10.5, pad=8)
         if j == 0:
-            ax0.set_ylabel("intent $m$\n(first 2 components)", fontsize=9)
+            ax0.set_ylabel("intent $m$\n(t-SNE)", fontsize=9)
         gallery(fig.add_subplot(gs[1, j]), x, y, part, "", rows_max=6, seed=seed)
     fig.suptitle(headline, x=0.01, ha="left", fontsize=12, fontweight="bold", y=0.995)
     handles = [Rectangle((0, 0), 1, 1, color=C[c]) for c in range(5)]
@@ -573,7 +582,7 @@ def main(argv=None) -> None:
     if want("difficulty"):
         fig_difficulty(out, 100)
     if want("trace"):
-        for seed, stages, headline in ((20, [("epoch", 12, "Start: epoch 12"), ("epoch", 13, "Epoch 13"), ("final", None, "End: output at the stop (epoch 42)")],
+        for seed, stages, headline in ((20, [("epoch", 12, "Start: epoch 12"), ("epoch", 13, "Epoch 13"), ("epoch", 14, "Epoch 14"), ("final", None, "End: output at the stop (epoch 46)")],
                                         "Seed 20 (replay): from a single cluster to five pure clusters"),):
             if (out / f"trace_seed{seed}.npz").exists():
                 fig_trace(out, seed, stages, f"fig3_clusters_seed{seed}.png", headline)

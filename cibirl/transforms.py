@@ -206,6 +206,109 @@ def random_stroke_width(max_strength: float = 0.5, p: float = 1.0) -> Transform:
     return op
 
 
+def _gauss_kernel1d(sigma: Tensor, radius: int) -> Tensor:
+    """[n, 2 * radius + 1] normalised gaussian kernels, one per sigma (> 0)."""
+    t = torch.arange(-radius, radius + 1, device=sigma.device, dtype=sigma.dtype).view(1, -1)
+    k = torch.exp(-0.5 * (t / sigma.view(-1, 1)) ** 2)
+    return k / k.sum(1, keepdim=True)
+
+
+def _smooth(x: Tensor, kern: Tensor) -> Tensor:
+    """Separable gaussian smoothing of x [n, c, h, w] with one kernel per image kern [n, k] (border pixels repeated)."""
+    n, c, h, w = x.shape
+    r = kern.shape[1] // 2
+    z = F.pad(x.reshape(1, n * c, h, w), (r, r, r, r), mode="replicate")
+    kk = kern.repeat_interleave(c, dim=0)
+    z = F.conv2d(z, kk.view(n * c, 1, 1, -1), groups=n * c)
+    z = F.conv2d(z, kk.view(n * c, 1, -1, 1), groups=n * c)
+    return z.reshape(n, c, h, w)
+
+
+@register("elastic_distortion")
+def elastic_distortion(sigma: float = 3.5, strength: float = 1.2, p: float = 1.0) -> Transform:
+    """Elastic distortion (Simard et al. 2003): a smooth random displacement field moves every pixel a little, as a different
+    hand would bend or stretch the strokes.
+
+    sigma     smoothness of the field in pixels (larger = broader, gentler waves)
+    strength  the standard deviation of the displacement, in pixels, is drawn in [0, strength] for each image
+    p         share of the images that are distorted
+
+    The field is rescaled to a unit standard deviation before the strength is applied, so `strength` is in pixels whatever sigma is.
+    """
+    p = _prob(p)
+    if sigma <= 0.0 or strength <= 0.0:
+        raise ValueError("sigma and strength must be positive")
+    radius = max(1, int(math.ceil(3 * sigma)))
+
+    def op(x: Tensor) -> Tensor:
+        _check(x, "elastic_distortion")
+        n, _, h, w = x.shape
+        field = torch.randn(n, 2, h, w, device=x.device, dtype=x.dtype)
+        k = _gauss_kernel1d(torch.full((n,), sigma, device=x.device, dtype=x.dtype), radius)
+        field = _smooth(field, k)
+        field = field / field.flatten(2).std(dim=2).clamp_min(1e-8).view(n, 2, 1, 1)
+        amp = _uniform(n, 0.0, strength, x).view(n, 1, 1, 1)
+        dx, dy = field[:, 0] * amp[:, 0] * 2.0 / w, field[:, 1] * amp[:, 0] * 2.0 / h     # pixels -> normalised coordinates
+        base = F.affine_grid(torch.eye(2, 3, device=x.device, dtype=x.dtype).unsqueeze(0).repeat(n, 1, 1), list(x.shape), align_corners=False)
+        grid = base + torch.stack([dx, dy], dim=-1)
+        return _blend(x, F.grid_sample(x, grid, mode="bilinear", padding_mode="border", align_corners=False), p)
+
+    return op
+
+
+@register("gaussian_blur")
+def gaussian_blur(sigma: Sequence[float] = (0.0, 0.5), p: float = 1.0) -> Transform:
+    """Light gaussian blur of the image, sigma (in pixels) drawn in [sigma[0], sigma[1]] for each image (5 x 5 kernel)."""
+    p = _prob(p)
+    lo, hi = _pair(sigma, "sigma")
+    if lo < 0.0 or hi <= 0.0 or hi > 2.0:
+        raise ValueError("sigma must be in [0, 2] with a positive upper bound")
+
+    def op(x: Tensor) -> Tensor:
+        _check(x, "gaussian_blur")
+        sg = _uniform(x.shape[0], lo, hi, x).clamp_min(1e-3)
+        return _blend(x, _smooth(x, _gauss_kernel1d(sg, 2)), p)
+
+    return op
+
+
+@register("gaussian_noise")
+def gaussian_noise(max_std: float = 0.04, p: float = 1.0) -> Transform:
+    """Additive white noise of standard deviation drawn in [0, max_std] for each image, the result clipped to [0, 1]."""
+    p = _prob(p)
+    if not 0.0 < max_std <= 0.5:
+        raise ValueError(f"max_std must be in (0, 0.5], got {max_std}")
+
+    def op(x: Tensor) -> Tensor:
+        _check(x, "gaussian_noise")
+        sd = _uniform(x.shape[0], 0.0, max_std, x).view(-1, 1, 1, 1)
+        return _blend(x, (x + sd * torch.randn_like(x)).clamp(0.0, 1.0), p)
+
+    return op
+
+
+@register("random_erasing")
+def random_erasing(size: int = 4, p: float = 0.5) -> Transform:
+    """Set a size x size square to 0 (black), at a uniformly random position of the image, for a share p of the images."""
+    p = _prob(p)
+    if size < 1:
+        raise ValueError(f"size must be >= 1, got {size}")
+
+    def op(x: Tensor) -> Tensor:
+        _check(x, "random_erasing")
+        n, _, h, w = x.shape
+        if size > min(h, w):
+            raise ValueError(f"random_erasing: size {size} larger than the image {h} x {w}")
+        top = torch.randint(0, h - size + 1, (n, 1, 1), device=x.device)
+        left = torch.randint(0, w - size + 1, (n, 1, 1), device=x.device)
+        ys = torch.arange(h, device=x.device).view(1, h, 1)
+        xs = torch.arange(w, device=x.device).view(1, 1, w)
+        hole = ((ys >= top) & (ys < top + size) & (xs >= left) & (xs < left + size)).unsqueeze(1)
+        return _blend(x, x.masked_fill(hole, 0.0), p)
+
+    return op
+
+
 @register("hflip")
 def hflip(p: float = 0.5) -> Transform:
     """Mirror left-right with probability p. Natural images only: it changes the identity of digits."""

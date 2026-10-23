@@ -1,0 +1,12 @@
+name: digits_zoomshift
+description: bounded rotation + shear + zoom + shift, no crop and no photometric jitter,
+  for grey handwritten digits
+ops:
+- random_rotation:
+    max_degrees: 8
+- random_affine:
+    shear_degrees: 8
+    translate: 0.05
+    scale:
+    - 0.9
+    - 1.1

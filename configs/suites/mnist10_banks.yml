@@ -5,6 +5,10 @@
 #   python scripts/run_suite.py configs/suites/mnist10_banks.yml --only affine --cpu-count 1 --threads-per-run 1 --skip-existing
 #   python scripts/run_suite.py configs/suites/mnist10_banks.yml --only zoomshift --cpu-count 1 --threads-per-run 1 --skip-existing
 #   python scripts/run_suite.py configs/suites/mnist10_banks.yml --only zoomshift_stroke --cpu-count 1 --threads-per-run 1 --skip-existing
+#   python scripts/run_suite.py configs/suites/mnist10_banks.yml --only full --cpu-count 1 --threads-per-run 1 --skip-existing
+#   python scripts/run_suite.py configs/suites/mnist10_banks.yml --only zoomshift_stroke_n5 --cpu-count 1 --threads-per-run 1 --skip-existing
+#   python scripts/run_suite.py configs/suites/mnist10_banks.yml --only zoomshift_stroke_n5_dmax1 --cpu-count 1 --threads-per-run 1 --skip-existing
+#   python scripts/run_suite.py configs/suites/mnist10_banks.yml --only zoomshift_stroke_elastic_n5 --cpu-count 1 --threads-per-run 1 --skip-existing
 name: mnist10_banks
 description: MNIST 10 digits, K=15, final protocol, two handwriting banks, seed 0 first (600 epochs at most)
 seeds: [0]
@@ -17,3 +21,7 @@ experiments:
   - {name: affine, transform: digits_affine, ckpt_every: 25}
   - {name: zoomshift, transform: digits_zoomshift, ckpt_every: 25}      # variant 3, replaces `affine` (stopped at epoch 58, results/mnist10_banks/affine_seed0_stopped_ep58)
   - {name: zoomshift_stroke, transform: digits_zoomshift_stroke, ckpt_every: 25}   # variant 4 = variant 3 + stroke width, replaces `affine_stroke` (never run; decision of 2026-10-22: same base, one factor)
+  - {name: full, transform: digits_full, ckpt_every: 25}                 # variant 5 = variant 4 + elastic, light blur, noise, 4x4 erasing (asked by the user, 2026-10-23)
+  - {name: zoomshift_stroke_n5, transform: digits_zoomshift_stroke, set: {views_per_orbit: 5}, ckpt_every: 25}   # variant 4 with 5 views per orbit instead of 2 (user, 2026-10-23): 25 views per episode
+  - {name: zoomshift_stroke_n5_dmax1, transform: digits_zoomshift_stroke, set: {views_per_orbit: 5, d_max: 1}, ckpt_every: 25}   # variant 4 with 5 views and chains of at most ONE application (d_max 1 instead of 2): a view is the image or the image after one application (user, 2026-10-23; docs 5.40)
+  - {name: zoomshift_stroke_elastic_n5, transform: digits_zoomshift_stroke_elastic, set: {views_per_orbit: 5}, ckpt_every: 25}   # variant 4 + elastic distortion ALONE, 5 views, d_max 2 (user, 2026-10-23; docs 5.40)

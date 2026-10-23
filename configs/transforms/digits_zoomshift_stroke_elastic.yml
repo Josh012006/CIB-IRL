@@ -1,0 +1,13 @@
+# Variant 6 of the `digits` bank (docs/protocol-decisions.md 5.40), fixed BEFORE any result was seen: `digits_zoomshift_stroke` + ONE
+# operation of `digits_full`, the elastic distortion, with the same values. `digits_full` (all four operations at once) was worse than
+# `digits_zoomshift_stroke` (5.39); this bank says whether the elastic distortion alone is responsible.
+#   base      digits_zoomshift_stroke: rotation +-8 degrees, shear +-8 degrees, zoom 0.9 to 1.1, shift 0.05 of the side, stroke width
+#   added     elastic distortion (Simard et al. 2003): sigma 3.5 pixels, displacement std drawn in [0, 1.2] pixels, on every application
+# No blur, no noise, no erasing. The orbit sampler chains up to d_max steps, so the distortion can be applied more than once.
+name: digits_zoomshift_stroke_elastic
+description: digits_zoomshift_stroke + elastic distortion alone, for grey handwritten digits
+ops:
+  - random_rotation: {max_degrees: 8}
+  - random_affine: {shear_degrees: 8, translate: 0.05, scale: [0.9, 1.1]}
+  - elastic_distortion: {sigma: 3.5, strength: 1.2, p: 1.0}
+  - random_stroke_width: {max_strength: 0.5, p: 0.5}

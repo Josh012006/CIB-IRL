@@ -1,0 +1,18 @@
+# Variant 5 of the `digits` bank (docs/protocol-decisions.md 5.39), fixed BEFORE any result was seen. Asked by the user after reading
+# a list of the usual augmentations of MNIST: everything that keeps the digit, all at once, on the base that worked best so far.
+#   base      digits_zoomshift_stroke: rotation +-8 degrees, shear +-8 degrees, zoom 0.9 to 1.1, shift 0.05 of the side, stroke width
+#   added     elastic distortion (Simard et al. 2003): sigma 3.5 pixels, displacement std drawn in [0, 1.2] pixels
+#             gaussian blur: sigma drawn in [0, 0.5] pixel, on half of the images
+#             additive gaussian noise: std drawn in [0, 0.04], on half of the images, clipped to [0, 1]
+#             random erasing: one 4 x 4 black square at a random position, on half of the images
+# The orbit sampler chains up to d_max = 2 steps, so every effect can be applied twice. No flip, no hue / saturation change.
+name: digits_full
+description: digits_zoomshift_stroke + elastic distortion, light blur, noise and 4x4 erasing, for grey handwritten digits
+ops:
+  - random_rotation: {max_degrees: 8}
+  - random_affine: {shear_degrees: 8, translate: 0.05, scale: [0.9, 1.1]}
+  - elastic_distortion: {sigma: 3.5, strength: 1.2, p: 1.0}
+  - random_stroke_width: {max_strength: 0.5, p: 0.5}
+  - gaussian_blur: {sigma: [0.0, 0.5], p: 0.5}
+  - gaussian_noise: {max_std: 0.04, p: 0.5}
+  - random_erasing: {size: 4, p: 0.5}

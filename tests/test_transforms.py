@@ -196,3 +196,76 @@ def test_stroke_width_thickens_or_thins_and_p_zero_is_identity():
     assert torch.equal(T.from_spec({"ops": [{"random_stroke_width": {"p": 0.0}}]})(img), img)
     with pytest.raises(ValueError):
         T.from_spec({"ops": [{"random_stroke_width": {"max_strength": 0.0}}]})
+
+
+# ---- digit operations: elastic_distortion, gaussian_blur, gaussian_noise, random_erasing ----------------
+def _bar():
+    img = torch.zeros(64, 1, 28, 28)
+    img[..., 6:22, 12:16] = 1.0
+    return img
+
+
+def test_elastic_moves_the_strokes_gently_and_p_zero_is_identity():
+    img = _bar()
+    y = T.from_spec({"ops": [{"elastic_distortion": {"sigma": 3.5, "strength": 1.2}}]})(img)
+    assert y.shape == img.shape and y.min() >= 0 and y.max() <= 1 and torch.isfinite(y).all()
+    assert not torch.allclose(y, img)
+    mass = y.sum(dim=(1, 2, 3)) / img[0].sum()
+    assert 0.8 < mass.mean() < 1.2 and mass.min() > 0.5            # the ink is moved, not created nor destroyed
+    assert torch.equal(T.from_spec({"ops": [{"elastic_distortion": {"p": 0.0}}]})(img), img)
+    with pytest.raises(ValueError):
+        T.from_spec({"ops": [{"elastic_distortion": {"strength": 0.0}}]})
+
+
+def test_blur_spreads_the_ink_without_changing_its_mass():
+    img = _bar()
+    y = T.from_spec({"ops": [{"gaussian_blur": {"sigma": [0.5, 0.5]}}]})(img)
+    assert y.max() <= 1 and y.min() >= 0
+    assert torch.allclose(y.sum(dim=(1, 2, 3)), img.sum(dim=(1, 2, 3)), rtol=1e-3)
+    assert (y > 0).sum() > (img > 0).sum()                         # it spreads
+    assert torch.equal(T.from_spec({"ops": [{"gaussian_blur": {"p": 0.0}}]})(img), img)
+    with pytest.raises(ValueError):
+        T.from_spec({"ops": [{"gaussian_blur": {"sigma": [0.0, 5.0]}}]})
+
+
+def test_noise_is_small_clipped_and_p_zero_is_identity():
+    img = _bar()
+    y = T.from_spec({"ops": [{"gaussian_noise": {"max_std": 0.04}}]})(img)
+    assert y.min() >= 0 and y.max() <= 1 and not torch.equal(y, img)
+    assert (y - img).abs().mean() < 0.04
+    assert torch.equal(T.from_spec({"ops": [{"gaussian_noise": {"p": 0.0}}]})(img), img)
+    with pytest.raises(ValueError):
+        T.from_spec({"ops": [{"gaussian_noise": {"max_std": 0.0}}]})
+
+
+def test_erasing_blacks_out_exactly_one_square():
+    img = torch.ones(200, 1, 28, 28)
+    y = T.from_spec({"ops": [{"random_erasing": {"size": 4, "p": 1.0}}]})(img)
+    assert torch.all((y == 0).sum(dim=(1, 2, 3)) == 16)            # one 4 x 4 square per image, fully inside the image
+    z = T.from_spec({"ops": [{"random_erasing": {"size": 4, "p": 0.5}}]})(img)
+    n_erased = ((z == 0).sum(dim=(1, 2, 3)) == 16).sum().item()
+    assert 60 < n_erased < 140                                     # about half of the images
+    assert torch.equal(T.from_spec({"ops": [{"random_erasing": {"p": 0.0}}]})(img), img)
+    with pytest.raises(ValueError):
+        T.from_spec({"ops": [{"random_erasing": {"size": 40}}]})(img)
+
+
+def test_digits_zoomshift_stroke_elastic_bank_and_dmax_one():
+    from cibirl.experts import OrbitSampler
+    bank = T.build(ROOT / "configs" / "transforms" / "digits_zoomshift_stroke_elastic.yml")
+    x = torch.rand(64, 1, 28, 28)
+    for d_max in (1, 2):
+        y = OrbitSampler(bank, d_max=d_max)(x)
+        assert y.shape == x.shape and y.min() >= 0 and y.max() <= 1 and torch.isfinite(y).all()
+    # d_max = 1: a view is the image itself or the image after exactly one application (about half untouched)
+    y1 = OrbitSampler(bank, d_max=1)(x)
+    untouched = (y1 == x).flatten(1).all(1).float().mean().item()
+    assert 0.25 < untouched < 0.75
+
+
+def test_digits_full_bank_builds_and_keeps_the_range():
+    from cibirl.experts import OrbitSampler
+    bank = T.build(ROOT / "configs" / "transforms" / "digits_full.yml")
+    x = torch.rand(16, 1, 28, 28)
+    y = OrbitSampler(bank, d_max=2)(x)
+    assert y.shape == x.shape and y.min() >= 0 and y.max() <= 1 and torch.isfinite(y).all()

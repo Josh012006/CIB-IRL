@@ -833,7 +833,7 @@ The difficulty is not that the pixels are dominated by the background. If the nu
 
 ![Pixel space of one seed and K-Means with K=10](results/toy_final_report/fig2_difficulty.png)
 
-*Figure 2. Left: the first two principal components of the pixels, coloured by the brightness of the background: each class is stretched along it. Right: the 10 clusters of K-Means on pixels (one row per cluster, with the true classes in the bars): every class is split in two.*
+*Figure 2. Left: t-SNE of the pixels, coloured by the brightness of the background: five groups, one per class, each spread over a range of brightness (a PCA of the pixels shows each class as a long segment along the brightness; t-SNE keeps neighbourhoods, not that elongation). Right: the 10 clusters of K-Means on pixels (one row per cluster, with the true classes in the bars): every class is split in two.*
 
 #### 11.1.4 Protocol
 
@@ -905,19 +905,19 @@ The CIB-IRL cells at $s=0$ are the 200 runs of Table 1. The pipeline gets the ri
 
 #### 11.1.6 How the clusters improve
 
-Figure 3 follows one run (seed 20, replayed with a checkpoint at every epoch; the training is not bit-for-bit deterministic, so this replay is a run of the same configuration that stops at epoch 42 instead of 46, with the same final partition). The top row is the intent space $m$ (two principal components, coloured by the true class), the bottom row the clusters of the output, with the true classes in the bars.
+Figure 3 follows one run (seed 20, replayed with a checkpoint at every epoch; the training is not bit-for-bit deterministic, so this replay is a run of the same configuration, which here stops at epoch 46 with the same final partition). The top row is the intent space $m$ (t-SNE, coloured by the true class), the bottom row the clusters of the output, with the true classes in the bars.
 
 ![Clusters at the start, during, and at the end of one run](results/toy_final_report/fig3_clusters_seed20.png)
 
-*Figure 3. Seed 20. At epoch 12, right after the policy starts to act, the output is a single cluster of 1500 images (ACC 0.20). At epoch 13, three clusters, two of them mixing classes (ACC 0.60). At the end, five clusters of 300 images each, one per class (ACC 1.00).*
+*Figure 3. Seed 20. At epoch 12, right after the policy starts to act, the output is a single cluster of 1500 images (ACC 0.20). At epoch 13, two clusters, one of them mixing four classes (ACC 0.40). At epoch 14, four clusters, one of them mixing two classes (ACC 0.80). At the end (epoch 46), five clusters of 300 images each, one per class (ACC 1.00).*
 
-- **The intent space is already separated at epoch 12.** The five classes form five compact groups in $m$ before the policy has placed a single image: the improvement comes from the policy learning to read $m$, not from the representation changing afterwards.
-- **From one cluster to five in two epochs.** The reward alone is trained during the first 10 epochs, so the output is one cluster. The policy then opens clusters: three at epoch 13, five pure ones at epoch 14.
-- **The memory keeps more slots than the output uses.** At the end the memory holds 7 slots for 5 classes (two classes sit in two slots each). The output is right because the argmax sends every image of such a class to the larger of its two slots; the clean-up renames the pairs (7 $\to$ 5 slots) without changing the partition.
+- **The intent space is already separated at epoch 12.** The five classes form five compact groups in $m$ before the policy has placed a single image: the improvement comes from the policy learning to read $m$, not from the representation changing afterwards. (t-SNE keeps neighbourhoods, not distances between groups: it shows that the neighbourhoods are already separated, not how large the gaps are compared with the groups.)
+- **From one cluster to five in three epochs.** The reward alone is trained during the first 10 epochs, so the output is one cluster. The policy then opens clusters: two at epoch 13, four at epoch 14 (one still mixing two classes), five pure ones at epoch 15.
+- **The memory keeps more slots than the output uses.** At the end the memory holds 9 slots for 5 classes (the memory alone would give ACC 0.74). The output is right because the argmax sends every image of a class spread over several slots to the largest of them; the clean-up merges four slots (9 $\to$ 5, no merge across two classes) without changing the partition, and the memory ACC becomes 1.00.
 
 ![Evolution of one run](results/toy_final_report/fig4_trace_seed20.png)
 
-*Figure 4. Seed 20, per epoch: number of clusters of the output and occupied slots of the memory; ACC of the output; share of images that change cluster (the stopping rule needs it below 1%, dotted line, over 10 epochs). Epoch 17 shows a transient: one class is split in two for one epoch, and the output then returns to five; this is why the rule asks for a plateau and not for a first right partition.*
+*Figure 4. Seed 20, per epoch: number of clusters of the output and occupied slots of the memory; ACC of the output; share of images that change cluster (the stopping rule needs it below 1%, dotted line, over 10 epochs). In this replay the output goes from one cluster to five at epochs 12 to 15 and stays at five; the share of images changing cluster peaks at about 40 % (epoch 14) and is below 1 % from epoch 16. In an earlier replay of the same seed, one class was split in two for one epoch at epoch 17 and the output then returned to five: this is why the rule asks for a plateau and not for a first right partition.*
 
 #### 11.1.7 Training dynamics over 200 seeds
 
