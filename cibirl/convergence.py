@@ -92,6 +92,16 @@ class ConvergenceMonitor:
         self.output_converged_epoch: int | None = None   # first epoch (>= min_epochs) at which criteria 1-3 held
         self.memory_converged_epoch: int | None = None   # first epoch (>= min_epochs) at which criteria 1-4 held
 
+    def state_dict(self) -> dict:
+        """What a resumed run needs to go on exactly as if it had not stopped (see Trainer.save_state)."""
+        return {"rows": self.rows, "prev": self._prev, "converged": self.converged, "reason": self.reason,
+                "output_converged_epoch": self.output_converged_epoch, "memory_converged_epoch": self.memory_converged_epoch}
+
+    def load_state_dict(self, st: dict) -> None:
+        self.rows, self._prev = list(st["rows"]), st["prev"]
+        self.converged, self.reason = st["converged"], st["reason"]
+        self.output_converged_epoch, self.memory_converged_epoch = st["output_converged_epoch"], st["memory_converged_epoch"]
+
     def observe(self, row: dict, pred, memory=None) -> bool:
         """Adds `part_change`, `slot_change` and `n_clusters` to `row` (in place, so that they reach metrics.jsonl).
         With `memory` (the slot of every image in the learner's memory, -1 = not placed) it also adds `mem_gap`

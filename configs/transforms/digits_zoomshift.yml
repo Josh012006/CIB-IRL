@@ -1,0 +1,13 @@
+# Variant 3 of the `digits` bank (docs/protocol-decisions.md 5.37), fixed BEFORE any result was seen. Written after looking at real views
+# of `digits` (crop cuts the digit at the frame, two applications double the rotation, the jitter and the resamplings fade the views).
+#   removed   random_resized_crop (position, zoom-in only, aspect ratio, cuts the digit): replaced by an explicit zoom and shift
+#   removed   brightness / contrast jitter (the ink intensity of MNIST is nearly constant)
+#   bounded   rotation and shear +-8 degrees PER STEP: the orbit sampler chains up to d_max = 2 steps, so +-16 degrees at most
+#   zoom      0.9 to 1.1 per step (0.81 to 1.21 after two); shift +-0.05 of the side per step (1.4 pixels of 28, 2.8 after two):
+#             a digit that fills 20 of the 28 pixels stays inside the frame
+# No flip. No stroke-width operation (this is the base that `digits_zoomshift_stroke` would add it to).
+name: digits_zoomshift
+description: bounded rotation + shear + zoom + shift, no crop and no photometric jitter, for grey handwritten digits
+ops:
+  - random_rotation: {max_degrees: 8}
+  - random_affine: {shear_degrees: 8, translate: 0.05, scale: [0.9, 1.1]}

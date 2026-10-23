@@ -98,6 +98,14 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--name", default=None, help="run folder name (default built from the options)")
     ap.add_argument("--overwrite", action="store_true", help="replace an existing run folder")
     ap.add_argument("--snapshot-every", type=int, default=10, help="save a cluster grid every N epochs (0 = never)")
+    ap.add_argument("--ckpt-every", type=int, default=0, metavar="N",
+                    help="write <run>/resume_state.pt (the FULL state: networks, optimizers, memory, random numbers, convergence "
+                         "monitor) every N epochs and when training stops, so that the run can be continued with --resume. "
+                         "0 = never (default). Does not touch the training.")
+    ap.add_argument("--resume", action="store_true",
+                    help="continue the run <out-root>/<name> from its resume_state.pt (same --data/--data-set/--transform/--config/"
+                         "--set as the original command; give the NEW total in --stop-set max_epochs=...). The final files of the "
+                         "previous stop are moved to <run>/at_ep<N>/.")
     ap.add_argument("--save-epochs", default=None, metavar="A-B",
                     help="also save the networks and the memory at the end of epochs A..B (1-based, e.g. 195-212) in ckpts/epNNN.pt, "
                          "to study what happens around an event. Does not touch the training (no random number is drawn).")
@@ -125,17 +133,31 @@ def main(argv=None) -> None:
     name = args.name or default_name(args.data, data_params, bank.name, args.config or [""], cfg.seed)
     out = Path(args.out_root) if Path(args.out_root).is_absolute() else ROOT / args.out_root
     out = out / name
-    if out.exists():
-        if not args.overwrite:
-            sys.exit(f"{out} already exists: choose --name, or pass --overwrite")
-        shutil.rmtree(out)
-    (out / "figures").mkdir(parents=True)
-    cfg.to_yaml(out / "config.yml")
-    (out / "transform.yml").write_text(yaml.safe_dump(bank.spec, sort_keys=False, allow_unicode=True), encoding="utf-8")
-    (out / "run.yml").write_text(yaml.safe_dump(
-        {"data": args.data, "data_params": data.info, "transform": bank.name, "stop": stop.to_dict(),
-         "device": args.device, "uses_labels_for_training": cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0,
-         "command": " ".join(sys.argv)}, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    state_file = out / "resume_state.pt"
+    if args.resume:
+        if not state_file.exists():
+            sys.exit(f"--resume: {state_file} does not exist (the run was not made with --ckpt-every)")
+        if args.overwrite:
+            sys.exit("--resume and --overwrite are incompatible")
+        saved_cfg = TrainConfig.from_yaml(out / "config.yml")
+        if saved_cfg != cfg:
+            sys.exit(f"--resume: the configuration differs from {out / 'config.yml'}; repeat the options of the original command")
+    else:
+        if out.exists():
+            if not args.overwrite:
+                sys.exit(f"{out} already exists: choose --name, or pass --overwrite")
+            shutil.rmtree(out)
+        (out / "figures").mkdir(parents=True)
+        cfg.to_yaml(out / "config.yml")
+        (out / "transform.yml").write_text(yaml.safe_dump(bank.spec, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    run_info = {"data": args.data, "data_params": data.info, "transform": bank.name, "stop": stop.to_dict(),
+                "device": args.device, "uses_labels_for_training": cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0,
+                "command": " ".join(sys.argv)}
+    if args.resume:                                   # keep the original run.yml, add the continuation
+        prev = yaml.safe_load((out / "run.yml").read_text(encoding="utf-8"))
+        prev.setdefault("resumed", []).append({"stop": stop.to_dict(), "command": run_info["command"]})
+        run_info = prev
+    (out / "run.yml").write_text(yaml.safe_dump(run_info, sort_keys=False, allow_unicode=True), encoding="utf-8")
     print(f"run folder: {out}\n{bank!r}\nstop: {stop}", flush=True)
 
     oracle = cfg.expert_oracle_link > 0 or cfg.oracle_warm_memory > 0
@@ -152,8 +174,30 @@ def main(argv=None) -> None:
         save_lo, save_hi = int(lo), int(hi or lo)
         (out / "ckpts").mkdir(exist_ok=True)
     history: list[dict] = []
-    metrics_file = open(out / "metrics.jsonl", "w", encoding="utf-8")
+    start_epoch = 0
+    if args.resume:
+        monitor.load_state_dict(tr.load_state(str(state_file)).pop("monitor"))
+        history = list(monitor.rows)
+        start_epoch = len(history)
+        mfile = out / "metrics.jsonl"                  # a run that crashed after its last state has epochs the state does not: drop them
+        mfile.write_text("".join(l + "\n" for l in mfile.read_text(encoding="utf-8").splitlines()[:start_epoch]), encoding="utf-8")
+        if start_epoch >= stop.max_epochs:
+            sys.exit(f"--resume: the run already has {start_epoch} epochs; give a larger max_epochs in --stop-set")
+        monitor.converged, monitor.reason = False, "running"
+        old_final = out / f"at_ep{start_epoch}"        # the files of the previous stop are kept, not overwritten
+        old_final.mkdir(exist_ok=True)
+        for f in ("final_metrics.json", "preds.npy", "intents.npy", "checkpoint.pt", "variants.npz", "memory_pre.pt"):
+            if (out / f).exists():
+                shutil.move(str(out / f), str(old_final / f))
+        if (out / "figures").exists():
+            shutil.copytree(out / "figures", old_final / "figures", dirs_exist_ok=True)
+        print(f"resumed from epoch {start_epoch}", flush=True)
+    (out / "figures").mkdir(exist_ok=True)
+    metrics_file = open(out / "metrics.jsonl", "a" if args.resume else "w", encoding="utf-8")
     t0 = time.time()
+
+    def write_state() -> None:
+        tr.save_state(str(state_file), extra={"monitor": monitor.state_dict()})
 
     def log(row: dict) -> bool:
         pred = tr.predict().cpu().numpy()
@@ -168,6 +212,8 @@ def main(argv=None) -> None:
             tr.save(str(out / "ckpts" / f"ep{row['epoch'] + 1:03d}.pt"))
         metrics_file.write(json.dumps(row) + "\n")
         metrics_file.flush()
+        if args.ckpt_every and (row["epoch"] + 1) % args.ckpt_every == 0 and not stop_now:
+            write_state()                                    # after the monitor and the log: the state of the end of the epoch
         print(f"ep {row['epoch']:3d} it {row['iter']:5d} | L_pos {row.get('L_pos', 0):5.3f} L_neg {row.get('L_neg', 0):5.3f} "
               f"twin {row.get('twin_acc', 0):.2f} KL {row.get('KL', 0):6.1f} L_inv {row.get('L_inv', 0):.3f} "
               f"m_std {row.get('m_std', 0):.2f} | ent {row.get('pi_entropy', 0):.2f} | clusters {row['n_clusters']} "
@@ -179,8 +225,10 @@ def main(argv=None) -> None:
                                   labels=y, title=f"Clusters formed by the policy, after epoch {row['epoch'] + 1}")
         return stop_now
 
-    tr.fit(stop.max_epochs, log_fn=log)
+    tr.fit(stop.max_epochs, log_fn=log, start_epoch=start_epoch)
     metrics_file.close()
+    if args.ckpt_every:
+        write_state()                                        # the state at the stop, BEFORE the final clean-up: a run can be prolonged
     print(f"\nstopped after {len(history)} epochs: {monitor.reason}", flush=True)
 
     # ---- final clustering: argmax of the policy with the memory frozen (README 6.7) ----------------

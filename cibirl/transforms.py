@@ -150,6 +150,62 @@ def random_rotation(max_degrees: float = 15.0) -> Transform:
     return op
 
 
+@register("random_affine")
+def random_affine(shear_degrees: float = 0.0, translate: float = 0.0, scale: Sequence[float] = (1.0, 1.0)) -> Transform:
+    """Slant (horizontal shear), shift and zoom of each image, in ONE resampling.
+
+    shear_degrees   the shear angle is drawn in [-shear_degrees, +shear_degrees]: the slant of the hand writing
+    translate       shift of each axis, drawn in [-translate, +translate] as a share of the image side (0.07 is 2 pixels of 28)
+    scale           zoom factor drawn in [scale[0], scale[1]] (1 = unchanged; > 1 enlarges the content)
+
+    With the defaults it is the identity. The corners that come from outside the image repeat the border pixels.
+    """
+    if not 0.0 <= shear_degrees <= 45.0 or not 0.0 <= translate <= 0.5:
+        raise ValueError("shear_degrees must be in [0, 45] and translate in [0, 0.5]")
+    s_lo, s_hi = _pair(scale, "scale")
+    if s_lo <= 0.0:
+        raise ValueError("scale must be positive")
+    shear = math.tan(math.radians(shear_degrees))
+
+    def op(x: Tensor) -> Tensor:
+        _check(x, "random_affine")
+        n = x.shape[0]
+        k = _uniform(n, -shear, shear, x)                    # x_in = x_out + k * y_out
+        z = _uniform(n, s_lo, s_hi, x)                       # zoom z: the sampling grid is 1 / z of the image
+        tx, ty = (_uniform(n, -translate, translate, x) * 2 for _ in range(2))   # normalised coordinates span 2
+        theta = torch.zeros(n, 2, 3, device=x.device, dtype=x.dtype)
+        theta[:, 0, 0], theta[:, 0, 1], theta[:, 0, 2] = 1 / z, k / z, tx
+        theta[:, 1, 1], theta[:, 1, 2] = 1 / z, ty
+        grid = F.affine_grid(theta, list(x.shape), align_corners=False)
+        return F.grid_sample(x, grid, mode="bilinear", padding_mode="border", align_corners=False)
+
+    return op
+
+
+@register("random_stroke_width")
+def random_stroke_width(max_strength: float = 0.5, p: float = 1.0) -> Transform:
+    """Thicken or thin the strokes of a bright-on-dark drawing (digits), by a random amount.
+
+    Each image is blended with its 3 x 3 grey dilation (thicker) or erosion (thinner), with a random sign and a weight
+    drawn in [0, max_strength]: 0 leaves the image alone, 1 moves every stroke edge by one full pixel. Meant for white ink on
+    a black background (MNIST). The stroke width of a handwritten digit is a style of the pen, not an identity.
+    """
+    p = _prob(p)
+    if not 0.0 < max_strength <= 1.0:
+        raise ValueError(f"max_strength must be in (0, 1], got {max_strength}")
+
+    def op(x: Tensor) -> Tensor:
+        _check(x, "random_stroke_width")
+        n = x.shape[0]
+        dil = F.max_pool2d(x, 3, 1, 1)
+        ero = -F.max_pool2d(-x, 3, 1, 1)
+        w = _uniform(n, 0.0, max_strength, x).view(-1, 1, 1, 1)
+        target = torch.where((torch.rand(n, device=x.device) < 0.5).view(-1, 1, 1, 1), dil, ero)
+        return _blend(x, (1 - w) * x + w * target, p)
+
+    return op
+
+
 @register("hflip")
 def hflip(p: float = 0.5) -> Transform:
     """Mirror left-right with probability p. Natural images only: it changes the identity of digits."""

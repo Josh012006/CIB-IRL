@@ -1,0 +1,10 @@
+# Variant 4 of the `digits` bank (docs/protocol-decisions.md 5.37): `digits_zoomshift` + stroke width. Fixed BEFORE any result was seen.
+# Replaces `digits_affine_stroke` (never run) so that the comparison with `digits_zoomshift` isolates ONE factor, the stroke width.
+#   added   stroke width: the pen thickness is a style, not an identity (half of the images are thickened, half thinned, by up
+#           to half a pixel; 50 % of the applications leave the stroke alone). Same operation and values as digits_affine_stroke.
+name: digits_zoomshift_stroke
+description: digits_zoomshift + random stroke thickness, for grey handwritten digits
+ops:
+  - random_rotation: {max_degrees: 8}
+  - random_affine: {shear_degrees: 8, translate: 0.05, scale: [0.9, 1.1]}
+  - random_stroke_width: {max_strength: 0.5, p: 0.5}

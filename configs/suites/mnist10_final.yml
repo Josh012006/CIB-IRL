@@ -1,0 +1,15 @@
+# MNIST, the 10 digits, K = 15, the final protocol of the toy (configs/benchmarks/toy.yml) with the digits bank: does it converge to ACC > 0.9?
+# Exploratory run (600 epochs at most: the task is harder than the toy's 300) (3 seeds, nothing tuned): docs/protocol-decisions.md 5.36.
+#
+#   python scripts/run_suite.py configs/suites/mnist10_final.yml --cpu-count 2 --skip-existing
+name: mnist10_final
+description: MNIST 10 digits, K=15, final protocol, digits bank, 3 seeds, convergence or 600 epochs
+seeds: [0, 1, 2]
+common:
+  data: mnist
+  data_params: {digits: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], n_per_class: 300}
+  transform: digits
+  configs: [configs/benchmarks/toy.yml, configs/mnist10.yml]
+  stop: {max_epochs: 600, min_epochs: 40}
+experiments:
+  - {name: final, ckpt_every: 25}      # full state every 25 epochs and at the stop: --resume continues a run

@@ -164,3 +164,35 @@ def test_chain_through_the_orbit_sampler():
     x = batch(32)
     y = sampler(x)
     assert y.shape == x.shape and not torch.equal(x, y)
+
+
+# ---- digit operations: random_affine, random_stroke_width -----------------------------------------------
+def test_affine_defaults_are_the_identity_and_range_is_kept():
+    x = batch()
+    assert torch.allclose(T.from_spec({"ops": [{"random_affine": {}}]})(x), x, atol=1e-5)
+    y = T.from_spec({"ops": [{"random_affine": {"shear_degrees": 15, "translate": 0.07, "scale": [0.9, 1.1]}}]})(x)
+    assert y.shape == x.shape and y.min() >= 0 and y.max() <= 1 and not torch.allclose(y, x)
+
+
+def test_affine_shears_a_vertical_bar():
+    img = torch.zeros(1, 1, 28, 28)
+    img[..., 6:22, 13:15] = 1.0                                    # a vertical stroke, centred
+    for _ in range(20):
+        y = T.from_spec({"ops": [{"random_affine": {"shear_degrees": 30}}]})(img)
+        top, bottom = y[0, 0, 7].argmax().item(), y[0, 0, 21].argmax().item()
+        assert abs(top - bottom) <= 10                             # the bar leans, it does not move away
+    ys = [T.from_spec({"ops": [{"random_affine": {"shear_degrees": 30}}]})(img) for _ in range(30)]
+    leans = [abs(v[0, 0, 7].argmax().item() - v[0, 0, 21].argmax().item()) for v in ys]
+    assert max(leans) >= 3                                         # and it does lean for some draws
+
+
+def test_stroke_width_thickens_or_thins_and_p_zero_is_identity():
+    img = torch.zeros(200, 1, 28, 28)
+    img[..., 10:18, 12:16] = 1.0
+    y = T.from_spec({"ops": [{"random_stroke_width": {"max_strength": 1.0, "p": 1.0}}]})(img)
+    mass = y.sum(dim=(1, 2, 3)) / img[0].sum()
+    assert (mass > 1.01).any() and (mass < 0.99).any()             # both directions occur
+    assert y.min() >= 0 and y.max() <= 1
+    assert torch.equal(T.from_spec({"ops": [{"random_stroke_width": {"p": 0.0}}]})(img), img)
+    with pytest.raises(ValueError):
+        T.from_spec({"ops": [{"random_stroke_width": {"max_strength": 0.0}}]})

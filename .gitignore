@@ -6,6 +6,7 @@ data/*
 !data/README.md
 !data/toy/
 results/**/checkpoint.pt
+results/**/resume_state.pt
 thinking-process.txt
 # documentation build
 site/

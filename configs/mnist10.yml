@@ -1,0 +1,7 @@
+# MNIST, the 10 digits (standard setting of the clustering literature), grey 28 x 28, 300 images of each digit.
+# To be merged AFTER configs/benchmarks/toy.yml: it keeps the final protocol (covariance penalty, CRP prior, relabel clean-up) and only
+# changes the shape of the data and the number of slots. NOT validated yet (exploratory, docs/protocol-decisions.md 5.36).
+num_slots: 15             # K = 1.5 x the number of classes: the number of clusters is not given to the model
+image_size: 28
+in_channels: 1
+orbits_per_episode: 5     # B <= K

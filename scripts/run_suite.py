@@ -43,7 +43,7 @@ from _parallel import Job, run_jobs, say          # noqa: E402
 from eval.aggregate import main as aggregate      # noqa: E402
 
 SUITE_KEYS = {"name", "description", "seeds", "out_root", "common", "experiments"}
-EXPERIMENT_KEYS = {"name", "data", "data_params", "transform", "configs", "set", "stop", "fixed_epochs", "seeds", "method"}
+EXPERIMENT_KEYS = {"name", "data", "data_params", "transform", "configs", "set", "stop", "fixed_epochs", "seeds", "method", "ckpt_every"}
 DICT_KEYS = {"data_params", "set", "stop"}
 BASELINES = ("kmeans", "gmm", "simclr", "iic")           # run by scripts/run_baseline.py; any other method is our trainer
 NO_BANK = ("kmeans", "gmm")                              # baselines that never draw a view: no transformation bank needed
@@ -137,6 +137,8 @@ def command(exp: dict, seed: int, name: str, out_root: Path, max_epochs: int | N
     stop = dict(exp["stop"])
     if max_epochs is not None:
         stop["max_epochs"] = max_epochs
+    if exp.get("ckpt_every"):
+        cmd += ["--ckpt-every", str(exp["ckpt_every"])]        # full state kept: the run can be continued with --resume
     if exp.get("fixed_epochs") is not None:
         cmd += ["--fixed-epochs", str(exp["fixed_epochs"])]
     elif stop:

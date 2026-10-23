@@ -1,0 +1,19 @@
+# MNIST, the 10 digits, K = 15, final protocol: the `digits` bank (configs/suites/mnist10_final.yml) against two variants written for
+# handwriting, fixed before any result (docs/protocol-decisions.md 5.37): `digits_affine` (slant, shift, zoom, no jitter) and
+# `digits_affine_stroke` (+ stroke width). Same configuration, stopping rule and seeds as mnist10_final, only the bank changes.
+#
+#   python scripts/run_suite.py configs/suites/mnist10_banks.yml --only affine --cpu-count 1 --threads-per-run 1 --skip-existing
+#   python scripts/run_suite.py configs/suites/mnist10_banks.yml --only zoomshift --cpu-count 1 --threads-per-run 1 --skip-existing
+#   python scripts/run_suite.py configs/suites/mnist10_banks.yml --only zoomshift_stroke --cpu-count 1 --threads-per-run 1 --skip-existing
+name: mnist10_banks
+description: MNIST 10 digits, K=15, final protocol, two handwriting banks, seed 0 first (600 epochs at most)
+seeds: [0]
+common:
+  data: mnist
+  data_params: {digits: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], n_per_class: 300}
+  configs: [configs/benchmarks/toy.yml, configs/mnist10.yml]
+  stop: {max_epochs: 600, min_epochs: 40}
+experiments:
+  - {name: affine, transform: digits_affine, ckpt_every: 25}
+  - {name: zoomshift, transform: digits_zoomshift, ckpt_every: 25}      # variant 3, replaces `affine` (stopped at epoch 58, results/mnist10_banks/affine_seed0_stopped_ep58)
+  - {name: zoomshift_stroke, transform: digits_zoomshift_stroke, ckpt_every: 25}   # variant 4 = variant 3 + stroke width, replaces `affine_stroke` (never run; decision of 2026-10-22: same base, one factor)

@@ -20,6 +20,7 @@ from __future__ import annotations
 import difflib
 import itertools
 import math
+import os
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
@@ -571,11 +572,12 @@ class Trainer:
                 "size_entropy": entropy, "K_eff": math.exp(entropy),
                 "churn": self._changes / max(self._revisits, 1)}
 
-    def fit(self, epochs: int, log_fn: Callable[[dict], Any] = print) -> list[dict]:
-        """Up to `epochs` epochs. `log_fn(row)` is called after each one; if it returns True, training stops
-        there (this is how a convergence monitor ends a run, see convergence.py)."""
+    def fit(self, epochs: int, log_fn: Callable[[dict], Any] = print, start_epoch: int = 0) -> list[dict]:
+        """Epochs `start_epoch` .. `epochs - 1` (so `epochs` is the TOTAL number of epochs, also when a run is resumed).
+        `log_fn(row)` is called after each one; if it returns True, training stops there (this is how a convergence
+        monitor ends a run, see convergence.py)."""
         history = []
-        for ep in range(epochs):
+        for ep in range(start_epoch, epochs):
             perm = torch.randperm(self.N)
             self._changes = self._revisits = 0
             if self._diag is not None:
@@ -645,3 +647,41 @@ class Trainer:
                     "value": self.value.state_dict(), "assign": self.memory.assign,
                     "member_m": self.memory.member_m, "counts": self.memory.counts,
                     "summaries": self.memory.summaries}, path)
+
+    # ---------------------------------------------------------------------------------------------
+    # Full state, to CONTINUE a run (save() above keeps only what is needed to read the result)
+    # ---------------------------------------------------------------------------------------------
+    def save_state(self, path: str, extra: dict | None = None) -> None:
+        """Everything that makes the next epoch what it would have been: networks, the two Adam optimizers, the memory, the
+        counters, the global random number generator (the only one used while training; the experts are rebuilt from the seed).
+        `extra` is stored as is (the caller puts the convergence monitor there). Written to a temporary file, then renamed, so
+        a run killed in the middle of the write keeps its previous state."""
+        state = {"cfg": asdict(self.cfg), "iteration": self.iteration, "acting_iters": self._acting_iters,
+                 "acting_epochs": self._acting_epochs, "warmed": self._warmed,
+                 "encoder": self.encoder.state_dict(), "intent": self.intent.state_dict(),
+                 "reward": self.reward.state_dict(), "policy": self.policy.state_dict(), "value": self.value.state_dict(),
+                 "opt_reward": self.opt_reward.state_dict(), "opt_policy": self.opt_policy.state_dict(),
+                 "assign": self.memory.assign, "member_m": self.memory.member_m, "counts": self.memory.counts,
+                 "summaries": self.memory.summaries, "rng": torch.get_rng_state(), "extra": extra}
+        tmp = str(path) + ".tmp"
+        torch.save(state, tmp)
+        os.replace(tmp, path)
+
+    def load_state(self, path: str) -> dict | None:
+        """Inverse of save_state (the Trainer must have been built with the same config, data and bank). Returns `extra`."""
+        st = torch.load(path, map_location=self.device, weights_only=False)
+        if st["cfg"] != asdict(self.cfg):
+            diff = {k: (st["cfg"].get(k), v) for k, v in asdict(self.cfg).items() if st["cfg"].get(k) != v}
+            raise ValueError(f"the saved state was made with another configuration: {diff}")
+        for name in ("encoder", "intent", "reward", "policy", "value"):
+            getattr(self, name).load_state_dict(st[name])
+        self.opt_reward.load_state_dict(st["opt_reward"])
+        self.opt_policy.load_state_dict(st["opt_policy"])
+        self.memory.assign, self.memory.member_m = st["assign"].to(self.device), st["member_m"].to(self.device)
+        self.memory.counts, self.memory.summaries = st["counts"].to(self.device), st["summaries"].to(self.device)
+        self.iteration, self._acting_iters, self._acting_epochs = st["iteration"], st["acting_iters"], st["acting_epochs"]
+        self._warmed = st["warmed"]
+        torch.set_rng_state(st["rng"].cpu())
+        if self._diag is not None:
+            self._diag.sync(self.memory.assign)
+        return st["extra"]
