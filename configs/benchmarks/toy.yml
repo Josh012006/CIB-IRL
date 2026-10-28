@@ -23,6 +23,9 @@ rel_dim: 64
 in_channels: 3
 image_size: 16
 use_z: true
+rel_pool: mean            # reward: pooling of the relations to the other slots ("mean", "top2", "nearest" or "attn"; docs 5.48)
+decoy_in_loss: true       # with decoy_slots: false = decoys only as context, outside the softmax of the loss (docs 5.48)
+decoy_slots: false        # reward step: decoy clusters in the expert states (docs 5.48)
 intent_standardize: true
 
 # Experts (README 6.2): 3 orbits x 2 views per episode, 2000 fixed episodes built from 30 % of the images
@@ -55,6 +58,7 @@ lam: 1.0
 gamma: 0.9
 gae_lambda: 0.95
 alpha: 0.01
+adv_norm: true
 policy_temperature: 1.0
 ppo_clip: 0.2
 ppo_epochs: 4
@@ -75,6 +79,7 @@ cleanup_mode: relabel
 lr_reward: 0.0003
 lr_policy: 0.001
 grad_clip: 5.0
+clip_split: false
 learner_batch: 100
 reward_warmup_iters: 150
 

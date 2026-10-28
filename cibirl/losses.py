@@ -88,7 +88,8 @@ class ExpertLossOut:
 
 def expert_loss(scores: Tensor, empty: Tensor, slot: Tensor, is_first: Tensor, neg_mask: Tensor,
                 tau_plus: float, rho: float = 0.0, free_debias: float = 1.0,
-                neg_floor: float = 0.0) -> ExpertLossOut:
+                neg_floor: float = 0.0, decoy: Tensor | None = None,
+                decoy_exclude: bool = False) -> ExpertLossOut:
     """Maximum-likelihood IRL of the expert's relational decisions under q_theta = softmax(R_theta).
 
     scores [E, T, K]  raw rewards R_theta(s^E_t, a)
@@ -104,9 +105,14 @@ def expert_loss(scores: Tensor, empty: Tensor, slot: Tensor, is_first: Tensor, n
     docs/protocol-decisions.md 5.9.
     neg_floor = eps > 0 replaces the corrected term by max{ corrected, eps * E_v l(u,v) }: a share eps of the plain
     repulsion is always kept, so the gradient never vanishes (a constant added to the loss would give no gradient).
+    decoy [E, T, K] (reward_step, decoy_slots): slots filled with the summary of an orbit of ANOTHER episode. With decoy_exclude they are
+    context for the reward only: they leave the softmax of the loss, so nothing pushes mass away from them (a decoy of the class of the
+    arriving image would otherwise be treated as a wrong slot, docs 5.48).
     """
     E, T, K = scores.shape
     valid = valid_slot_mask(empty)
+    if decoy is not None and decoy_exclude:
+        valid = valid & ~decoy
     logp = masked_log_softmax(scores, valid)                                   # log q_theta
     log1m = _log_one_minus_prob(scores, valid)                                 # log (1 - q_theta)
     forced = ~is_first
@@ -139,7 +145,11 @@ def expert_loss(scores: Tensor, empty: Tensor, slot: Tensor, is_first: Tensor, n
     # --- optional anti-collapse safeguard (rho = 0 by default) -------------------------------------
     loss = l_pos + l_neg
     if rho > 0:
-        p_bar = logp.exp().mean(dim=(0, 1))
+        p_all = logp.exp()
+        if decoy is not None:          # decoy slots (reward_step, decoy_slots) are not the expert's: entropy of the REAL slots only
+            p_all = p_all.masked_fill(decoy, 0.0)
+            p_all = p_all / p_all.sum(-1, keepdim=True).clamp(min=1e-8)
+        p_bar = p_all.mean(dim=(0, 1))
         loss = loss + rho * (p_bar * torch.log(p_bar + 1e-8)).sum()           # = - rho * H(p_bar)
 
     with torch.no_grad():

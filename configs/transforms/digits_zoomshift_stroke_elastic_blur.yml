@@ -1,0 +1,13 @@
+# Variant 7d of the `digits` bank (docs 5.50), asked by the user (2026-10-27 05:50): the blur is the operation of `digits_full` that the banks 7a (erasing) and 7b/7c (noise)
+# do not contain. `digits_zoomshift_stroke_elastic` + the light blur of `digits_full`, with the same values. To be run ONLY if `elastic_n5_noise01` shows a clear collapse.
+#   base      digits_zoomshift_stroke_elastic: rotation +-8, shear +-8, zoom 0.9 to 1.1, shift 0.05, stroke width, elastic distortion (sigma 3.5, strength 1.2)
+#   added     gaussian blur: sigma drawn in [0, 0.5] pixel, on half of the applications (5 x 5 kernel)
+# The orbit sampler chains up to d_max = 2 steps, so every effect can be applied twice, as in `digits_full`.
+name: digits_zoomshift_stroke_elastic_blur
+description: digits_zoomshift_stroke_elastic + light gaussian blur alone, for grey handwritten digits
+ops:
+  - random_rotation: {max_degrees: 8}
+  - random_affine: {shear_degrees: 8, translate: 0.05, scale: [0.9, 1.1]}
+  - elastic_distortion: {sigma: 3.5, strength: 1.2, p: 1.0}
+  - random_stroke_width: {max_strength: 0.5, p: 0.5}
+  - gaussian_blur: {sigma: [0.0, 0.5], p: 0.5}

@@ -1,0 +1,32 @@
+data: mnist
+data_params:
+  digits:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  n_per_class: 300
+transform: digits_zoomshift_stroke_elastic
+stop:
+  max_epochs: 600
+  min_epochs: 40
+  window: 10
+  part_tol: 0.01
+  twin_tol: 0.01
+  loss_tol: 0.02
+  enabled: true
+  memory: false
+  mem_tol: 0.01
+device: cpu
+uses_labels_for_training: false
+command: /home/claude/cib-irl-pull/scripts/run_experiment.py --data mnist --transform
+  digits_zoomshift_stroke_elastic --name elastic_n5_top2_seed0 --out-root /home/claude/cib-irl-pull/results/mnist10_banks
+  --overwrite --data-set digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9] n_per_class=300 --config
+  configs/benchmarks/toy.yml configs/mnist10.yml --set seed=0 views_per_orbit=5 rel_pool="top2"
+  --ckpt-every 25 --stop-set max_epochs=600 min_epochs=40

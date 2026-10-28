@@ -1,0 +1,14 @@
+# Variant 7c of the `digits` bank (docs 5.50), prepared BEFORE any result of the noise bank 7b was final: the SAME bank as
+# `digits_zoomshift_stroke_elastic_noise` with a larger noise, max_std 0.1 instead of 0.04 (user, 2026-10-26 21:30: "lancer 0.1 si noise arrive à se rétablir").
+# At 0.1 the digit keeps its shape (correlation with the clean view 0.956, against 0.993 at 0.04); from 0.2 the cues of 4/9 start to be erased.
+#   base      digits_zoomshift_stroke_elastic: rotation +-8, shear +-8, zoom 0.9 to 1.1, shift 0.05, stroke width, elastic distortion (sigma 3.5, strength 1.2)
+#   added     additive gaussian noise: std drawn in [0, 0.1], on half of the applications, clipped to [0, 1]
+# The orbit sampler chains up to d_max = 2 steps, so every effect can be applied twice, as in `digits_full`.
+name: digits_zoomshift_stroke_elastic_noise01
+description: digits_zoomshift_stroke_elastic + gaussian noise (max std 0.1) alone, for grey handwritten digits
+ops:
+  - random_rotation: {max_degrees: 8}
+  - random_affine: {shear_degrees: 8, translate: 0.05, scale: [0.9, 1.1]}
+  - elastic_distortion: {sigma: 3.5, strength: 1.2, p: 1.0}
+  - random_stroke_width: {max_strength: 0.5, p: 0.5}
+  - gaussian_noise: {max_std: 0.1, p: 0.5}

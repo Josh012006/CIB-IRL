@@ -9,6 +9,10 @@
 #   python scripts/run_suite.py configs/suites/mnist10_banks.yml --only zoomshift_stroke_n5 --cpu-count 1 --threads-per-run 1 --skip-existing
 #   python scripts/run_suite.py configs/suites/mnist10_banks.yml --only zoomshift_stroke_n5_dmax1 --cpu-count 1 --threads-per-run 1 --skip-existing
 #   python scripts/run_suite.py configs/suites/mnist10_banks.yml --only zoomshift_stroke_elastic_n5 --cpu-count 1 --threads-per-run 1 --skip-existing
+#
+# LOCKED (docs 5.57, 2026-10-28): the reference of the following experiments is `zoomshift_stroke_elastic_n5` (bank digits_zoomshift_stroke_elastic,
+# views_per_orbit 5, d_max 2). The entries `full`, `elastic_n5_noise`, `elastic_n5_noise01`, `elastic_n5_erasing` and `elastic_n5_blur`
+# document the operations tried on top of it and are not part of the bank. The other `elastic_n5_*` entries are stability / reward tests (docs 5.44 to 5.49).
 name: mnist10_banks
 description: MNIST 10 digits, K=15, final protocol, two handwriting banks, seed 0 first (600 epochs at most)
 seeds: [0]
@@ -25,3 +29,16 @@ experiments:
   - {name: zoomshift_stroke_n5, transform: digits_zoomshift_stroke, set: {views_per_orbit: 5}, ckpt_every: 25}   # variant 4 with 5 views per orbit instead of 2 (user, 2026-10-23): 25 views per episode
   - {name: zoomshift_stroke_n5_dmax1, transform: digits_zoomshift_stroke, set: {views_per_orbit: 5, d_max: 1}, ckpt_every: 25}   # variant 4 with 5 views and chains of at most ONE application (d_max 1 instead of 2): a view is the image or the image after one application (user, 2026-10-23; docs 5.40)
   - {name: zoomshift_stroke_elastic_n5, transform: digits_zoomshift_stroke_elastic, set: {views_per_orbit: 5}, ckpt_every: 25}   # variant 4 + elastic distortion ALONE, 5 views, d_max 2 (user, 2026-10-23; docs 5.40)
+  - {name: elastic_n5_alpha005, transform: digits_zoomshift_stroke_elastic, set: {views_per_orbit: 5, alpha: 0.05}, ckpt_every: 25}   # stability test 1/3 (user, 2026-10-23; docs 5.44): entropy bonus 0.05 instead of 0.01, everything else as elastic_n5
+  - {name: elastic_n5_noadvnorm, transform: digits_zoomshift_stroke_elastic, set: {views_per_orbit: 5, adv_norm: false}, ckpt_every: 25}   # stability test 2/3: no per-episode normalisation of the advantages (raw GAE)
+  - {name: elastic_n5_clipsplit, transform: digits_zoomshift_stroke_elastic, set: {views_per_orbit: 5, clip_split: true}, ckpt_every: 25}   # stability test 3/3 (replaces grad_clip 1.0, docs 5.45): the policy and the value are clipped separately (each to 5.0) instead of by their joint norm, which the value dominates
+  - {name: elastic_n5_erasing, transform: digits_zoomshift_stroke_elastic_erasing, set: {views_per_orbit: 5}, ckpt_every: 25}   # bank test 1/2 (user, 2026-10-25; docs 5.46): elastic_n5 + 4x4 erasing alone
+  - {name: elastic_n5_noise, transform: digits_zoomshift_stroke_elastic_noise, set: {views_per_orbit: 5}, ckpt_every: 25}   # bank test 2/2: elastic_n5 + gaussian noise alone
+  - {name: elastic_n5_noise01, transform: digits_zoomshift_stroke_elastic_noise01, set: {views_per_orbit: 5}, ckpt_every: 25}   # bank test 7c (user, 2026-10-26 21:30; docs 5.50): same as elastic_n5_noise with max std 0.1; launched only if elastic_n5_noise recovers
+  - {name: elastic_n5_blur, transform: digits_zoomshift_stroke_elastic_blur, set: {views_per_orbit: 5}, ckpt_every: 25}   # bank test 7d (user, 2026-10-27 05:50; docs 5.50): elastic_n5 + light blur alone; only if elastic_n5_noise01 collapses clearly
+  - {name: elastic_n5_decoy, transform: digits_zoomshift_stroke_elastic, set: {views_per_orbit: 5, decoy_slots: true}, ckpt_every: 25}   # reward trained on memories as large as the learner's (user, 2026-10-25; docs 5.48), path 1
+  - {name: elastic_n5_top2, transform: digits_zoomshift_stroke_elastic, set: {views_per_orbit: 5, rel_pool: top2}, ckpt_every: 25}   # reward pools the relations with the mean of the 2 largest instead of the mean of all (docs 5.48), path 2
+  - {name: elastic_n5_nearest, transform: digits_zoomshift_stroke_elastic, set: {views_per_orbit: 5, rel_pool: nearest}, ckpt_every: 25}   # reward: full relation vector of the NEAREST other slot instead of the feature-wise max (user, 2026-10-25; docs 5.48), path 3
+  - {name: elastic_n5_attn, transform: digits_zoomshift_stroke_elastic, set: {views_per_orbit: 5, rel_pool: attn}, ckpt_every: 25}   # reward: softmax-weighted average of the other slots instead of mean + max (docs 5.48), path 4
+  - {name: elastic_n5_local2, transform: digits_zoomshift_stroke_elastic, set: {views_per_orbit: 5, rel_pool: local2}, fixed_epochs: 600, ckpt_every: 25}   # reward: mean AND max over the 2 slots nearest to the image in m space (user, 2026-10-26; docs 5.49); exactly 600 epochs, no early stop (user's choice)
+  - {name: elastic_n5_decoyctx, transform: digits_zoomshift_stroke_elastic, set: {views_per_orbit: 5, decoy_slots: true, decoy_in_loss: false}, ckpt_every: 25}   # path 1 corrected (user, 2026-10-25 09:05; docs 5.48): decoys only as context, outside the softmax of the loss

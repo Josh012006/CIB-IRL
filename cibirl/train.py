@@ -54,6 +54,12 @@ class TrainConfig:
     in_channels: int = 3
     image_size: int = 28
     use_z: bool = True             # False: reward and policy only see m (ablation)
+    rel_pool: str = "mean"         # reward: pooling of the relations to the OTHER slots: "mean" (mean + max), "top2" (mean of the 2 largest + max),
+                                   # "nearest" (mean + full vector of the nearest slot), "attn" (one softmax-weighted average),
+                                   # "local2" / "local3" (mean AND max over the 2 / 3 slots nearest to the image in m space; docs 5.49)
+    decoy_in_loss: bool = True     # with decoy_slots: False = the decoys are context for the reward only (removed from the softmax of the loss, docs 5.48)
+    decoy_slots: bool = False      # reward step: fill 0..K-B extra slots of every expert state with the mean intent of orbits of OTHER
+                                   # episodes (the expert's decision does not depend on them), so that the reward sees memories as large as the learner's
     intent_standardize: bool = True
 
     # experts (Phase 1)
@@ -106,6 +112,7 @@ class TrainConfig:
     gamma: float = 0.9
     gae_lambda: float = 0.95
     alpha: float = 0.01            # entropy bonus
+    adv_norm: bool = True          # normalise the advantages inside each episode (mean 0, std 1); False: raw GAE advantages (docs 5.44)
     policy_temperature: float = 1.0  # pi = softmax(scores / T); T < 1: sharper policy, less exploration
     consolidate: bool = False      # end of epoch: rebuild the memory from the greedy partition (argmax of pi,
                                    # memory frozen) instead of the sampled placements of the epoch
@@ -133,6 +140,8 @@ class TrainConfig:
     lr_reward: float = 3e-4        # slower than the policy: the reward is the ruler
     lr_policy: float = 1e-3
     grad_clip: float = 5.0
+    clip_split: bool = False       # policy step: clip the gradient of the policy and the one of the value SEPARATELY (each to grad_clip) instead of
+                                   # their joint norm, which the value loss dominates (docs 5.45); False: joint clip, as before
     learner_batch: int = 128
     reward_warmup_iters: int = 200  # reward / encoder / intent on the experts alone, no learner rollout
     seed: int = 0
@@ -296,7 +305,7 @@ class Trainer:
         self.encoder = build_encoder("small_cnn", cfg.z_dim, cfg.in_channels, cfg.image_size).to(dev)
         self.intent = IntentPredictor(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.intent_standardize,
                                      whiten=cfg.intent_decorrelate == "whiten").to(dev)
-        self.reward = RewardModel(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.rel_dim, cfg.use_z).to(dev)
+        self.reward = RewardModel(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.rel_dim, cfg.use_z, cfg.rel_pool).to(dev)
         self._prior_gate = cfg.crp_gate if cfg.crp_gate >= 0 else None      # None: the prior acts everywhere
         self.policy = PolicyNet(cfg.z_dim, cfg.m_dim, cfg.hidden, cfg.rel_dim, cfg.use_z,
                                 temperature=cfg.policy_temperature, prior_gate=self._prior_gate).to(dev)
@@ -334,11 +343,20 @@ class Trainer:
         w = self.cfg.beta_warmup_iters
         return self.cfg.beta * (1.0 if w <= 0 else min(1.0, self.iteration / w))
 
-    def _clip_step(self, opt: torch.optim.Optimizer, params: list[Tensor], loss: Tensor) -> None:
+    def _clip_step(self, opt: torch.optim.Optimizer, params: list[Tensor], loss: Tensor,
+                   groups: list[list[Tensor]] | None = None) -> None:
+        """One step with the gradient clipped to `grad_clip`: jointly over `params`, or group by group if `groups` is given."""
         opt.zero_grad(set_to_none=True)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(params, self.cfg.grad_clip)
+        for g in (groups if groups is not None else [params]):
+            torch.nn.utils.clip_grad_norm_(g, self.cfg.grad_clip)
         opt.step()
+
+    def _policy_clip_step(self, loss: Tensor) -> None:
+        """The step of the policy and the value (one optimizer). Joint clip by default; with `clip_split`, the policy and the value
+        are clipped apart: the value gradient (norm ~1e3 to 1e4) otherwise sets the clip factor of the policy gradient (docs 5.45)."""
+        groups = [list(self.policy.parameters()), list(self.value.parameters())] if self.cfg.clip_split else None
+        self._clip_step(self.opt_policy, self.policy_params, loss, groups)
 
     # ---------------------------------------------------------------------------------------------
     # 2. Learner rollout
@@ -404,6 +422,36 @@ class Trainer:
             logp_p = self.policy.log_probs(out_p.z, m_bar, roll.summaries, roll.empty, roll.log_prior)
         return L.invariance_kl(logp_c, logp_p, valid_slot_mask(roll.empty))
 
+    def _decoy_shift(self, m: Tensor, eb: ExpertBatch):
+        """Decoy slots for the expert states (cfg.decoy_slots). Episode e gets D_e ~ U{0..K-B} decoy clusters: slots 0..D_e-1 hold the mean
+        intent of an orbit of ANOTHER episode of the batch, and the expert's own slots are shifted by D_e (so that the first empty slot,
+        the "open" action, is still the one the expert opens). Returns the shifted slots [E, T] and (decoy summaries [E, K, d], decoy mask [E, K])."""
+        E, T, d = m.shape
+        K, B = self.cfg.num_slots, self.cfg.orbits_per_episode
+        n_dec = K - B
+        if n_dec <= 0 or E < 2:
+            return eb.slot, None
+        dev = m.device
+        onehot = torch.nn.functional.one_hot(eb.orbit, B).to(m.dtype)                    # [E, T, B]
+        orbit_mean = torch.einsum("etb,etd->ebd", onehot, m) / onehot.sum(1).clamp(min=1).unsqueeze(-1)   # [E, B, d]
+        D = torch.randint(0, n_dec + 1, (E,), device=dev)
+        e_idx = torch.arange(E, device=dev).unsqueeze(1)
+        other = torch.randint(0, E - 1, (E, n_dec), device=dev)
+        other = other + (other >= e_idx).long()                                         # an episode different from e
+        which = torch.randint(0, B, (E, n_dec), device=dev)
+        dec_summ = orbit_mean[other, which]                                             # [E, n_dec, d]
+        dec_mask = torch.arange(n_dec, device=dev).unsqueeze(0) < D.unsqueeze(1)        # [E, n_dec]
+        full = torch.zeros(E, K, d, device=dev, dtype=m.dtype); full[:, :n_dec] = dec_summ
+        mask = torch.zeros(E, K, dtype=torch.bool, device=dev); mask[:, :n_dec] = dec_mask
+        return eb.slot + D.unsqueeze(1), (full, mask)
+
+    @staticmethod
+    def _fill_decoys(summ: Tensor, empty: Tensor, decoy) -> tuple[Tensor, Tensor]:
+        full, mask = decoy
+        E, T, K, d = summ.shape
+        summ = torch.where(mask.view(E, 1, K, 1), full.view(E, 1, K, d).expand(E, T, K, d), summ)
+        return summ, empty & ~mask.view(E, 1, K)
+
     def reward_step(self, eb: ExpertBatch, roll: Rollout | None) -> dict:
         cfg, K = self.cfg, self.cfg.num_slots
         eb = eb.to(self.device)
@@ -424,9 +472,16 @@ class Trainer:
         # memory is built from the same constants
         with torch.no_grad():
             m_state = self.intent.mean(enc.z)
-        summ, empty = expert_memory_states(m_state.view(E, T, -1), eb.slot, K)
+        slot, decoy = eb.slot, None
+        if cfg.decoy_slots:
+            slot, decoy = self._decoy_shift(m_state.view(E, T, -1), eb)
+        summ, empty = expert_memory_states(m_state.view(E, T, -1), slot, K)
+        if decoy is not None:
+            summ, empty = self._fill_decoys(summ, empty, decoy)
         scores = self.reward(enc.z, m_state, summ.reshape(E * T, K, -1), empty.reshape(E * T, K)).view(E, T, K)
-        exp = L.expert_loss(scores, empty, eb.slot, eb.is_first, eb.neg_mask, self.tau, cfg.rho, cfg.free_debias_scale, cfg.neg_floor)
+        exp = L.expert_loss(scores, empty, slot, eb.is_first, eb.neg_mask, self.tau, cfg.rho, cfg.free_debias_scale, cfg.neg_floor,
+                            decoy=None if decoy is None else decoy[1].unsqueeze(1).expand(E, T, K),
+                            decoy_exclude=not cfg.decoy_in_loss)
 
         kl = L.kl_standard_normal(enc.mu, enc.logvar)
         loss = l_psi + exp.loss + self._beta() * kl
@@ -468,7 +523,7 @@ class Trainer:
             kl = (teacher.exp() * (teacher.masked_fill(~valid, 0.0) - logp.masked_fill(~valid, 0.0))).sum(-1).mean()
             v_new = self.value(roll.z, roll.m, roll.summaries, roll.empty)
             value_loss = torch.nn.functional.mse_loss(v_new, ret)
-            self._clip_step(self.opt_policy, self.policy_params, kl + cfg.value_coef * value_loss)
+            self._policy_clip_step(kl + cfg.value_coef * value_loss)
         return {"return": float(r.sum()), "r_mean": float(r.mean()), "distill_kl": float(kl.detach()),
                 "L_xi": float(value_loss.detach())}
 
@@ -485,7 +540,8 @@ class Trainer:
             r = scores.gather(1, roll.actions.unsqueeze(1)).squeeze(1)                # R(s_t, a_t)
             v_old = self.value(roll.z, roll.m, roll.summaries, roll.empty)
             adv, ret = L.compute_gae(r, v_old, cfg.gamma, cfg.gae_lambda)
-            adv = (adv - adv.mean()) / (adv.std() + 1e-8)
+            if cfg.adv_norm:
+                adv = (adv - adv.mean()) / (adv.std() + 1e-8)
 
         for _ in range(cfg.ppo_epochs):
             logp_all = self.policy.log_probs(roll.z, roll.m, roll.summaries, roll.empty, roll.log_prior)
@@ -493,7 +549,7 @@ class Trainer:
             ent = PolicyNet.entropy(logp_all, roll.empty)
             v_new = self.value(roll.z, roll.m, roll.summaries, roll.empty)
             out = L.ppo_losses(logp_new, roll.logp_old, adv, ent, v_new, ret, cfg.ppo_clip, cfg.alpha)
-            self._clip_step(self.opt_policy, self.policy_params, out.policy_loss + cfg.value_coef * out.value_loss)
+            self._policy_clip_step(out.policy_loss + cfg.value_coef * out.value_loss)
         return {"return": float(r.sum()), "r_mean": float(r.mean()), "pi_entropy": float(out.entropy),
                 "approx_kl": float(out.approx_kl), "L_xi": float(out.value_loss.detach())}
 
@@ -670,8 +726,12 @@ class Trainer:
     def load_state(self, path: str) -> dict | None:
         """Inverse of save_state (the Trainer must have been built with the same config, data and bank). Returns `extra`."""
         st = torch.load(path, map_location=self.device, weights_only=False)
-        if st["cfg"] != asdict(self.cfg):
-            diff = {k: (st["cfg"].get(k), v) for k, v in asdict(self.cfg).items() if st["cfg"].get(k) != v}
+        # a field added to TrainConfig after the state was written is absent from it: that is the same configuration if
+        # the current value is the default (the behaviour the older code had), e.g. adv_norm (docs 5.44)
+        defaults = {f.name: f.default for f in fields(TrainConfig)}
+        diff = {k: (st["cfg"].get(k, defaults[k]), v) for k, v in asdict(self.cfg).items()
+                if st["cfg"].get(k, defaults[k]) != v}
+        if diff:
             raise ValueError(f"the saved state was made with another configuration: {diff}")
         for name in ("encoder", "intent", "reward", "policy", "value"):
             getattr(self, name).load_state_dict(st[name])

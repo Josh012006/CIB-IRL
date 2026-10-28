@@ -1,0 +1,22 @@
+name: digits_zoomshift_stroke_elastic_noise01
+description: digits_zoomshift_stroke_elastic + gaussian noise (max std 0.1) alone,
+  for grey handwritten digits
+ops:
+- random_rotation:
+    max_degrees: 8
+- random_affine:
+    shear_degrees: 8
+    translate: 0.05
+    scale:
+    - 0.9
+    - 1.1
+- elastic_distortion:
+    sigma: 3.5
+    strength: 1.2
+    p: 1.0
+- random_stroke_width:
+    max_strength: 0.5
+    p: 0.5
+- gaussian_noise:
+    max_std: 0.1
+    p: 0.5

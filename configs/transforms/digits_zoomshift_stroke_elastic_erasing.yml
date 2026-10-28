@@ -1,0 +1,14 @@
+# Variant 7 of the `digits` bank (docs/protocol-decisions.md 5.46), fixed BEFORE any result was seen: `digits_zoomshift_stroke_elastic` (the best bank
+# so far) + ONE more operation of `digits_full`, with the same values. `digits_full` (elastic, blur, noise and erasing at once) was worse than
+# `digits_zoomshift_stroke` (5.39) while the elastic distortion alone is not (5.40): this bank says whether this operation is a culprit.
+#   base      digits_zoomshift_stroke_elastic: rotation +-8, shear +-8, zoom 0.9 to 1.1, shift 0.05, stroke width, elastic distortion (sigma 3.5, strength 1.2)
+#   added     random erasing: one 4 x 4 black square at a random position, on half of the applications
+# The orbit sampler chains up to d_max = 2 steps, so every effect can be applied twice, as in `digits_full`.
+name: digits_zoomshift_stroke_elastic_erasing
+description: digits_zoomshift_stroke_elastic + 4x4 erasing alone, for grey handwritten digits
+ops:
+  - random_rotation: {max_degrees: 8}
+  - random_affine: {shear_degrees: 8, translate: 0.05, scale: [0.9, 1.1]}
+  - elastic_distortion: {sigma: 3.5, strength: 1.2, p: 1.0}
+  - random_stroke_width: {max_strength: 0.5, p: 0.5}
+  - random_erasing: {size: 4, p: 0.5}

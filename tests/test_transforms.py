@@ -263,6 +263,18 @@ def test_digits_zoomshift_stroke_elastic_bank_and_dmax_one():
     assert 0.25 < untouched < 0.75
 
 
+@pytest.mark.parametrize("name", ["digits_zoomshift_stroke_elastic_erasing", "digits_zoomshift_stroke_elastic_noise", "digits_zoomshift_stroke_elastic_noise01", "digits_zoomshift_stroke_elastic_blur"])
+def test_elastic_plus_one_operation_banks_build_and_keep_the_range(name):
+    from cibirl.experts import OrbitSampler
+    bank = T.build(ROOT / "configs" / "transforms" / f"{name}.yml")
+    base = T.build(ROOT / "configs" / "transforms" / "digits_zoomshift_stroke_elastic.yml")
+    assert len(bank.ops) == len(base.ops) + 1
+    x = torch.rand(64, 1, 28, 28)
+    for d_max in (1, 2):
+        y = OrbitSampler(bank, d_max=d_max)(x)
+        assert y.shape == x.shape and y.min() >= 0 and y.max() <= 1 and torch.isfinite(y).all()
+
+
 def test_digits_full_bank_builds_and_keeps_the_range():
     from cibirl.experts import OrbitSampler
     bank = T.build(ROOT / "configs" / "transforms" / "digits_full.yml")

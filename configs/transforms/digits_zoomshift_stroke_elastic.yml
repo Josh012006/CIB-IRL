@@ -1,3 +1,4 @@
+# LOCKED (docs/protocol-decisions.md 5.57, 2026-10-28): reference bank for MNIST, used with views_per_orbit 5 and d_max 2. Do not change the values.
 # Variant 6 of the `digits` bank (docs/protocol-decisions.md 5.40), fixed BEFORE any result was seen: `digits_zoomshift_stroke` + ONE
 # operation of `digits_full`, the elastic distortion, with the same values. `digits_full` (all four operations at once) was worse than
 # `digits_zoomshift_stroke` (5.39); this bank says whether the elastic distortion alone is responsible.

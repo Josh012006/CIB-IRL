@@ -18,7 +18,8 @@ NEG_INF = float("-inf")
 
 def make_trainer(**kw):
     x, _, _ = make_toy(n_per_class=60, n_classes=4)
-    cfg = TrainConfig(num_slots=4, image_size=16, orbits_per_episode=3, num_expert_episodes=200,
+    kw.setdefault("num_slots", 4)
+    cfg = TrainConfig(image_size=16, orbits_per_episode=3, num_expert_episodes=200,
                       expert_fraction=0.5, learner_batch=32, episodes_per_batch=8, beta=1e-2,
                       beta_warmup_iters=0, reward_warmup_iters=2, **kw)
     return Trainer(cfg, x, background_redraw)
@@ -280,3 +281,157 @@ def test_the_gate_has_no_gradient_and_the_policy_trains_with_it():
     for extra in ({}, {"policy_teacher_iters": 3}):
         rows = make_trainer(slot_prior="crp", crp_alpha=1.0, crp_gate=1.0, **extra).fit(2)
         assert len(rows) == 2 and all(math.isfinite(v) for v in rows[-1].values() if isinstance(v, float))
+
+
+# -- advantage normalisation switch (docs 5.44) ------------------------------------------------------
+def test_adv_norm_switch_default_on_and_policy_step_runs_without_it():
+    assert TrainConfig().adv_norm is True
+    tr = make_trainer(adv_norm=False)
+    roll = tr.learner_rollout(torch.arange(32))
+    out = tr.policy_step(roll)
+    assert math.isfinite(out["pi_entropy"]) and math.isfinite(out["approx_kl"])
+
+
+# -- resuming a state written before a field existed (docs 5.45) ---------------------------------------
+def test_load_state_accepts_a_saved_config_without_a_new_field_at_its_default(tmp_path):
+    tr = make_trainer()
+    path = tmp_path / "state.pt"
+    tr.save_state(str(path))
+    st = torch.load(path, weights_only=False)
+    del st["cfg"]["adv_norm"]                               # a state written before adv_norm existed
+    torch.save(st, path)
+    make_trainer().load_state(str(path))                    # default value: the same configuration
+
+    with pytest.raises(ValueError, match="adv_norm"):       # not the default: another configuration
+        make_trainer(adv_norm=False).load_state(str(path))
+
+
+# -- separate clip of the policy and the value (docs 5.45) ---------------------------------------------
+def test_clip_split_default_off_and_keeps_the_policy_gradient_out_of_the_value_clip():
+    assert TrainConfig().clip_split is False
+    applied = {}
+    for split in (False, True):
+        tr = make_trainer(clip_split=split)
+        roll = tr.learner_rollout(torch.arange(32))
+        logp = tr.policy.log_probs(roll.z, roll.m, roll.summaries, roll.empty, roll.log_prior)
+        pol = logp.gather(1, roll.actions.unsqueeze(1)).mean()
+        val = tr.value(roll.z, roll.m, roll.summaries, roll.empty).pow(2).mean() * 1e6     # a value loss that dominates the joint norm
+        grads = torch.autograd.grad(pol, list(tr.policy.parameters()), retain_graph=True, allow_unused=True)
+        alone = float(torch.sqrt(sum((g ** 2).sum() for g in grads if g is not None)))
+        tr._policy_clip_step(pol + val)
+        applied[split] = float(torch.sqrt(sum((p.grad ** 2).sum() for p in tr.policy.parameters() if p.grad is not None)))
+        applied[("alone", split)] = alone
+    alone = applied[("alone", True)]
+    assert applied[False] < 1e-3 * alone                        # joint clip: the policy gradient is scaled down by the value norm
+    assert applied[True] == pytest.approx(min(alone, tr.cfg.grad_clip), rel=1e-3)   # split: the policy gradient is untouched
+
+
+# -- docs 5.48: decoy slots in the expert states and the "top2" pooling of the reward --------------------------
+def test_top2_pool_matches_mean_with_one_other_slot_and_differs_with_several():
+    from cibirl.reward import SlotScorer
+    torch.manual_seed(0)
+    mean, top2 = SlotScorer(8, 4, 16, 8, True, "mean"), SlotScorer(8, 4, 16, 8, True, "top2")
+    top2.load_state_dict(mean.state_dict())
+    z, m = torch.randn(5, 8), torch.randn(5, 4)
+    summ = torch.randn(5, 6, 4)
+    two = torch.tensor([False, False, True, True, True, True]).expand(5, 6)         # 2 occupied: each slot has ONE other
+    four = torch.tensor([False, False, False, False, True, True]).expand(5, 6)
+    assert torch.allclose(mean(z, m, summ, two), top2(z, m, summ, two), atol=1e-6)
+    assert not torch.allclose(mean(z, m, summ, four), top2(z, m, summ, four), atol=1e-6)
+    assert torch.isfinite(top2(z, m, summ, torch.ones(5, 6, dtype=torch.bool))).all()      # empty memory
+    with pytest.raises(ValueError):
+        SlotScorer(8, 4, 16, 8, True, "median")
+
+
+def test_decoy_slots_keep_the_open_slot_of_the_expert_and_the_reward_step_runs():
+    tr2 = make_trainer(decoy_slots=True, rho=0.1, num_slots=7)
+    assert TrainConfig().decoy_slots is False and TrainConfig().rel_pool == "mean"
+    eb = tr2.experts.sample(16)
+    E, T = eb.slot.shape
+    K, d = tr2.cfg.num_slots, tr2.cfg.m_dim
+    m = torch.randn(E, T, d)
+    slot, decoy = tr2._decoy_shift(m, eb)
+    full, mask = decoy
+    assert int(mask.sum(1).max()) <= K - tr2.cfg.orbits_per_episode and int(slot.max()) < K
+    from cibirl.memory import expert_memory_states
+    summ, empty = expert_memory_states(m, slot, K)
+    summ, empty = tr2._fill_decoys(summ, empty, decoy)
+    first_empty = (empty.long().cumsum(-1) == 1) & empty
+    opening = first_empty.float().argmax(-1)
+    assert torch.equal(opening[eb.is_first], slot[eb.is_first])                       # "open" is still the expert's slot
+    forced = ~eb.is_first
+    assert bool((~empty).gather(-1, slot.unsqueeze(-1)).squeeze(-1)[forced].all())     # the twin's slot is occupied
+    assert not bool((~empty)[:, :, :].gather(-1, slot.unsqueeze(-1)).squeeze(-1)[eb.is_first].any())   # a new orbit is not in memory
+    out = tr2.reward_step(eb, None)
+    assert all(math.isfinite(v) for v in out.values())
+    tr3 = make_trainer(rel_pool="top2", decoy_slots=True, num_slots=7)
+    assert all(math.isfinite(v) for v in tr3.reward_step(tr3.experts.sample(16), None).values())
+
+
+def test_nearest_and_attn_pools_are_finite_equivariant_and_learn_the_proximity():
+    from cibirl.reward import SlotScorer
+    torch.manual_seed(1)
+    z, m, summ = torch.randn(6, 8), torch.randn(6, 4), torch.randn(6, 7, 4)
+    for pool in ("nearest", "attn"):
+        sc = SlotScorer(8, 4, 16, 8, True, pool)
+        for occupied in (0, 1, 2, 5, 7):                           # includes the empty memory and a single slot
+            empty = torch.arange(7).expand(6, 7) >= occupied
+            out = sc(z, m, summ, empty)
+            assert out.shape == (6, 7) and torch.isfinite(out).all()
+        empty = torch.arange(7).expand(6, 7) >= 5
+        perm = torch.tensor([3, 0, 4, 1, 2, 5, 6])                  # permute the occupied slots
+        out = sc(z, m, summ, empty)
+        out_p = sc(z, m, summ[:, perm], empty)
+        assert torch.allclose(out[:, perm], out_p, atol=1e-5)       # permutation-equivariant
+        sc.zero_grad(); sc(z, m, summ, empty).sum().backward()
+        assert sc.prox.weight.grad is not None and float(sc.prox.weight.grad.abs().sum()) > 0   # the proximity gets a gradient
+
+
+def test_local_pool_sees_only_the_nearest_slots_and_matches_mean_pool_on_small_memories():
+    from cibirl.reward import SlotScorer
+    torch.manual_seed(3)
+    K, d = 8, 4
+    mean, loc = SlotScorer(8, d, 16, 8, True, "mean"), SlotScorer(8, d, 16, 8, True, "local2")
+    loc.load_state_dict(mean.state_dict())
+    z, m, summ = torch.randn(6, 8), torch.randn(6, d), torch.randn(6, K, d)
+    for pool in ("local2", "local3"):                                  # finite on the empty memory and a single slot, permutation-equivariant
+        sc = SlotScorer(8, d, 16, 8, True, pool)
+        for occupied in (0, 1, 2, 5, 8):
+            empty = torch.arange(K).expand(6, K) >= occupied
+            assert torch.isfinite(sc(z, m, summ, empty)).all()
+        empty = torch.arange(K).expand(6, K) >= 5
+        perm = torch.tensor([3, 0, 4, 1, 2, 5, 6, 7])
+        assert torch.allclose(sc(z, m, summ, empty)[:, perm], sc(z, m, summ[:, perm], empty), atol=1e-5)
+    # with 3 occupied slots every occupied slot has 2 other slots: local2 = mean + max over all the others = the "mean" pool
+    empty3 = torch.arange(K).expand(6, K) >= 3
+    assert torch.allclose(mean(z, m, summ, empty3)[:, :3], loc(z, m, summ, empty3)[:, :3], atol=1e-6)
+    # the score of the OPEN slot does not depend on slots that are farther than the 2 nearest ones
+    m0 = torch.zeros(6, d)
+    near = 0.1 * torch.randn(6, K, d)
+    few, many = torch.arange(K).expand(6, K) >= 2, torch.arange(K).expand(6, K) >= 6
+    far = near.clone(); far[:, 2:] = 50.0 + torch.randn(6, K - 2, d)
+    open_few, open_many = loc(z, m0, far, few)[:, 2], loc(z, m0, far, many)[:, 6]
+    assert torch.allclose(open_few, open_many, atol=1e-5)
+    assert not torch.allclose(mean(z, m0, far, few)[:, 2], mean(z, m0, far, many)[:, 6], atol=1e-3)   # the mean pool does see them
+    with pytest.raises(ValueError):
+        SlotScorer(8, d, 16, 8, True, "local4")
+
+
+def test_decoy_exclude_makes_the_expert_loss_blind_to_the_scores_of_decoys():
+    from cibirl.losses import expert_loss
+    torch.manual_seed(2)
+    E, T, K = 4, 6, 8
+    scores = torch.randn(E, T, K)
+    empty = torch.ones(E, T, K, dtype=torch.bool)
+    slot = torch.randint(3, 6, (E, T)); is_first = torch.zeros(E, T, dtype=torch.bool); is_first[:, 0] = True
+    empty[:, :, :6] = False                                     # slots 0..2 decoys, 3..5 the expert's
+    neg = torch.zeros(E, T, T, dtype=torch.bool)
+    decoy = torch.zeros(E, T, K, dtype=torch.bool); decoy[:, :, :3] = True
+    a = expert_loss(scores, empty, slot, is_first, neg, 0.1, rho=0.1, decoy=decoy, decoy_exclude=True).loss
+    changed = scores.clone(); changed[:, :, :3] += 7.0
+    b = expert_loss(changed, empty, slot, is_first, neg, 0.1, rho=0.1, decoy=decoy, decoy_exclude=True).loss
+    c = expert_loss(changed, empty, slot, is_first, neg, 0.1, rho=0.1, decoy=decoy, decoy_exclude=False).loss
+    assert torch.allclose(a, b, atol=1e-6) and not torch.allclose(a, c, atol=1e-3)
+    tr = make_trainer(decoy_slots=True, decoy_in_loss=False, rho=0.1, num_slots=7)
+    assert all(math.isfinite(v) for v in tr.reward_step(tr.experts.sample(16), None).values())
+    assert TrainConfig().decoy_in_loss is True
